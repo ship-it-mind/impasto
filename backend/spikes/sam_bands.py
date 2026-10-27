@@ -4,8 +4,9 @@
         --concept "teal paint band" --concept "white paint band"
 
 SAM takes one short noun phrase per request, so each --concept is a separate
-call. Writes spikes/output/sam/<image>/ with summary.json and overlay.png
-(every mask tinted on the photo, one color per concept).
+call. Writes spikes/output/sam/<image>/ with summary.json, overlay.png
+(every mask tinted on the photo, one color per concept) and one
+overlay-NN-<concept>.png per concept.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import time
 from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import aclosing
@@ -160,6 +162,10 @@ async def main() -> None:
         overlay.paste(
             Image.blend(overlay, Image.new("RGB", photo.size, tint), 0.55), mask=union
         )
+        # Tints overlap in the combined overlay, so keep one per concept too.
+        single = photo.copy()
+        single.paste(Image.blend(single, Image.new("RGB", photo.size, tint), 0.55), mask=union)
+        single.save(out / f"overlay-{index:02d}-{re.sub(r'[^a-z0-9]+', '-', concept.lower())}.png")
 
         summaries.append(
             {
