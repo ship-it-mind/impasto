@@ -197,6 +197,16 @@ def rectify(
     )
 
 
+def photo_to_canvas(
+    points: list[tuple[float, float]], homography: list[list[float]]
+) -> list[tuple[float, float]]:
+    """Map photo pixels to rectified-canvas pixels."""
+    mapped = cv2.perspectiveTransform(
+        np.array(points, dtype=np.float64).reshape(-1, 1, 2), np.array(homography)
+    )
+    return [(float(x), float(y)) for x, y in mapped.reshape(-1, 2)]
+
+
 def draw_corners(image: np.ndarray, info: Rectification) -> np.ndarray:
     drawn = image.copy()
     points = np.array(info.corners_px, dtype=np.int32)
