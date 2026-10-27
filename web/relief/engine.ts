@@ -8,7 +8,8 @@ export type RGB = [number, number, number];
 // c: paint color, a: stroke direction (radians), s: stroke size (1 = normal,
 // smaller means shorter strokes laid more densely), t: paste thickness (1 = normal).
 export interface Sample { c: RGB; a: number; s: number; t?: number }
-export interface Scene { at(x: number, y: number): Sample }
+// bandAt, if given, keeps every stroke inside the band it starts in.
+export interface Scene { at(x: number, y: number): Sample; bandAt?(x: number, y: number): number }
 
 export interface Noise { n2(x: number, y: number): number; fbm(x: number, y: number, octaves?: number): number }
 
@@ -20,7 +21,7 @@ export interface PaintOptions {
   swirl: number;    // how far strokes wander from the scene's direction
 }
 
-export const DEFAULTS: Omit<PaintOptions, 'seed'> = { brush: 13, thick: 1, density: 1, swirl: 0.35 };
+export const DEFAULTS: Omit<PaintOptions, 'seed'> = { brush: 55, thick: 0.5, density: 3, swirl: 0.1 };
 
 export function mulberry32(a: number): () => number {
   return function () {
@@ -66,6 +67,7 @@ export class Surface {
   readonly C: Float32Array; readonly Hm: Float32Array;
   readonly Bs: Float32Array; readonly Hs: Float32Array; readonly Tmp: Float32Array;
   readonly stamp: Int32Array;
+  band: Int16Array | null = null;  // scene band per pixel, when the scene has bands
   strokeId = 0;
   constructor(w: number, h: number) {
     this.w = w; this.h = h; this.n = w * h;
@@ -86,13 +88,22 @@ function blankCanvas(sf: Surface): void {
   }
 }
 
-// Toned ground: the scene's colors, blocky and pulled toward a warm brown.
-function applyWash(sf: Surface, scene: Scene): void {
+// Toned ground: the scene's colors, pulled toward a warm brown. Blocky, unless
+// the scene has bands: then per pixel, so no blocks show along band edges.
+function applyWash(sf: Surface, scene: Scene, toBrown: number): void {
   const { w: W, h: H } = sf;
-  const ground = hex('#8f6040'), G = 10, gw = Math.ceil(W / G) + 1, gh = Math.ceil(H / G) + 1;
+  const ground = hex('#8f6040');
+  if (sf.band) {
+    for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
+      const c = mix(scene.at(x, y).c, ground, toBrown);
+      sf.C[i * 3] = c[0]; sf.C[i * 3 + 1] = c[1]; sf.C[i * 3 + 2] = c[2];
+    }
+    return;
+  }
+  const G = 10, gw = Math.ceil(W / G) + 1, gh = Math.ceil(H / G) + 1;
   const grid = new Float32Array(gw * gh * 3);
   for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
-    const c = mix(scene.at(Math.min(W - 1, gx * G), Math.min(H - 1, gy * G)).c, ground, 0.35);
+    const c = mix(scene.at(Math.min(W - 1, gx * G), Math.min(H - 1, gy * G)).c, ground, toBrown);
     const k = (gy * gw + gx) * 3; grid[k] = c[0]; grid[k + 1] = c[1]; grid[k + 2] = c[2];
   }
   for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
@@ -101,10 +112,19 @@ function applyWash(sf: Surface, scene: Scene): void {
   }
 }
 
-// Palette knife: flat slabs of paint with sharp edges and a ridge where the blade lifts.
+// Palette knife: broad flat slabs with square ends, a thin ridge along the side
+// where paste squeezes out, and another where the blade lifts.
+//   square: no rounded caps   oneSide: side ridge on one edge only
+//   jitter: color variation between strokes   tone: variation across the blade
+//   keep: share of the paste underneath a stroke that survives it
+//   feather: how far in from the edge the slab ramps up (0 = a hard step)
+//   soft: share of the stroke over which its start fades in, in height and color
+//   ground: how far the toned ground is pulled toward brown
+//   steer: how strongly a stroke turns to follow the scene's direction (0 = dead straight)
 export const KNIFE = {
-  wMul: 1.6, lenMul: 0.75, cov: 0.9, nbDiv: 8, bVar: 0.03, ridge: 0.95, dome: 0.04, ragged: 0.02,
-  dryStart: 9, dryBase: 0, head: 0, endRidge: 1.1, taper: 0, straight: 1, pick0: 0.1, pick1: 0.55, thick: 1.25,
+  wMul: 1.6, lenMul: 4, cov: 0.9, nbDiv: 8, bVar: 0.03, ridge: 0.7, dome: 0, ragged: 0.02,
+  dryStart: 9, dryBase: 0, head: 0, endRidge: 0.5, taper: 0, pick0: 0.1, pick1: 0.55, thick: 1.25,
+  square: 1, oneSide: 1, jitter: 0.2, tone: 0.2, keep: 0.9, feather: 0.08, ground: 0.12, steer: 0.35, soft: 0.25,
 };
 type StrokeStyle = typeof KNIFE;
 
@@ -112,12 +132,13 @@ function stroke(
   sf: Surface, scene: Scene, x0: number, y0: number, smp: Sample, w: number, L: number,
   thick: number, swirl: number, seed: number, tz: Noise, st: StrokeStyle,
 ): void {
-  const { w: W, h: H, C, Hm, Bs, stamp } = sf;
+  const { w: W, h: H, C, Hm, Bs, stamp, band } = sf;
   const sid = ++sf.strokeId;
   const rng = mulberry32(seed);
+  const home = band ? band[(y0 | 0) * W + (x0 | 0)] : -1;
   let c = smp.c;
-  const j = (rng() - 0.5) * 26;
-  c = [c[0] + j + (rng() - 0.5) * 14, c[1] + j + (rng() - 0.5) * 14, c[2] + j + (rng() - 0.5) * 14];
+  const j = (rng() - 0.5) * 26 * st.jitter, jc = 14 * st.jitter;
+  c = [c[0] + j + (rng() - 0.5) * jc, c[1] + j + (rng() - 0.5) * jc, c[2] + j + (rng() - 0.5) * jc];
   const i0 = ((y0 | 0) * W + (x0 | 0)) * 3;
   c = mix(c, [C[i0], C[i0 + 1], C[i0 + 2]], 0.08);
   c = [clamp(c[0], 0, 230), clamp(c[1], 0, 230), clamp(c[2], 0, 230)]; // headroom for the blade tint (x1.1)
@@ -135,7 +156,7 @@ function stroke(
     const ta = q.a + turb(x, y);
     let tx = Math.cos(ta), ty = Math.sin(ta);
     if (tx * dx + ty * dy < 0) { tx = -tx; ty = -ty; }
-    const f = st.straight ? 0.06 : 0.4;
+    const f = st.steer;
     dx = dx * (1 - f) + tx * f; dy = dy * (1 - f) + ty * f;
     const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
     x += dx * step; y += dy * step; px[i] = x; py[i] = y;
@@ -143,7 +164,7 @@ function stroke(
 
   const nb = Math.max(3, Math.round(w / st.nbDiv));
   const bh = new Float32Array(nb), bt = new Float32Array(nb), br = new Float32Array(nb);
-  for (let b = 0; b < nb; b++) { bh[b] = 1 + (rng() - 0.5) * 2 * st.bVar; bt[b] = 0.9 + rng() * 0.2; br[b] = rng(); }
+  for (let b = 0; b < nb; b++) { bh[b] = 1 + (rng() - 0.5) * 2 * st.bVar; bt[b] = 1 + (rng() - 0.5) * 0.2 * st.tone; br[b] = rng(); }
   const load = 0.75 + rng() * 0.5;
   let total = 0; for (let i = 0; i < n; i++) total += Math.hypot(px[i + 1] - px[i], py[i + 1] - py[i]);
   total = total || 1;
@@ -153,13 +174,25 @@ function stroke(
     const ax = px[i], ay = py[i];
     const sl = Math.hypot(px[i + 1] - ax, py[i + 1] - ay) || 1e-6;
     const tx = (px[i + 1] - ax) / sl, ty = (py[i + 1] - ay) / sl, nx = -ty, ny = tx;
-    for (let t = 0; t < sl; t += 0.55) {
+    // Where the path turns, run each segment on past its end, so the outer
+    // edge of a wide blade leaves no gap at the joint.
+    let reach = sl;
+    if (i < n - 1) {
+      const nl = Math.hypot(px[i + 2] - px[i + 1], py[i + 2] - py[i + 1]) || 1e-6;
+      const cos = clamp((tx * (px[i + 2] - px[i + 1]) + ty * (py[i + 2] - py[i + 1])) / nl, -1, 1);
+      reach += half * Math.acos(cos) + 1;
+    }
+    for (let t = 0; t < reach; t += 0.55) {
       const cx = ax + tx * t, cy = ay + ty * t, d = dist + t, u = d / total;
-      const hd = Math.min(1, d / half); let lv = Math.sqrt(1 - (1 - hd) * (1 - hd));
-      const rd = Math.min(1, (total - d) / half); lv = Math.min(lv, Math.sqrt(1 - (1 - rd) * (1 - rd)));
+      let lv = 1;
+      if (!st.square) {
+        const hd = Math.min(1, d / half); lv = Math.sqrt(1 - (1 - hd) * (1 - hd));
+        const rd = Math.min(1, (total - d) / half); lv = Math.min(lv, Math.sqrt(1 - (1 - rd) * (1 - rd)));
+      }
       if (st.taper) lv = Math.min(lv, Math.pow(Math.sin(PI * clamp(u, 0.02, 0.98)), 0.5));
-      const profU = load * (1.12 - 0.5 * u) + (d < head ? st.head * (1 - d / head) : 0) + (st.endRidge ? st.endRidge * sstep(0.82, 0.97, u) : 0);
-      const m = st.pick0 + st.pick1 * u * u;
+      const fadeIn = st.soft ? sstep(0, st.soft, u) : 1;
+      const profU = fadeIn * load * (1.12 - 0.5 * u) + (d < head ? st.head * (1 - d / head) : 0) + (st.endRidge ? st.endRidge * sstep(0.82, 0.97, u) : 0);
+      const m = 1 - fadeIn * (1 - (st.pick0 + st.pick1 * u * u));
       for (let v = -lv; v <= lv; v += vStep) {
         const b = Math.min(nb - 1, ((v + 1) * 0.5 * nb) | 0);
         const av = v < 0 ? -v : v;
@@ -168,11 +201,14 @@ function stroke(
         const X = (cx + nx * v * half) | 0, Y = (cy + ny * v * half) | 0;
         if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
         const idx = Y * W + X;
+        if (band && band[idx] !== home) continue;
         const e = av - (1 - st.ragged - 0.02);
-        const prof = (1 - st.dome * v * v) + st.ridge * Math.exp(-(e * e) / 0.006);
+        const sideRidge = st.oneSide && v < 0 ? 0 : st.ridge * Math.exp(-(e * e) / 0.006);
+        const edge = st.feather ? sstep(1, 1 - st.feather, av) : 1;
+        const prof = (1 - st.dome * v * v) * edge + sideRidge;
         const hgt = thick * profU * prof * bh[b];
         if (stamp[idx] !== sid) {
-          stamp[idx] = sid; Bs[idx] = Hm[idx] * 0.4;
+          stamp[idx] = sid; Bs[idx] = Hm[idx] * st.keep;
           const k3 = idx * 3, bb = bt[b];
           C[k3] = c[0] * bb * (1 - m) + C[k3] * m;
           C[k3 + 1] = c[1] * bb * (1 - m) + C[k3 + 1] * m;
@@ -186,9 +222,9 @@ function stroke(
 }
 
 export const PASSES = [
-  { name: 'Laying in the underpainting', cov: 1.7, size: 2.0, thick: 0.35, len: 1.25 },
-  { name: 'Building body strokes', cov: 1.9, size: 1.1, thick: 0.8, len: 1.0 },
-  { name: 'Loading on impasto', cov: 1.3, size: 0.62, thick: 1.2, len: 0.85 },
+  { name: 'Laying in the underpainting', cov: 2.2, size: 2.5, thick: 0.35, len: 1.25 },
+  { name: 'Building body strokes', cov: 2.5, size: 1.1, thick: 0.55, len: 1.0 },
+  { name: 'Loading on impasto', cov: 0.2, size: 0.85, thick: 1.6, len: 0.85 },
 ];
 
 interface StrokeEvent { x: number; y: number; sm: Sample; w: number; L: number; t: number; seed: number }
@@ -235,6 +271,10 @@ export class Timeline {
     this.ev = plan.events; this.passEnds = plan.passEnds;
     this.T = this.ev.length + 1;
     this.interval = Math.max(300, Math.ceil(this.T / 12));
+    if (scene.bandAt) {
+      sf.band = new Int16Array(sf.n);
+      for (let y = 0, i = 0; y < sf.h; y++) for (let x = 0; x < sf.w; x++, i++) sf.band[i] = scene.bandAt(x, y);
+    }
     blankCanvas(sf); this.save(0);
   }
   save(k: number): void {
@@ -252,7 +292,7 @@ export class Timeline {
     this.k = k;
   }
   step(): void {
-    if (this.k === 0) applyWash(this.sf, this.scene);
+    if (this.k === 0) applyWash(this.sf, this.scene, this.st.ground);
     else {
       const e = this.ev[this.k - 1];
       stroke(this.sf, this.scene, e.x, e.y, e.sm, e.w, e.L, e.t, this.o.swirl, e.seed, this.tz, this.st);
