@@ -5,10 +5,12 @@
         --corners 20,60 1170,45 1185,1480 95,1495
 
 Corners are found automatically from SAM's "painting" mask unless --corners
-gives them (top-left, top-right, bottom-right, bottom-left, in photo pixels).
-Scale comes from the canvas size the artist enters, so every pixel of the
-rectified image is 1/px_per_cm cm on the canvas. Writes rectified.png,
-corners.png (the corners drawn on the photo) and rectify.json.
+gives them (in photo pixels, any order). Scale comes from the canvas size the
+artist enters, so every pixel of the rectified image is 1/px_per_cm cm on the
+canvas. --white X,Y points at something white (paper next to the canvas, the
+unpainted canvas side) to correct white balance and exposure. Writes
+rectified.png, corners.png (corners and white patch drawn on the photo) and
+rectify.json.
 """
 
 from __future__ import annotations
@@ -26,6 +28,17 @@ from impasto.sam import masks_by_object, segment
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "rectify"
 DEFAULT_PX_PER_CM = 10.0
+WHITE_PATCH_RADIUS = 8
+# The white reference is mapped to this sRGB level in every channel, so photos
+# from different days share both white balance and exposure.
+TARGET_WHITE = 235
+
+
+@dataclass
+class WhiteBalance:
+    point_px: tuple[float, float]
+    measured_rgb: tuple[int, int, int]
+    gains: tuple[float, float, float]
 
 
 @dataclass
@@ -35,6 +48,7 @@ class Rectification:
     corners_px: list[tuple[float, float]]
     corner_source: str
     homography: list[list[float]]
+    white_balance: WhiteBalance | None
     warnings: list[str]
 
     @property
@@ -84,13 +98,63 @@ async def detect_corners(photo: Path, size: tuple[int, int]) -> np.ndarray:
     return quad_from_mask(np.logical_or.reduce(list(masks.values())))
 
 
+def srgb_to_linear(values: np.ndarray) -> np.ndarray:
+    values = values / 255.0
+    return np.where(values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(values: np.ndarray) -> np.ndarray:
+    values = np.clip(values, 0.0, 1.0)
+    encoded = np.where(values <= 0.0031308, values * 12.92, 1.055 * values ** (1 / 2.4) - 0.055)
+    return np.round(encoded * 255.0).astype(np.uint8)
+
+
+def measure_white(
+    image: np.ndarray, point: tuple[float, float], warnings: list[str]
+) -> WhiteBalance:
+    """Per-channel linear gains that map the patch around `point` to neutral TARGET_WHITE."""
+    height, width = image.shape[:2]
+    x, y = round(point[0]), round(point[1])
+    if not (0 <= x < width and 0 <= y < height):
+        raise ValueError(f"White point {point} is outside the {width}x{height} photo.")
+    r = WHITE_PATCH_RADIUS
+    patch = image[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1].reshape(-1, 3)
+    # Median ignores specks of dust or texture inside the patch.
+    blue, green, red = np.median(patch, axis=0)
+    measured = np.array([red, green, blue])
+    if measured.max() >= 250:
+        warnings.append("White reference is clipped (overexposed); the correction may be off.")
+    if measured.min() < 80:
+        warnings.append("White reference is dark; check that the point is on something white.")
+    if measured.max() - measured.min() > 0.35 * measured.max():
+        warnings.append("White reference looks strongly colored; check that the point is on something white.")
+    gains = srgb_to_linear(np.full(3, TARGET_WHITE)) / np.maximum(srgb_to_linear(measured), 1e-6)
+    return WhiteBalance(
+        point_px=(float(point[0]), float(point[1])),
+        measured_rgb=tuple(int(round(v)) for v in measured),
+        gains=tuple(round(float(g), 4) for g in gains),
+    )
+
+
+def apply_white_balance(image: np.ndarray, white: WhiteBalance) -> np.ndarray:
+    red, green, blue = white.gains
+    linear = srgb_to_linear(image.astype(np.float64)) * np.array([blue, green, red])
+    return linear_to_srgb(linear)
+
+
 def rectify(
     image: np.ndarray,
     corners: np.ndarray,
     canvas_cm: tuple[float, float],
     px_per_cm: float = DEFAULT_PX_PER_CM,
     corner_source: str = "manual",
+    white_point: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, Rectification]:
+    """Warp the canvas to a flat rectangle and, given a white point, color-correct it.
+
+    The white point is in photo pixels and can lie outside the canvas, e.g. on
+    a sheet of paper next to it.
+    """
     corners = order_corners(corners)
     width_cm, height_cm = canvas_cm
     out_w, out_h = round(width_cm * px_per_cm), round(height_cm * px_per_cm)
@@ -98,7 +162,19 @@ def rectify(
     homography = cv2.getPerspectiveTransform(corners, target)
     warped = cv2.warpPerspective(image, homography, (out_w, out_h), flags=cv2.INTER_LINEAR)
 
-    warnings = []
+    warnings: list[str] = []
+    white = None
+    if white_point is not None:
+        white = measure_white(image, white_point, warnings)
+        warped = apply_white_balance(warped, white)
+        clipped = float((warped.max(axis=2) >= 254).mean())
+        if clipped > 0.02:
+            warnings.append(
+                f"Color correction blows out {clipped:.0%} of the canvas: the white reference "
+                "is darker than the paint, likely in shadow. Use something white in the same "
+                "light as the canvas, e.g. paper held flat against its edge."
+            )
+
     top, right, bottom, left = (
         np.linalg.norm(corners[(i + 1) % 4] - corners[i]) for i in range(4)
     )
@@ -116,13 +192,14 @@ def rectify(
         corners_px=[(float(x), float(y)) for x, y in corners],
         corner_source=corner_source,
         homography=homography.tolist(),
+        white_balance=white,
         warnings=warnings,
     )
 
 
-def draw_corners(image: np.ndarray, corners: list[tuple[float, float]]) -> np.ndarray:
+def draw_corners(image: np.ndarray, info: Rectification) -> np.ndarray:
     drawn = image.copy()
-    points = np.array(corners, dtype=np.int32)
+    points = np.array(info.corners_px, dtype=np.int32)
     cv2.polylines(drawn, [points], isClosed=True, color=(0, 0, 255), thickness=4)
     for label, (x, y) in zip(("TL", "TR", "BR", "BL"), points):
         cv2.circle(drawn, (int(x), int(y)), 12, (0, 0, 255), -1)
@@ -130,6 +207,10 @@ def draw_corners(image: np.ndarray, corners: list[tuple[float, float]]) -> np.nd
             drawn, label, (int(x) + 16, int(y) + 8), cv2.FONT_HERSHEY_SIMPLEX, 1.2,
             (0, 0, 255), 3,
         )
+    if info.white_balance:
+        x, y = (round(v) for v in info.white_balance.point_px)
+        r = WHITE_PATCH_RADIUS
+        cv2.rectangle(drawn, (x - r - 3, y - r - 3), (x + r + 3, y + r + 3), (255, 0, 0), 3)
     return drawn
 
 
@@ -151,6 +232,10 @@ async def main() -> None:
         "--corners", type=parse_point, nargs=4, metavar="X,Y",
         help="corner points in photo pixels; skips automatic detection",
     )
+    parser.add_argument(
+        "--white", type=parse_point, metavar="X,Y",
+        help="a point on something white (paper, unpainted canvas side) for color correction",
+    )
     parser.add_argument("--px-per-cm", type=float, default=DEFAULT_PX_PER_CM)
     parser.add_argument("--out", type=Path, help="output folder")
     args = parser.parse_args()
@@ -164,15 +249,20 @@ async def main() -> None:
     else:
         corners, source = await detect_corners(args.photo, (width, height)), "auto"
 
-    warped, info = rectify(image, corners, args.size, args.px_per_cm, source)
+    warped, info = rectify(image, corners, args.size, args.px_per_cm, source, args.white)
     out = args.out or OUTPUT_ROOT / args.photo.stem
     out.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out / "rectified.png"), warped)
-    cv2.imwrite(str(out / "corners.png"), draw_corners(image, info.corners_px))
+    cv2.imwrite(str(out / "corners.png"), draw_corners(image, info))
     (out / "rectify.json").write_text(json.dumps(asdict(info), indent=2) + "\n", encoding="utf-8")
 
     print(f"Corners ({source}): " + "  ".join(f"{x:.0f},{y:.0f}" for x, y in info.corners_px))
     print(f"Rectified to {info.output_size[0]}x{info.output_size[1]} px at {info.px_per_cm:g} px/cm")
+    if info.white_balance:
+        wb = info.white_balance
+        print(f"White reference RGB {wb.measured_rgb} -> gains R/G/B {wb.gains}")
+    else:
+        print("No white reference: colors are as the phone captured them")
     for warning in info.warnings:
         print(f"Warning: {warning}")
     print(f"Wrote {out}")
