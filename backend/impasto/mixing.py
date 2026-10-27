@@ -9,6 +9,10 @@ band, every combination of 1–3 tubes is searched for the ratio with the
 lowest CIEDE2000 difference to the band's color. A tube is only added when it
 improves the match by more than MIN_GAIN_DE, so recipes stay short.
 
+The recipe is by weight: she weighs each tube on a kitchen scale. Whole parts
+(at most MAX_PARTS) are also given as a rough guide for small test batches,
+with their own ΔE, since rounding a 4% tube to 1 part in 10 shifts the color.
+
 --paste-in-mix treats the modeling paste as part of the colored mix (tinted
 paste), using the paint/paste split from the materials file. Without it the
 paste is assumed to sit under the paint and not affect color.
@@ -53,13 +57,16 @@ COARSE_STEP = 0.05
 FINE_STEP = 0.01
 # A recipe needs one more tube only if that tube lowers ΔE by more than this.
 MIN_GAIN_DE = 1.0
+# She mixes in whole parts, so recipes are rounded to at most this many parts.
+MAX_PARTS = 10
 
 
 @dataclass
 class Ingredient:
     name: str
-    share: float  # of the paint, by volume
+    share: float  # of the paint; weighed on her kitchen scale, this is the recipe
     grams: float | None
+    parts: int  # rough whole-part guide for small test batches
 
 
 @dataclass
@@ -67,7 +74,8 @@ class Recipe:
     band: str
     target_hex: str
     predicted_hex: str
-    delta_e: float
+    delta_e: float  # mixed by weight
+    parts_delta_e: float  # mixed by the rough whole parts
     tubes: list[Ingredient]
     paste_grams: float | None
 
@@ -120,6 +128,23 @@ class Mixer:
         de, shares, combo = chosen
         return de, combo, shares
 
+    def best_parts(self, target_hex: str, combo: tuple[int, ...]) -> tuple[float, list[int]]:
+        """Whole-number parts (each ≥ 1, total ≤ MAX_PARTS) with the lowest ΔE.
+
+        Ties within 0.1 ΔE go to the recipe with fewer total parts.
+        """
+        target_lab = rgb_to_lab(hex_to_rgb(target_hex))
+        best_de, best = float("inf"), None
+        for total in range(len(combo), MAX_PARTS + 1):
+            for parts in itertools.product(range(1, total + 1), repeat=len(combo)):
+                if sum(parts) != total:
+                    continue
+                shares = np.array(parts, dtype=float) / total
+                de = delta_e2000(target_lab, rgb_to_lab(self.mix_rgb(combo, shares)))
+                if de < best_de - 0.1:
+                    best_de, best = de, list(parts)
+        return best_de, best
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -150,28 +175,34 @@ def main() -> None:
     recipes = []
     for band in bands:
         de, combo, shares = mixer.recipe(band["color_hex"])
+        parts_de, parts = mixer.best_parts(band["color_hex"], combo)
         band_grams = grams.get(band["name"])
         tubes = [
             Ingredient(
                 name=mixer.names[i],
                 share=round(float(s), 2),
                 grams=round(float(s) * band_grams["paint_g"]) if band_grams else None,
+                parts=p,
             )
-            for i, s in sorted(zip(combo, shares), key=lambda item: -item[1])
+            for i, s, p in sorted(zip(combo, shares, parts), key=lambda item: -item[1])
         ]
         recipe = Recipe(
             band=band["name"],
             target_hex=band["color_hex"],
             predicted_hex=rgb_to_hex(mixer.mix_rgb(combo, shares)),
             delta_e=round(de, 2),
+            parts_delta_e=round(parts_de, 2),
             tubes=tubes,
             paste_grams=round(band_grams["paste_g"]) if band_grams else None,
         )
         recipes.append(recipe)
-        parts = " + ".join(
+        weighed = " + ".join(
             f"{t.share:.0%} {t.name}" + (f" ({t.grams:.0f} g)" if t.grams is not None else "") for t in tubes
         )
-        print(f"{recipe.band:<14} {recipe.target_hex} → {recipe.predicted_hex}  ΔE {recipe.delta_e:5.2f}  {parts}")
+        print(f"{recipe.band:<14} {recipe.target_hex} → {recipe.predicted_hex}  ΔE {recipe.delta_e:5.2f}  {weighed}")
+        print(
+            f"{'':<14} rough parts {':'.join(str(t.parts) for t in tubes)}  ΔE {recipe.parts_delta_e:5.2f}"
+        )
 
     output = {
         "placeholder_inventory": bool(inventory.get("placeholder")),
