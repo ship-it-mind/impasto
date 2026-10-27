@@ -12,16 +12,24 @@ A studio co-pilot for palette-knife / impasto artists, built for the Meta Global
 
 All code in this repository was written during the hackathon (Oct 26 – Nov 4, 2026). The commit history is the record.
 
-_TODO: scope decisions from the Day 1 go/no-go._
+### Day 1 decisions (Oct 27)
+
+We tested each model on a photo of one of the artist's finished pieces before designing around it. Scripts are in `backend/spikes/`.
+
+- **All four Meta models stay in.**
+- **Band segmentation uses manual points.** SAM 3.1 returns clean masks that follow band edges and ignore knife texture, but only when it is given 2–3 points inside each band. Text prompts only worked for plain color words ("cream", "sage", "pink" returned nothing), and points picked by Muse Spark missed a band. The artist points at each band in the app. Fallback: color clustering inside SAM's canvas mask.
+- **Muse Image always gets reference images.** From text alone it produced generic texture; with her past works as references it kept her composition and palette. It is the concept model for now, pending a comparison with other image models. The procedural SVG fallback is not needed yet.
+- **Canvas rectification comes first.** It turns pixels into cm², and once photos are rectified, the points from the plan carry over to the progress check-in photos.
+- **Cut or deferred:** Spark-picked points (cut), the wall mockup (if time allows), relief estimation (stretch only).
 
 ## Meta models used
 
 | Model | Job in the app |
 |---|---|
-| Muse Spark | _TODO_ |
-| SAM 3.1 | _TODO_ |
-| Muse Image | _TODO_ |
-| Muse Voice Transcribe | _TODO_ |
+| Muse Spark | Reads band structure from a painting, turns the voice brief into a structured brief, writes mixing recipes |
+| SAM 3.1 | One mask per color band from the artist's points, for area per band and progress coverage |
+| Muse Image | Concept compositions in the artist's style, steered by her past works |
+| Muse Voice Transcribe | Transcribes the client's voice note |
 
 ## Setup
 
