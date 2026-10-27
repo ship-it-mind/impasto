@@ -29,9 +29,21 @@ Requires [uv](https://docs.astral.sh/uv/) and a Meta Model API key.
 
 ```sh
 cp .env.example .env   # then fill in MODEL_API_KEY
+cd backend && uv sync
 ```
 
-_TODO: backend and web app run instructions._
+### Model spikes
+
+One script per model in `backend/spikes/`, run from `backend/`. Put inputs in `backend/spikes/inputs/`; results land in `backend/spikes/output/`. Both folders are git-ignored.
+
+```sh
+uv run spikes/spark_bands.py spikes/inputs/painting.jpg
+uv run spikes/sam_bands.py spikes/inputs/painting.jpg --concept "teal paint band" --concept "white paint band"
+uv run spikes/image_concept.py --name with-refs --reference spikes/inputs/past/01.jpg
+uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inputs/brief.txt
+```
+
+_TODO: web app run instructions._
 
 ## Team
 
