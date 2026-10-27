@@ -53,6 +53,11 @@ uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inpu
 
 _TODO: web app run instructions._
 
+## Credits
+
+- Paint mixing is predicted with [Mixbox](https://github.com/scrtwpns/mixbox) by Šárka Sochorová and Ondřej Jamriška (Secret Weapons), licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) for non-commercial use.
+- The SAM stream adapter is adapted from Meta's [meta-model-cookbook](https://github.com/meta-models/meta-model-cookbook) (MIT).
+
 ## Team
 
 _TODO_
