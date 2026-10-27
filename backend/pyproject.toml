@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "meta-sam-parser>=0.1.0",
     "openai>=3.39.0",
+    "pillow>=13.0.0",
     "python-dotenv>=1.2.4",
     "requests>=2.34.2",
 ]
