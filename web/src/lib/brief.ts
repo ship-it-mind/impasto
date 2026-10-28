@@ -21,7 +21,7 @@ export type Brief = {
   clarifying_question: string | null
 }
 
-export type BriefResult = { transcript: string; brief: Brief }
+export type BriefResult = { id: string; transcript: string; brief: Brief; warnings: string[] }
 
 export type Relief = { default?: string; accent?: string; top?: string; bottom?: string }
 export type Preset = {

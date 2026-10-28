@@ -1,69 +1,84 @@
-// What the screens ask the backend for.
+// What the screens ask the backend for (backend/impasto/api.py, proxied at /api).
 //
-// TEMPORARY: there is no API yet, so these answer from the sample output in
-// src/sample (the test voice note and the Layered Horizon concepts). The FastAPI
-// layer (OUR-142) replaces each function with a real call; the signatures stay.
+// Model calls run as jobs on the server: each call here starts one and polls it,
+// passing the server's phase ("Transcribing the voice note…") to `onPhase`.
 
 import type { Concept, Piece } from './concepts'
 import type { BriefResult, Preset } from './brief'
-import sampleBrief from '@/sample/brief.json'
-import sampleConcepts from '@/sample/concepts.json'
-import samplePresets from '@/sample/presets.json'
 
 export type BriefInput = { audio: File | null; text: string; wall: File | null }
-export type StyleInput = { preset: string | null; references: File[] }
+export type StyleInput = { preset: string | null; references: File[]; without?: string[] }
 export type ConceptSet = { concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
+export type Presets = { default: string; presets: Preset[]; tubes: string[] }
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-const SIZE = /(\d{2,3})\s*(?:x|×|by)\s*(\d{2,3})/i
+// One session per page load: the server caps model calls per session.
+const SESSION = crypto.randomUUID()
+const POLL_MS = 700
 
-export const PRESETS = samplePresets.presets as Preset[]
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`/api${path}`, { ...init, headers: { ...init.headers, 'X-Impasto-Session': SESSION } })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) {
+    const detail = body?.detail
+    throw new Error(typeof detail === 'string' ? detail : `The server said ${response.status}. Try again.`)
+  }
+  return body as T
+}
+
+type Job<T> = { status: 'running' | 'done' | 'failed'; phase: string; result: T | null; error: string | null }
+
+async function poll<T>(start: Promise<{ job: string }>, onPhase?: (phase: string) => void): Promise<T> {
+  const { job } = await start
+  for (;;) {
+    const state = await request<Job<T>>(`/jobs/${job}`)
+    if (state.status === 'done') return state.result as T
+    if (state.status === 'failed') throw new Error(state.error ?? 'Something went wrong on the server.')
+    onPhase?.(state.phase)
+    await new Promise(r => setTimeout(r, POLL_MS))
+  }
+}
+
+let presets: Promise<Presets> | null = null
+export function getPresets(): Promise<Presets> {
+  presets ??= request<Presets>('/presets').catch(error => { presets = null; throw error })
+  return presets
+}
 
 // Voice Transcribe (if there is a voice note), then Spark reads the brief.
-export async function readBrief(input: BriefInput, onPhase: (phase: string) => void): Promise<BriefResult> {
-  let transcript = input.text.trim()
-  if (input.audio) {
-    onPhase('Transcribing the voice note…')
-    await sleep(1600)
-    transcript = sampleBrief.transcript
-  }
-  onPhase(input.wall ? 'Reading the brief and the wall photo…' : 'Reading the brief…')
-  await sleep(1800)
-  const brief = structuredClone(sampleBrief.brief) as BriefResult['brief']
-  if (!input.audio) {
-    const size = transcript.match(SIZE)
-    brief.summary = transcript.length > 200 ? `${transcript.slice(0, 200).trimEnd()}…` : transcript
-    brief.piece = size ? piece(+size[1], +size[2]) : { width_cm: null, height_cm: null, orientation: null }
-    brief.clarifying_question = size ? null : 'How big would you like the piece? Width by height in cm is perfect.'
-  }
-  return { transcript, brief }
+export function readBrief(input: BriefInput, onPhase: (phase: string) => void): Promise<BriefResult> {
+  const form = new FormData()
+  form.append('text', input.text)
+  if (input.audio) form.append('audio', input.audio)
+  if (input.wall) form.append('wall', input.wall)
+  return poll(request('/brief', { method: 'POST', body: form }), onPhase)
 }
 
 // The client's answer to Spark's one clarifying question (the size).
-export async function answerQuestion(result: BriefResult, answer: string): Promise<BriefResult> {
-  await sleep(1200)
-  const size = answer.match(SIZE)
-  const brief = structuredClone(result.brief)
-  if (size) brief.piece = piece(+size[1], +size[2])
-  brief.clarifying_question = null
-  return { ...result, brief }
+export function answerQuestion(result: BriefResult, answer: string): Promise<BriefResult> {
+  return poll(request(`/brief/${result.id}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answer }),
+  }))
 }
+
+type ConceptsRecord = { canvas_px: [number, number]; concepts: (Concept & { warnings: string[] })[] }
 
 // Spark drafts 3 band specs in the chosen style; each band gets its Mixbox mix.
-export async function makeConcepts(result: BriefResult, _style: StyleInput): Promise<ConceptSet> {
-  await sleep(2200)
-  const { width_cm, height_cm } = result.brief.piece
+export async function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
+  const form = new FormData()
+  form.append('brief_id', result.id)
+  if (style.preset) form.append('preset', style.preset)
+  style.references.forEach(file => form.append('references', file))
+  style.without?.forEach(tube => form.append('without', tube))
+  const record = await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase)
+  // A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.
+  const usable = record.concepts.filter(c => c.warnings.length === 0)
+  if (usable.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
+  const { piece, room } = result.brief
   return {
-    concepts: sampleConcepts.concepts as Concept[],
-    canvasPx: sampleConcepts.canvas_px as [number, number],
-    piece: {
-      widthCm: width_cm ?? sampleConcepts.piece.widthCm,
-      heightCm: height_cm ?? sampleConcepts.piece.heightCm,
-      wallWidthCm: result.brief.room.wall_width_cm,
-    },
+    concepts: usable,
+    canvasPx: record.canvas_px,
+    piece: { widthCm: piece.width_cm ?? 120, heightCm: piece.height_cm ?? 90, wallWidthCm: room.wall_width_cm },
   }
-}
-
-function piece(width: number, height: number): BriefResult['brief']['piece'] {
-  return { width_cm: width, height_cm: height, orientation: width === height ? 'square' : width > height ? 'landscape' : 'portrait' }
 }

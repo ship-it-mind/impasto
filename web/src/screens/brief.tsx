@@ -1,12 +1,12 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, ChevronDown, Frame, Images, LoaderCircle, Palette, X } from 'lucide-react'
 import { BriefDetails, QuestionForm } from '@/components/brief-details'
 import { PresetPicker } from '@/components/preset-picker'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { VoiceButtons, VoiceNote } from '@/components/voice-input'
-import { PRESETS, answerQuestion, makeConcepts, readBrief, type ConceptSet } from '@/lib/api'
-import type { BriefResult } from '@/lib/brief'
+import { answerQuestion, getPresets, makeConcepts, readBrief, type ConceptSet } from '@/lib/api'
+import type { BriefResult, Preset } from '@/lib/brief'
 import { cn } from '@/lib/utils'
 
 const MAX_REFERENCES = 6
@@ -32,12 +32,18 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
   const [styleOpen, setStyleOpen] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
   const [result, setResult] = useState<BriefResult | null>(null)
-  const [making, setMaking] = useState(false)
+  const [making, setMaking] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [presets, setPresets] = useState<Preset[]>([])
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
 
-  const presetName = preset && PRESETS.find(p => p.key === preset)?.name
+  useEffect(() => {
+    getPresets().then(p => setPresets(p.presets)).catch(() => setError("Couldn't reach the server. Is the API running?"))
+  }, [])
+
+  const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.')
+  const presetName = preset && presets.find(p => p.key === preset)?.name
   const style = [presetName, refs.length && `${refs.length} picture${refs.length > 1 ? 's' : ''}`].filter(Boolean).join(' + ')
   const canRead = (!!audio || text.trim().length > 0) && !phase && !making
 
@@ -47,22 +53,30 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
     setResult(null)
     try {
       setResult(await readBrief({ audio, text, wall }, setPhase))
-    } catch {
-      setError("Couldn't read the brief. Check the connection and try again.")
+    } catch (e) {
+      setError(message(e))
     } finally {
       setPhase(null)
     }
   }
-  const answer = async (a: string) => { if (result) setResult(await answerQuestion(result, a)) }
+  const answer = async (a: string) => {
+    if (!result) return
+    setError(null)
+    try {
+      setResult(await answerQuestion(result, a))
+    } catch (e) {
+      setError(message(e))
+    }
+  }
   const make = async () => {
     if (!result) return
     setError(null)
-    setMaking(true)
+    setMaking('Starting…')
     try {
-      onConcepts(await makeConcepts(result, { preset, references: refs }))
-    } catch {
-      setError("Couldn't make the concepts. Try again.")
-      setMaking(false)
+      onConcepts(await makeConcepts(result, { preset, references: refs }, setMaking))
+    } catch (e) {
+      setError(message(e))
+      setMaking(null)
     }
   }
 
@@ -105,7 +119,7 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
               <Button type="button" variant="ghost"><Palette /> {presetName ?? 'Style'} <ChevronDown /></Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-[min(560px,90vw)] p-3">
-              <PresetPicker presets={PRESETS} value={preset} onChange={k => { setPreset(k); setStyleOpen(false) }} />
+              <PresetPicker presets={presets} value={preset} onChange={k => { setPreset(k); setStyleOpen(false) }} />
             </PopoverContent>
           </Popover>
           <Button type="submit" size="icon-lg" aria-label="Read the brief" disabled={!canRead} className="ml-auto rounded-full">
@@ -129,7 +143,7 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
       )}
 
       <section aria-live="polite" className="flex flex-col gap-5">
-        {error && <p className="text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-destructive">{error}</p>}
         {phase && (
           <p className="flex items-center gap-2 text-muted-foreground"><LoaderCircle className="size-4 animate-spin" aria-hidden />{phase}</p>
         )}
@@ -146,8 +160,8 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
               <p className="mt-2 max-w-[65ch] text-pretty">{result.transcript}</p>
             </details>
             <div className="flex items-center gap-3">
-              <Button size="lg" onClick={make} disabled={making || !!result.brief.clarifying_question}>
-                {making ? <><LoaderCircle className="animate-spin" /> Making 3 concepts…</> : 'Make 3 concepts'}
+              <Button size="lg" onClick={make} disabled={!!making || !!result.brief.clarifying_question}>
+                {making ? <><LoaderCircle className="animate-spin" /> {making}</> : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">Style: {style || 'Flowing Bands (default)'}</span>
             </div>
