@@ -1,0 +1,497 @@
+{
+ "canvas_px": [
+  1000,
+  667
+ ],
+ "mixing": {
+  "tubes": [
+   "Titanium White",
+   "Mars Black",
+   "Yellow Ochre",
+   "Cadmium Red",
+   "Quinacridone Magenta",
+   "Ultramarine Blue",
+   "Sap Green"
+  ],
+  "without": [
+   "Raw Umber",
+   "Burnt Sienna"
+  ],
+  "paste_in_mix": false
+ },
+ "concepts": [
+  {
+   "bands": [
+    {
+     "hex": "#E8DCC6",
+     "name": "Pale Sand",
+     "relief": "thin",
+     "width": 1.5,
+     "lab": [
+      88.17,
+      0.5,
+      12.28
+     ],
+     "mix": {
+      "hex": "#e5dcc6",
+      "delta_e": 1.44,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.78
+       },
+       {
+        "name": "Yellow Ochre",
+        "share": 0.15
+       },
+       {
+        "name": "Mars Black",
+        "share": 0.07
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#D5C2A1",
+     "name": "Warm Sand",
+     "relief": "thin",
+     "width": 1,
+     "lab": [
+      79.22,
+      1.56,
+      19.06
+     ],
+     "mix": {
+      "hex": "#e2c9a2",
+      "delta_e": 3.02,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.71
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.19
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.1
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#9AA78E",
+     "name": "Soft Sage",
+     "relief": "medium",
+     "width": 0.7,
+     "lab": [
+      66.87,
+      -9.27,
+      11.4
+     ],
+     "mix": {
+      "hex": "#9ba68e",
+      "delta_e": 0.83,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.41
+       },
+       {
+        "name": "Yellow Ochre",
+        "share": 0.36
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.23
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#C07552",
+     "name": "Terracotta",
+     "relief": "medium",
+     "width": 1,
+     "lab": [
+      56.63,
+      25.97,
+      31.63
+     ],
+     "mix": {
+      "hex": "#bd7654",
+      "delta_e": 0.81,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.34
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.33
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.33
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#8E5240",
+     "name": "Burnt Clay",
+     "relief": "heavy",
+     "width": 2,
+     "lab": [
+      41.46,
+      23.1,
+      21.31
+     ],
+     "mix": {
+      "hex": "#8e5140",
+      "delta_e": 0.52,
+      "tubes": [
+       {
+        "name": "Yellow Ochre",
+        "share": 0.58
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.28
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.14
+       }
+      ]
+     }
+    }
+   ],
+   "flow": "horizontal",
+   "idea": "Classic calm stack with pale sandy sky melting to a deep terracotta foreground built thick and wide at the bottom.",
+   "title": "Still Meadow Horizon",
+   "warnings": [],
+   "mix_warnings": [
+    "band 'Warm Sand' can only be mixed to ΔE 3.0 from these tubes"
+   ]
+  },
+  {
+   "bands": [
+    {
+     "hex": "#9AA78E",
+     "name": "Soft Sage",
+     "relief": "thin",
+     "width": 1,
+     "lab": [
+      66.87,
+      -9.27,
+      11.4
+     ],
+     "mix": {
+      "hex": "#9ba68e",
+      "delta_e": 0.83,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.41
+       },
+       {
+        "name": "Yellow Ochre",
+        "share": 0.36
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.23
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#C07552",
+     "name": "Terracotta",
+     "relief": "medium",
+     "width": 1,
+     "lab": [
+      56.63,
+      25.97,
+      31.63
+     ],
+     "mix": {
+      "hex": "#bd7654",
+      "delta_e": 0.81,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.34
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.33
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.33
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#D5C2A1",
+     "name": "Warm Sand",
+     "relief": "medium",
+     "width": 2,
+     "lab": [
+      79.22,
+      1.56,
+      19.06
+     ],
+     "mix": {
+      "hex": "#e2c9a2",
+      "delta_e": 3.02,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.71
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.19
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.1
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#6B5B45",
+     "name": "Olive Loam",
+     "relief": "heavy",
+     "width": 0.8,
+     "lab": [
+      39.64,
+      2.92,
+      15.11
+     ],
+     "mix": {
+      "hex": "#6c5c47",
+      "delta_e": 0.58,
+      "tubes": [
+       {
+        "name": "Yellow Ochre",
+        "share": 0.59
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.29
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.12
+       }
+      ]
+     }
+    }
+   ],
+   "flow": "gentle wave",
+   "idea": "Soft undulating bands with a wide sandy wave in the middle where sage and terracotta dissolve above it.",
+   "title": "Drifting Dune Wave",
+   "warnings": [],
+   "mix_warnings": [
+    "band 'Warm Sand' can only be mixed to ΔE 3.0 from these tubes"
+   ]
+  },
+  {
+   "bands": [
+    {
+     "hex": "#D89A7A",
+     "name": "Blush Clay",
+     "relief": "thin",
+     "width": 2,
+     "lab": [
+      68.84,
+      19.32,
+      26.01
+     ],
+     "mix": {
+      "hex": "#d99979",
+      "delta_e": 0.49,
+      "tubes": [
+       {
+        "name": "Yellow Ochre",
+        "share": 0.45
+       },
+       {
+        "name": "Titanium White",
+        "share": 0.39
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.16
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#E6D7BC",
+     "name": "Pale Sand",
+     "relief": "thin",
+     "width": 1,
+     "lab": [
+      86.53,
+      0.84,
+      15.2
+     ],
+     "mix": {
+      "hex": "#ecdcbf",
+      "delta_e": 1.32,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.81
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.13
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.06
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#D5C2A1",
+     "name": "Warm Sand",
+     "relief": "medium",
+     "width": 1,
+     "lab": [
+      79.22,
+      1.56,
+      19.06
+     ],
+     "mix": {
+      "hex": "#e2c9a2",
+      "delta_e": 3.02,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.71
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.19
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "share": 0.1
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#9AA78E",
+     "name": "Sage",
+     "relief": "medium",
+     "width": 0.5,
+     "lab": [
+      66.87,
+      -9.27,
+      11.4
+     ],
+     "mix": {
+      "hex": "#9ba68e",
+      "delta_e": 0.83,
+      "tubes": [
+       {
+        "name": "Titanium White",
+        "share": 0.41
+       },
+       {
+        "name": "Yellow Ochre",
+        "share": 0.36
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.23
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#7A8471",
+     "name": "Deep Sage",
+     "relief": "medium",
+     "width": 1,
+     "lab": [
+      53.85,
+      -7.4,
+      9.02
+     ],
+     "mix": {
+      "hex": "#7e8470",
+      "delta_e": 1.76,
+      "tubes": [
+       {
+        "name": "Mars Black",
+        "share": 0.51
+       },
+       {
+        "name": "Titanium White",
+        "share": 0.41
+       },
+       {
+        "name": "Sap Green",
+        "share": 0.08
+       }
+      ]
+     }
+    },
+    {
+     "hex": "#5E4E3E",
+     "name": "Dark Loam",
+     "relief": "heavy",
+     "width": 0.8,
+     "lab": [
+      34.35,
+      4.01,
+      11.98
+     ],
+     "mix": {
+      "hex": "#5f4f40",
+      "delta_e": 0.62,
+      "tubes": [
+       {
+        "name": "Yellow Ochre",
+        "share": 0.43
+       },
+       {
+        "name": "Ultramarine Blue",
+        "share": 0.4
+       },
+       {
+        "name": "Cadmium Red",
+        "share": 0.17
+       }
+      ]
+     }
+    }
+   ],
+   "flow": "horizontal",
+   "idea": "Inverted warmth with a broad blush sky on top narrowing to a thin dense sage-olive foreground at the base.",
+   "title": "Amber Field Dusk",
+   "warnings": [],
+   "mix_warnings": [
+    "band 'Warm Sand' can only be mixed to ΔE 3.0 from these tubes"
+   ]
+  }
+ ],
+ "piece": {
+  "widthCm": 120,
+  "heightCm": 80,
+  "wallWidthCm": 280
+ }
+}
