@@ -86,7 +86,7 @@ class BandProgress:
     measured_hex: str | None = None
     delta_e: float | None = None
     drift: str | None = None  # e.g. "warmer and darker"
-    fix: str | None = None  # e.g. "mix in about 5 g Ultramarine Blue per 100 g"
+    fix: str | None = None  # e.g. "mix in about 1 part Ultramarine Blue to 20 parts of it"
 
 
 @dataclass
@@ -207,10 +207,14 @@ def suggest_fix(measured_hex: str, planned_hex: str, inventory: dict) -> str | N
     after, adds = best_pair if best_single[0] - best_pair[0] > MIN_GAIN_DE else best_single
     if before - after < MIN_FIX_GAIN_DE:
         return None
-    # She weighs her mixes, so amounts are grams of tube per 100 g of the mix she has.
+    # She mixes by parts: the smallest addition is 1 part, against so many parts of the mix she has.
     total = sum(share for _, share in adds)
-    amounts = [f"{round(100 * share / (1 - total))} g {tubes[i][0]}" for i, share in sorted(adds, key=lambda a: -a[1])]
-    return f"mix in about {' and '.join(amounts)} per 100 g"
+    unit = min(share for _, share in adds)
+    amounts = [
+        f"{round(share / unit)} part{'s' if round(share / unit) > 1 else ''} {tubes[i][0]}"
+        for i, share in sorted(adds, key=lambda a: -a[1])
+    ]
+    return f"mix in about {' and '.join(amounts)} to {round((1 - total) / unit)} parts of it"
 
 
 def measure(
