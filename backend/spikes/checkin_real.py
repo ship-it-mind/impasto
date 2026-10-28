@@ -40,7 +40,7 @@ from common import output_dir, require_file
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from impasto.bands import TINTS  # noqa: E402
 from impasto.checkin import (  # noqa: E402
-    NO_BAND, WHITE_GROUND_LAB, check_in, local_std, median_hex, painted_mask, print_checkin, to_lab,
+    GROUND_CHROMA, NO_BAND, WHITE_GROUND_LAB, check_in, local_std, median_hex, painted_mask, print_checkin, to_lab,
 )
 from impasto.rectify import DEFAULT_PX_PER_CM, rectify  # noqa: E402
 
@@ -52,8 +52,8 @@ MIN_MATCHES = 40
 MIN_BAND_CM2 = 150.0
 # Smooths knife texture and pencil lines before the colors are clustered.
 SMOOTH_CM = 1.5
-# Shading changes lightness more than hue, so lightness counts less when clustering colors.
-CLUSTER_L_WEIGHT = 0.5
+# A color cluster this light and no more colorful than bare canvas is bare canvas in shadow.
+SHADOW_L = 60.0
 # Stray marks (pencil lines, specks) further than this from every band aren't part of the plan.
 STRAY_CM = 2.0
 # Bare canvas for the white reference: within this much L* of the brightest canvas, and smooth.
@@ -68,7 +68,7 @@ class Canvas:
     anchor: int  # the photo whose corners are given
     corners: tuple[tuple[float, float], ...]  # in the anchor photo; may lie just outside it
     names: tuple[str, ...]  # one per color, darkest first
-    # Extra color clusters expected from bare canvas in shadow; the most neutral ones are dropped.
+    # Extra color clusters for bare canvas in shadow, which comes out light and neutral and is dropped.
     shadow_clusters: int = 0
     # Per photo index: features matched by hand, as (photo px, anchor's rectified-canvas px), instead of SIFT.
     matches: dict[int, tuple[tuple[tuple[float, float], tuple[float, float]], ...]] = field(default_factory=dict)
@@ -180,17 +180,20 @@ def plan_from_photo(
     """Band map and bands from a rectified, white-balanced photo: her colors, one band per large patch."""
     painted = painted_mask(warped, WHITE_GROUND_LAB, PX_PER_CM) & in_photo
     smooth = cv2.medianBlur(warped, round(SMOOTH_CM * PX_PER_CM) | 1)
-    lab = to_lab(smooth) * np.float32([CLUSTER_L_WEIGHT, 1, 1])
+    lab = to_lab(smooth)
     samples = lab[painted].astype(np.float32)
     rng = np.random.default_rng(3)
     subset = samples[rng.choice(len(samples), min(len(samples), 60000), replace=False)]
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 0.1)
     _, _, centers = cv2.kmeans(subset, len(names) + shadow_clusters, None, criteria, 5, cv2.KMEANS_PP_CENTERS)
     nearest = np.argmin(np.linalg.norm(lab[..., None, :] - centers[None, None], axis=3), axis=2)
-    by_chroma = np.argsort(np.hypot(centers[:, 1], centers[:, 2]))
-    for shadow in by_chroma[:shadow_clusters]:
-        painted &= nearest != shadow
-    kept = sorted(by_chroma[shadow_clusters:], key=lambda i: centers[i, 0])  # darkest first, to match names
+    lightness, chroma = centers[:, 0], np.hypot(centers[:, 1], centers[:, 2])
+    shadow = (lightness > SHADOW_L) & (chroma < GROUND_CHROMA)
+    for cluster in np.flatnonzero(shadow):
+        painted &= nearest != cluster
+    kept = sorted(np.flatnonzero(~shadow), key=lambda i: centers[i, 0])  # darkest first, to match names
+    if len(kept) != len(names):
+        raise RuntimeError(f"Found {len(kept)} paint colors and {int(shadow.sum())} shades of bare canvas; expected {len(names)} colors.")
 
     min_px = MIN_BAND_CM2 * PX_PER_CM**2
     band_map = np.full(painted.shape, NO_BAND, np.uint8)
