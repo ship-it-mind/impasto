@@ -23,7 +23,7 @@ function Chip({ icon, label, onRemove }: { icon: ReactNode; label: string; onRem
 
 // One box takes the client's brief (voice note or text), the wall photo and the style;
 // the structured brief comes back below it, to check before making concepts.
-export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => void }) {
+export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet, brief: BriefResult) => void }) {
   const [audio, setAudio] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
@@ -73,7 +73,7 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet) => v
     setError(null)
     setMaking('Starting…')
     try {
-      onConcepts(await makeConcepts(result, { preset, references: refs }, setMaking))
+      onConcepts(await makeConcepts(result, { preset, references: refs }, setMaking), result)
     } catch (e) {
       setError(message(e))
       setMaking(null)

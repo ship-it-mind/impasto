@@ -17,11 +17,12 @@ type ConceptsProps = {
   canvasPx: [number, number]
   piece: Piece
   onChoose: (index: number) => void
+  initialPick?: number
 }
 
 // The concepts hung on the client's wall at true scale, picked from an editorial index.
-export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose }: ConceptsProps) {
-  const [pick, setPick] = useState(0)
+export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0 }: ConceptsProps) {
+  const [pick, setPick] = useState(initialPick)
   const [light, setLight] = useState(DEFAULT_LIGHT)
   const drag = useLightDrag(light, setLight)
   const concept = concepts[pick]
