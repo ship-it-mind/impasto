@@ -19,7 +19,10 @@ DEFAULT_PRESET = "flowing-bands"
 BASE_PROMPT = (
     "A palette-knife impasto painting, shot straight-on as a flat canvas filling the whole "
     "image, with no frame, wall or room. Abstract and non-figurative. The canvas is made of "
-    "clearly separate color bands with distinct edges between them."
+    "clearly separate color bands with distinct edges between them. Within each band the knife "
+    "strokes run in one consistent direction that follows the band across the whole canvas. No band "
+    "is suddenly much thicker than its neighbours unless the style below makes it the accent. Broad, calm "
+    "areas only: no tiny scattered shapes or specks. The colors sit well together; no clashing accents."
 )
 
 PRESETS = {
@@ -46,7 +49,8 @@ PRESETS = {
         "prompt": (
             "Horizontal bands stacked from top to bottom like an abstract landscape or seascape, "
             "with a soft horizon line. Long sideways knife strokes. The top bands are thin and "
-            "smooth; the paste gets thicker band by band towards the bottom, which is heavily built up."
+            "smooth; the paste gets thicker band by band towards the bottom, which is heavily built up. "
+            "Every band, including the bottom one, is laid edge to edge with horizontal strokes, never vertical."
         ),
         "fallback_palette": [
             ("pale blue-grey", "#B9C4C9"), ("sand", "#D9C7A3"), ("sage", "#9AA58A"),
@@ -59,8 +63,9 @@ PRESETS = {
         "bands": (2, 4),
         "relief": {"default": "heavy"},
         "prompt": (
-            "A few wide bands of very thick modeling paste, sculpted with the knife into deep "
-            "ridges, swirls and peaks that cast shadows. Tonal, close in color: the relief carries "
+            "A few wide bands of very thick modeling paste, built up with long, controlled knife "
+            "pulls into deep ridges that follow each band and cast shadows, not loose swirls, so it "
+            "can be painted by hand on a large canvas. Tonal, close in color: the relief carries "
             "the piece, not color contrast. Like textured plaster art."
         ),
         "fallback_palette": [
@@ -75,7 +80,7 @@ PRESETS = {
         "prompt": (
             "Geometric panels of color with straight, crisp edges, like a diagonal split or a "
             "loose grid. Each panel is laid in with flat knife slabs, thin to medium paste, "
-            "flat and even rather than sculpted."
+            "flat and even rather than sculpted. Bold colors, but chosen to work together."
         ),
         "fallback_palette": [
             ("ochre", "#D9A21B"), ("deep teal", "#1F5C63"), ("coral", "#E0644A"),

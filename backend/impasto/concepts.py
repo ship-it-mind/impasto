@@ -62,6 +62,8 @@ Write each one as a spec:
 
 Make the {n} compositions clearly different from each other: different flows where more than
 one is allowed, and otherwise a different band order, widths and placement of the thick band.
+Every composition should be paintable by hand with a palette knife on a large canvas: broad bands,
+no tiny shapes, and colors that sit well together rather than clashing accents.
 
 {style}
 
