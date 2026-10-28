@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { makeRecipe, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Concept } from '@/lib/concepts'
-import { cm2, grams, type MixSettings, type Recipe } from '@/lib/recipe'
+import { cm2, grams, parts, type MixSettings, type Recipe } from '@/lib/recipe'
 import { DEFAULT_LIGHT, bandShares } from '@/lib/relief'
 import { cn } from '@/lib/utils'
 
@@ -188,8 +188,8 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: Recip
         <header className="flex flex-col gap-2 pt-11 pb-6">
           <h2 className="text-3xl font-semibold tracking-tight">Mixing recipes</h2>
           <p className="max-w-[60ch] text-pretty text-muted-foreground">
-            By weight, on a kitchen scale. The rough parts are for a small test batch only.
-            {recipe && ` Grams use typical layer depths for thin, medium and heavy paste, plus ${recipe.materials.waste_pct}% for what stays on the palette and knife.`}
+            Mix by parts, lightest color first, and add the darker ones a little at a time.
+            {recipe && ` Grams are how much each band needs in all, from typical layer depths for thin, medium and heavy paste, plus ${recipe.materials.waste_pct}% for what stays on the palette and knife.`}
           </p>
         </header>
 
@@ -221,11 +221,21 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: Recip
               <ul className="flex flex-wrap gap-2">
                 {b.tubes.map(t => (
                   <li key={t.name} className="rounded-md bg-background px-2.5 py-1.5 shadow-[0_0_0_1px_rgb(0_0_0/0.06)] tabular-nums">
-                    <span className="font-medium">{t.grams} g</span> {t.name} <span className="text-muted-foreground">· {Math.round(t.share * 100)}%</span>
+                    <span className="font-medium">{parts(t.parts)}</span> {t.name} <span className="text-muted-foreground">· {t.grams} g</span>
                   </li>
                 ))}
+                {b.paste_parts !== null && (
+                  <li className="rounded-md bg-background px-2.5 py-1.5 shadow-[0_0_0_1px_rgb(0_0_0/0.06)] tabular-nums">
+                    <span className="font-medium">{parts(b.paste_parts)}</span> paste
+                  </li>
+                )}
               </ul>
               <Steps items={b.card.steps} />
+              {(b.card.too_dark || b.card.too_light) && (
+                <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {[b.card.too_dark, b.card.too_light].filter(Boolean).map(tip => <li key={tip} className="text-pretty">{tip}</li>)}
+                </ul>
+              )}
               {b.card.warnings.length > 0 && (
                 <ul className="flex flex-col gap-1.5">
                   {b.card.warnings.map(w => (
@@ -237,7 +247,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: Recip
               )}
               <details>
                 <summary className="cursor-pointer text-xs text-muted-foreground">
-                  If you run out mid-band · test batch {b.tubes.map(t => t.parts).join(':')}
+                  If you run out mid-band
                 </summary>
                 <Steps items={b.card.rematch} className="mt-2 text-muted-foreground" />
               </details>

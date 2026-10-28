@@ -10,9 +10,14 @@ band, every combination of 1–3 tubes is searched for the ratio with the
 lowest CIEDE2000 difference to the band's color. A tube is only added when it
 improves the match by more than MIN_GAIN_DE, so recipes stay short.
 
-The recipe is by weight: she weighs each tube on a kitchen scale. Whole parts
-(at most MAX_PARTS) are also given as a rough guide for small test batches,
-with their own ΔE, since rounding a 4% tube to 1 part in 10 shifts the color.
+She mixes by parts, not by weight, so each recipe is also rounded to whole
+parts with its own ΔE, since rounding a 4% tube to 1 part in 10 shifts the
+color: at most SHORT_PARTS, or up to MAX_PARTS when that is still visibly off. With paste in the mix, the paste gets parts too.
+
+Each recipe also names the tube to add if the mix comes out too dark, and the
+one to add if it comes out too light: the tube whose NUDGE share moves L* the
+right way with the least shift in hue and chroma, preferring tubes already in
+the recipe.
 
 --paste-in-mix treats the modeling paste as part of the colored mix (tinted
 paste), using the paint/paste split from the materials file. Without it the
@@ -61,16 +66,22 @@ COARSE_STEP = 0.05
 FINE_STEP = 0.01
 # A recipe needs one more tube only if that tube lowers ΔE by more than this.
 MIN_GAIN_DE = 1.0
-# She mixes in whole parts, so recipes are rounded to at most this many parts.
-MAX_PARTS = 10
+# She mixes in whole parts: at most SHORT_PARTS in all, or up to MAX_PARTS if the
+# short recipe is more than GOOD_PARTS_DE off.
+SHORT_PARTS = 10
+MAX_PARTS = 20
+GOOD_PARTS_DE = 1.5
+# Too dark / too light: the share of a tube added to test it, and how far it must move L*.
+NUDGE = 0.2
+MIN_NUDGE_L = 1.0
 
 
 @dataclass
 class Ingredient:
     name: str
-    share: float  # of the paint; weighed on her kitchen scale, this is the recipe
+    share: float  # of the paint
     grams: float | None
-    parts: int  # rough whole-part guide for small test batches
+    parts: int  # whole parts, how she mixes
 
 
 @dataclass
@@ -78,10 +89,13 @@ class Recipe:
     band: str
     target_hex: str
     predicted_hex: str
-    delta_e: float  # mixed by weight
-    parts_delta_e: float  # mixed by the rough whole parts
+    delta_e: float  # mixed at the exact shares
+    parts_delta_e: float  # mixed by the whole parts
     tubes: list[Ingredient]
+    paste_parts: int | None  # only when paste is mixed into the color
     paste_grams: float | None
+    if_too_dark: str | None  # tube to add a little of
+    if_too_light: str | None
 
 
 def without(inventory: dict, names: list[str]) -> dict:
@@ -146,7 +160,8 @@ class Mixer:
         return de, combo, shares
 
     def best_parts(self, target_hex: str, combo: tuple[int, ...]) -> tuple[float, list[int]]:
-        """Whole-number parts (each ≥ 1, total ≤ MAX_PARTS) with the lowest ΔE.
+        """Whole-number parts (each ≥ 1) with the lowest ΔE, at most SHORT_PARTS in all
+        unless more parts (up to MAX_PARTS) are needed to get within GOOD_PARTS_DE.
 
         Ties within 0.1 ΔE go to the recipe with fewer total parts.
         """
@@ -160,7 +175,33 @@ class Mixer:
                 de = delta_e2000(target_lab, rgb_to_lab(self.mix_rgb(combo, shares)))
                 if de < best_de - 0.1:
                     best_de, best = de, list(parts)
+            if total >= SHORT_PARTS and best_de <= GOOD_PARTS_DE:
+                break
         return best_de, best
+
+    def paste_parts(self, paint_parts: int) -> int | None:
+        """Parts of paste next to paint_parts of tube, or None if the paste isn't in the mix."""
+        if not self.paste_share:
+            return None
+        return max(1, round(paint_parts * self.paste_share / (1 - self.paste_share)))
+
+    def nudges(self, combo: tuple[int, ...], shares: np.ndarray) -> tuple[str | None, str | None]:
+        """The tube to add if the mix is too dark, and the one if it's too light."""
+        base = rgb_to_lab(self.mix_rgb(combo, shares))
+        tested = []
+        for i in range(len(self.names)):
+            indices = combo if i in combo else (*combo, i)
+            nudged = (np.append(shares, 0.0) if i not in combo else shares.copy()) * (1 - NUDGE)
+            nudged[indices.index(i)] += NUDGE
+            lab = rgb_to_lab(self.mix_rgb(indices, nudged))
+            shift = float(np.hypot(lab[1] - base[1], lab[2] - base[2]))
+            tested.append((lab[0] - base[0], i not in combo, shift, i))
+
+        def pick(sign: int) -> str | None:
+            moves = [(outside, shift, i) for dl, outside, shift, i in tested if sign * dl >= MIN_NUDGE_L]
+            return self.names[min(moves)[2]] if moves else None
+
+        return pick(+1), pick(-1)
 
 
 def main() -> None:
@@ -200,6 +241,7 @@ def main() -> None:
         de, combo, shares = mixer.recipe(band["color_hex"])
         parts_de, parts = mixer.best_parts(band["color_hex"], combo)
         band_grams = grams.get(band["name"])
+        lighten, darken = mixer.nudges(combo, shares)
         tubes = [
             Ingredient(
                 name=mixer.names[i],
@@ -216,15 +258,20 @@ def main() -> None:
             delta_e=round(de, 2),
             parts_delta_e=round(parts_de, 2),
             tubes=tubes,
+            paste_parts=mixer.paste_parts(sum(parts)),
             paste_grams=round(band_grams["paste_g"]) if band_grams else None,
+            if_too_dark=lighten,
+            if_too_light=darken,
         )
         recipes.append(recipe)
         weighed = " + ".join(
             f"{t.share:.0%} {t.name}" + (f" ({t.grams:.0f} g)" if t.grams is not None else "") for t in tubes
         )
         print(f"{recipe.band:<14} {recipe.target_hex} → {recipe.predicted_hex}  ΔE {recipe.delta_e:5.2f}  {weighed}")
+        paste = f" + {recipe.paste_parts} paste" if recipe.paste_parts else ""
         print(
-            f"{'':<14} rough parts {':'.join(str(t.parts) for t in tubes)}  ΔE {recipe.parts_delta_e:5.2f}"
+            f"{'':<14} parts {':'.join(str(t.parts) for t in tubes)}{paste}  ΔE {recipe.parts_delta_e:5.2f}"
+            f"  too dark: {recipe.if_too_dark or '-'}  too light: {recipe.if_too_light or '-'}"
         )
 
     output = {

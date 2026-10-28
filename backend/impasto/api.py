@@ -293,6 +293,7 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
         for name, band, grams in zip(names, concept["bands"], est.bands):
             de, combo, shares = mixer.recipe(band["hex"])
             parts_de, parts = mixer.best_parts(band["hex"], combo)
+            lighten, darken = mixer.nudges(combo, shares)
             recipes.append({
                 "band": name,
                 "target_hex": band["hex"],
@@ -303,7 +304,10 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
                     {"name": mixer.names[i], "share": round(float(s), 2), "grams": round(float(s) * grams.paint_g), "parts": p}
                     for i, s, p in sorted(zip(combo, shares, parts), key=lambda item: -item[1])
                 ],
+                "paste_parts": mixer.paste_parts(sum(parts)),
                 "paste_grams": round(grams.paste_g),
+                "if_too_dark": lighten,
+                "if_too_light": darken,
             })
         phase("Writing the recipe cards…")
         cards = write_cards([band_brief(r) for r in recipes])
@@ -318,9 +322,10 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
         result = {
             "bands": [
                 {"name": r["band"], "target_hex": r["target_hex"], "mix_hex": r["predicted_hex"], "delta_e": r["delta_e"],
-                 "parts_delta_e": r["parts_delta_e"], "tubes": r["tubes"], "area_cm2": g.area_cm2, "level": g.level,
+                 "parts_delta_e": r["parts_delta_e"], "tubes": r["tubes"], "paste_parts": r["paste_parts"],
+                 "area_cm2": g.area_cm2, "level": g.level,
                  "paint_g": g.paint_g, "paste_g": g.paste_g,
-                 "card": {key: card[key] for key in ("recipe_line", "steps", "warnings", "rematch")}}
+                 "card": {key: card[key] for key in ("recipe_line", "steps", "too_dark", "too_light", "warnings", "rematch")}}
                 for r, g, card in zip(recipes, est.bands, cards)
             ],
             "totals": {"paint_g": est.paint_g, "paste_g": est.paste_g, "area_cm2": round(sum(g.area_cm2 for g in est.bands), 1)},

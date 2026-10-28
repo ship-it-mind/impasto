@@ -9,11 +9,12 @@ export type RecipeBand = {
   delta_e: number
   parts_delta_e: number
   tubes: RecipeTube[]
+  paste_parts: number | null
   area_cm2: number
   level: 'thin' | 'medium' | 'heavy'
   paint_g: number
   paste_g: number
-  card: { recipe_line: string; steps: string[]; warnings: string[]; rematch: string[] }
+  card: { recipe_line: string; steps: string[]; too_dark: string; too_light: string; warnings: string[]; rematch: string[] }
 }
 
 export type Recipe = {
@@ -29,5 +30,6 @@ export type Recipe = {
 
 export type MixSettings = { without: string[]; pasteInMix: boolean }
 
+export const parts = (n: number) => `${n} ${n === 1 ? 'part' : 'parts'}`
 export const grams = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(2)} kg` : `${Math.round(g)} g`)
 export const cm2 = (a: number) => `${Math.round(a).toLocaleString('en-GB')} cm²`
