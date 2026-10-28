@@ -55,17 +55,24 @@ from impasto.rectify import (
 )
 
 BANDMAP = REPO_ROOT / "web" / "relief" / "bandmap.ts"
-# Painted: this far (ΔE76) from the ground, or half as far and textured (paste ridges).
+# Painted: this far (ΔE76) from the ground, or half as far and textured (paste ridges),
+# or more colorful than bare canvas ever reads (cream and other near-white paints sit
+# under GROUND_DE but are clearly tinted; bare canvas in warm shadow stays under ~4.5).
 GROUND_DE = 10.0
+GROUND_CHROMA = 5.5
 TEXTURE_L = 3.0  # local standard deviation of L*, over TEXTURE_WINDOW_CM
 TEXTURE_WINDOW_CM = 0.9
 # Bare patches and stray painted specks smaller than this are noise, not progress.
 MIN_PATCH_CM2 = 4.0
+# Marks thinner than this are her pencil sketch, not paint.
+PENCIL_CM = 0.5
 # A band counts as done from this coverage, and as started from MIN_STARTED.
 DONE = 0.95
 MIN_STARTED = 0.05
-# Too little painted area to judge a band's color.
+# Too little painted area, or too little of the band, to judge its color: a barely
+# started band's "paint" is often stray marks or shadow on bare canvas.
 MIN_COLOR_CM2 = 20.0
+MIN_COLOR_COVERAGE = 0.25
 # Drift worth a line: a clear difference on a textured, photographed surface.
 DRIFT_DE = 6.0
 # Tube shares tried when pulling a drifted mix back, and the gain one must give to be suggested.
@@ -140,7 +147,10 @@ def painted_mask(image: np.ndarray, ground_lab: tuple[float, float, float], px_p
     lab = to_lab(image)
     off_ground = np.linalg.norm(lab - np.array(ground_lab, dtype=np.float32), axis=2)
     texture = local_std(lab[..., 0], max(3, round(TEXTURE_WINDOW_CM * px_per_cm)) | 1)
-    painted = (off_ground > GROUND_DE) | ((off_ground > GROUND_DE / 2) & (texture > TEXTURE_L))
+    chroma = np.hypot(lab[..., 1] - ground_lab[1], lab[..., 2] - ground_lab[2])
+    painted = (off_ground > GROUND_DE) | ((off_ground > GROUND_DE / 2) & (texture > TEXTURE_L)) | (chroma > GROUND_CHROMA)
+    pencil = round(PENCIL_CM * px_per_cm) | 1
+    painted = cv2.morphologyEx(painted.astype(np.uint8), cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (pencil, pencil))) > 0
     min_px = round(MIN_PATCH_CM2 * px_per_cm**2)
     # Fill small bare gaps inside the paint, then drop specks out on the bare ground.
     return drop_specks(fill_small_holes(painted, min_px), min_px)
@@ -249,7 +259,7 @@ def measure(
         )
         # Color from well inside the paint: band edges blend and the paint front has bare ground in it.
         interior = cv2.erode(done.astype(np.uint8), kernel).astype(bool)
-        if interior.sum() * px_area >= MIN_COLOR_CM2:
+        if interior.sum() * px_area >= MIN_COLOR_CM2 and result.coverage >= MIN_COLOR_COVERAGE:
             measured_hex = median_hex(image, interior)
             planned_lab, measured_lab = rgb_to_lab(hex_to_rgb(planned_hex)), rgb_to_lab(hex_to_rgb(measured_hex))
             result.measured_hex = measured_hex
