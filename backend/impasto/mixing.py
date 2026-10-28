@@ -2,6 +2,7 @@
 
     uv run python -m impasto.mixing output/rectify/painting
     uv run python -m impasto.mixing output/rectify/painting --inventory tubes.json --paste-in-mix
+    uv run python -m impasto.mixing output/rectify/painting --without "Sap Green" --without "Mars Black"
 
 Mixes are predicted with Mixbox (Sochorova & Jamriska 2021, CC BY-NC 4.0),
 which models paint as real pigments rather than averaging RGB. For each
@@ -16,6 +17,9 @@ with their own ΔE, since rounding a 4% tube to 1 part in 10 shifts the color.
 --paste-in-mix treats the modeling paste as part of the colored mix (tinted
 paste), using the paint/paste split from the materials file. Without it the
 paste is assumed to sit under the paint and not affect color.
+
+--without leaves out a tube the user doesn't have for this piece; nothing is
+saved, so the next piece starts from the full list again.
 
 Reads bands.json (target colors) and estimate.json (grams per band, if
 present); writes recipes.json.
@@ -78,6 +82,19 @@ class Recipe:
     parts_delta_e: float  # mixed by the rough whole parts
     tubes: list[Ingredient]
     paste_grams: float | None
+
+
+def without(inventory: dict, names: list[str]) -> dict:
+    """The inventory minus the tubes the user unticked for this piece (names match case-insensitively)."""
+    known = {tube["name"].lower() for tube in inventory["tubes"]}
+    unknown = [name for name in names if name.lower() not in known]
+    if unknown:
+        raise ValueError(f"No such tube: {', '.join(unknown)}. Tubes: {', '.join(t['name'] for t in inventory['tubes'])}.")
+    dropped = {name.lower() for name in names}
+    tubes = [tube for tube in inventory["tubes"] if tube["name"].lower() not in dropped]
+    if not tubes:
+        raise ValueError("Every tube was left out; keep at least one.")
+    return {**inventory, "tubes": tubes}
 
 
 def simplex_grid(k: int, step: float) -> np.ndarray:
@@ -152,11 +169,17 @@ def main() -> None:
     parser.add_argument("--inventory", type=Path, help="her tubes as JSON (default: placeholders)")
     parser.add_argument("--materials", type=Path, help="materials JSON for the paint/paste split")
     parser.add_argument("--paste-in-mix", action="store_true", help="paste is mixed into the color")
+    parser.add_argument("--without", action="append", default=[], metavar="TUBE",
+                        help="leave out a tube for this piece; repeat for several")
     args = parser.parse_args()
 
     inventory = (
         json.loads(args.inventory.read_text(encoding="utf-8")) if args.inventory else PLACEHOLDER_INVENTORY
     )
+    try:
+        inventory = without(inventory, args.without)
+    except ValueError as error:
+        parser.error(str(error))
     materials = load_materials(args.materials)
     paste_share = 1 - materials.paint_fraction if args.paste_in_mix else 0.0
     mixer = Mixer(inventory, paste_share)
