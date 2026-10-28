@@ -20,6 +20,7 @@ that opening.
 
 Writes spikes/output/image-models/<model>/<arm>/<preset>-<n>.<ext> plus results.json, and
 spikes/output/image-models/sheets/<arm>-<preset>.png: one row per model, #1–#3 across.
+sheets/blind/ has the same sheets for the artist: rows lettered A–F, key in key.json.
 """
 
 from __future__ import annotations
@@ -89,6 +90,8 @@ MODELS = {
     },
 }
 RECRAFT_CREATE_STYLE = "fal-ai/recraft/v3/create-style"
+# Row order on the blind sheets, A first; shuffled so Muse isn't always the top row.
+BLIND_ORDER = ["flux-3", "muse", "gpt-image-2", "recraft-v3", "nano-banana-pro", "ideogram-v3"]
 ROOT = "image-models"
 
 
@@ -177,13 +180,22 @@ async def run_model(model: str, arm: str, args: argparse.Namespace) -> list[dict
     return results
 
 
-def sheets(cell: int = 360, label: int = 44) -> list[Path]:
-    """One sheet per arm and preset: a row per model that has results on disk, #1–#3 across."""
+def sheets(blind: bool = False, cell: int = 360, label: int = 44) -> list[Path]:
+    """One sheet per arm and preset: a row per model that has results on disk, #1–#3 across.
+
+    blind: rows lettered A, B, C… in BLIND_ORDER, the same letter on every sheet, with no model
+    names or timings, so the artist judges the paintings and not the brand. The key goes in key.json.
+    """
     root = output_dir(ROOT)
+    out = output_dir(f"{ROOT}/sheets/blind" if blind else f"{ROOT}/sheets")
+    order = BLIND_ORDER if blind else list(MODELS)
+    if blind:
+        key = {chr(ord("A") + i): MODELS[model]["name"] for i, model in enumerate(order)}
+        (out / "key.json").write_text(json.dumps(key, indent=2) + "\n", encoding="utf-8")
     written = []
     for arm in ARMS:
         results = {}
-        for model in MODELS:
+        for model in order:
             path = root / model / arm / "results.json"
             if path.is_file():
                 results[model] = json.loads(path.read_text(encoding="utf-8"))
@@ -200,13 +212,15 @@ def sheets(cell: int = 360, label: int = 44) -> list[Path]:
                         thumb = Image.open(r["image"]).convert("RGB")
                         thumb.thumbnail((cell - 8, cell - 8))
                         sheet.paste(thumb, (x + (cell - thumb.width) // 2, y + label))
-                        caption = f"{r['latency_s']:.0f}s"
+                        caption = "" if blind else f"{r['latency_s']:.0f}s"
                     else:
                         caption = f"failed: {r['error'][:40]}"
-                    draw.text((x + 6, y + 4), f"{MODELS[model]['name']} #{r['n']}", fill="black")
+                    name = chr(ord("A") + order.index(model)) if blind else MODELS[model]["name"]
+                    draw.text((x + 6, y + 4), f"{name} #{r['n']}", fill="black", font_size=18 if blind else None)
                     draw.text((x + 6, y + 22), caption, fill="dimgray")
-            path = output_dir(f"{ROOT}/sheets") / f"{arm}-{preset}.png"
-            sheet.save(path)
+            # Blind sheets go to the artist, so JPEG keeps the upload small.
+            path = out / f"{arm}-{preset}.{'jpg' if blind else 'png'}"
+            sheet.save(path, **({"quality": 88} if blind else {}))
             written.append(path)
     return written
 
@@ -235,7 +249,7 @@ def main() -> None:
         if any(model != "muse" for model in args.model):
             require_fal_key()
         asyncio.run(run(args))
-    for path in sheets():
+    for path in sheets() + sheets(blind=True):
         print(f"Wrote {path}")
 
 
