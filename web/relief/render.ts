@@ -3,7 +3,8 @@
 //   node relief/render.ts spec.json out.png [--seed 7] [--width 1000] [--height 750] [--light 225] [--gloss 0.15]
 //
 // spec.json is one concept from backend/impasto/concepts.py:
-// { "title": ..., "flow": ..., "bands": [{ "name", "hex", "width", "relief" }] }
+// { "title": ..., "flow": ..., "bands": [{ "name", "hex", "width", "relief", "mix"? }] }
+// A band with a mix is painted in the mix's hex, the color the user can actually mix.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';

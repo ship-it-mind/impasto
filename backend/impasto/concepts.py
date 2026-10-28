@@ -3,12 +3,18 @@
     uv run python -m impasto.concepts --brief output/brief/brief/brief.json --preset layered-horizon
     uv run python -m impasto.concepts --reference past1.jpg --reference past2.jpg --render
     uv run python -m impasto.concepts --render          # no brief, default preset
+    uv run python -m impasto.concepts --render --without "Sap Green" --paste-in-mix
 
 Muse Spark drafts three distinct compositions as structured specs: the flow,
 then the bands in order across the canvas, each with a color, a relative width
 and a relief level. Code checks them against the preset and adds Lab colors.
 Each spec is what the relief renderer (web/relief/render.ts) paints, and what
 the recipe step mixes, so nothing downstream guesses from pixels.
+
+Each band also gets its Mixbox mix from the tubes on hand (impasto.mixing), and
+the renderer paints that mix rather than Spark's color, so the preview shows
+what the user can actually mix. A band whose mix is more than MAX_MIX_DE off
+gets a warning; the concept still renders.
 
 Style: a preset sets the flows, band count and relief; reference photos steer
 the look and palette. Both can be given. References alone leave the layout to
@@ -25,10 +31,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from impasto.color import hex_to_rgb, rgb_to_lab
+from impasto.color import hex_to_rgb, rgb_to_hex, rgb_to_lab
 from impasto.meta import REPO_ROOT, client, data_url
+from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
-from impasto.volume import LEVELS
+from impasto.volume import LEVELS, load_materials
 
 MODEL = "muse-spark-1.3"
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "concepts"
@@ -37,6 +44,8 @@ ALL_FLOWS = sorted({flow for preset in PRESETS.values() for flow in preset["flow
 CONCEPTS = 3
 LONG_SIDE_PX = 1000
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+# A band's mix this far (ΔE2000) from Spark's color is clearly off, so the concept is flagged.
+MAX_MIX_DE = 3.0
 
 PROMPT = """You are the studio assistant of a palette-knife / impasto painter. Design {n} concept
 compositions for one piece. Each composition is a set of color bands laid across the canvas.
@@ -200,6 +209,36 @@ def draft(brief: dict | None, preset_key: str | None, references: list[Path]) ->
     }
 
 
+def mix(record: dict, unticked: list[str], paste_in_mix: bool) -> None:
+    """Add each band's Mixbox mix from the tubes on hand, and flag bands it can't match."""
+    inventory = without(PLACEHOLDER_INVENTORY, unticked)
+    paste_share = 1 - load_materials(None).paint_fraction if paste_in_mix else 0.0
+    mixer = Mixer(inventory, paste_share)
+    record["mixing"] = {
+        "tubes": mixer.names,
+        "without": unticked,
+        "paste_in_mix": paste_in_mix,
+    }
+    for concept in record["concepts"]:
+        concept["mix_warnings"] = []
+        for band in concept["bands"]:
+            if not HEX.match(band["hex"]):
+                continue
+            de, combo, shares = mixer.recipe(band["hex"])
+            band["mix"] = {
+                "hex": rgb_to_hex(mixer.mix_rgb(combo, shares)),
+                "delta_e": round(de, 2),
+                "tubes": [
+                    {"name": mixer.names[i], "share": round(float(s), 2)}
+                    for i, s in sorted(zip(combo, shares), key=lambda item: -item[1])
+                ],
+            }
+            if de > MAX_MIX_DE:
+                concept["mix_warnings"].append(
+                    f"band {band['name']!r} can only be mixed to ΔE {de:.1f} from these tubes"
+                )
+
+
 def render(record: dict, folder: Path) -> list[Path]:
     """Paint each concept with the relief renderer (needs Node 22+)."""
     node = shutil.which("node")
@@ -229,8 +268,9 @@ def print_concepts(record: dict) -> None:
         print(f"\n{i}. {concept['title']} ({concept['flow']})")
         print(f"   {concept['idea']}")
         for band in concept["bands"]:
-            print(f"   {band['hex']}  {band['name']:<18} width {band['width']:<4g} {band['relief']}")
-        for warning in concept["warnings"]:
+            mixed = f"  → mix {band['mix']['hex']} ΔE {band['mix']['delta_e']:.1f}" if "mix" in band else ""
+            print(f"   {band['hex']}  {band['name']:<18} width {band['width']:<4g} {band['relief']:<6}{mixed}")
+        for warning in concept["warnings"] + concept.get("mix_warnings", []):
             print(f"   ⚠️  {warning}")
 
 
@@ -241,6 +281,9 @@ def main() -> None:
     parser.add_argument("--reference", action="append", type=Path, default=[],
                         help="style reference photo; repeat for several")
     parser.add_argument("--render", action="store_true", help="paint each concept with the relief renderer")
+    parser.add_argument("--without", action="append", default=[], metavar="TUBE",
+                        help="leave out a tube for this piece; repeat for several")
+    parser.add_argument("--paste-in-mix", action="store_true", help="paste is mixed into the color")
     parser.add_argument("--out", type=Path, help="output folder")
     args = parser.parse_args()
 
@@ -248,8 +291,13 @@ def main() -> None:
     for path in args.reference:
         if not path.is_file():
             parser.error(f"No such reference: {path}")
+    try:
+        without(PLACEHOLDER_INVENTORY, args.without)  # fail before spending a Spark call
+    except ValueError as error:
+        parser.error(str(error))
     record = draft(brief, args.preset, args.reference)
     record["brief"] = str(args.brief) if args.brief else None
+    mix(record, args.without, args.paste_in_mix)
 
     folder = args.out or OUTPUT_ROOT / (args.preset or ("references" if args.reference else DEFAULT_PRESET))
     folder.mkdir(parents=True, exist_ok=True)

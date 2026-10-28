@@ -7,7 +7,8 @@ import { clamp, hex, makeNoise, mulberry32, type RGB, type Sample, type Scene } 
 export type Relief = 'thin' | 'medium' | 'heavy';
 export type Flow = 'arc' | 'diagonal' | 'wave' | 'horizontal' | 'gentle wave' | 'grid' | 'diagonal split';
 
-export interface BandSpec { name: string; hex: string; width: number; relief: Relief }
+// mix: the color the user can mix from their tubes (Mixbox); painted instead of hex when present.
+export interface BandSpec { name: string; hex: string; width: number; relief: Relief; mix?: { hex: string } }
 export interface ConceptSpec { title: string; flow: Flow; bands: BandSpec[] }
 
 // Paste thickness and stroke size per relief level: heavy bands get thicker,
@@ -24,7 +25,7 @@ export function bandScene(spec: ConceptSpec, W: number, H: number, seed: number)
   const region = spec.flow === 'grid' || spec.flow === 'diagonal split'
     ? panels(spec, W, H, seed)
     : continuous(spec, W, H, seed);
-  const colors: RGB[] = spec.bands.map(b => hex(b.hex));
+  const colors: RGB[] = spec.bands.map(b => hex(b.mix?.hex ?? b.hex));
   return {
     bandAt: (x, y) => region(x, y).band,
     at(x: number, y: number): Sample {
