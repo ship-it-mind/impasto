@@ -5,10 +5,11 @@
 
 import type { Concept, Piece } from './concepts'
 import type { BriefResult, Preset } from './brief'
+import type { MixSettings, Recipe } from './recipe'
 
 export type BriefInput = { audio: File | null; text: string; wall: File | null }
 export type StyleInput = { preset: string | null; references: File[]; without?: string[] }
-export type ConceptSet = { concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
+export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { default: string; presets: Preset[]; tubes: string[] }
 
 // One session per page load: the server caps model calls per session.
@@ -62,7 +63,7 @@ export function answerQuestion(result: BriefResult, answer: string): Promise<Bri
   }))
 }
 
-type ConceptsRecord = { canvas_px: [number, number]; concepts: (Concept & { warnings: string[] })[] }
+type ConceptsRecord = { run: string; canvas_px: [number, number]; concepts: (Concept & { warnings: string[]; index: number })[] }
 
 // Spark drafts 3 band specs in the chosen style; each band gets its Mixbox mix.
 export async function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
@@ -73,12 +74,30 @@ export async function makeConcepts(result: BriefResult, style: StyleInput, onPha
   style.without?.forEach(tube => form.append('without', tube))
   const record = await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase)
   // A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.
-  const usable = record.concepts.filter(c => c.warnings.length === 0)
+  // Each keeps its index in the run, which is how the recipe asks for it.
+  const usable = record.concepts.map((c, index) => ({ ...c, index })).filter(c => c.warnings.length === 0)
   if (usable.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
   const { piece, room } = result.brief
   return {
+    run: record.run,
     concepts: usable,
     canvasPx: record.canvas_px,
     piece: { widthCm: piece.width_cm ?? 120, heightCm: piece.height_cm ?? 90, wallWidthCm: room.wall_width_cm },
   }
+}
+
+// The paint plan for one concept: grams per band, Mixbox recipes from the tubes
+// on hand, Spark's recipe cards and a shopping list. `shares` is each band's
+// share of the canvas, measured from the painted concept.
+export function makeRecipe(
+  result: BriefResult, set: ConceptSet, concept: Concept, shares: number[], settings: MixSettings, onPhase?: (phase: string) => void,
+): Promise<Recipe> {
+  return poll(request('/recipe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      brief_id: result.id, run: set.run, concept: concept.index, shares,
+      without: settings.without, paste_in_mix: settings.pasteInMix,
+    }),
+  }), onPhase)
 }

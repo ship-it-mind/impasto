@@ -7,7 +7,8 @@ export type Band = {
   name: string; hex: string; width: number; relief: Relief
   mix: { hex: string; delta_e: number; tubes: Tube[] }
 }
-export type Concept = { title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[] }
+// index: the concept's place in its run on the server.
+export type Concept = { title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number }
 
 export type Piece = { widthCm: number; heightCm: number; wallWidthCm: number | null }
 
