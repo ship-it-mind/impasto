@@ -5,21 +5,23 @@ import type { ConceptSpec } from '../../relief/bands.ts'
 import { Surface } from '../../relief/engine.ts'
 import type { Concept } from './concepts'
 
-// Each painting is kept, so switching concepts or remounting never repaints.
-const paints = new Map<string, Promise<Surface>>()
+type Painted = { surface: Surface; shares: number[] }
 
-export function paint(concept: Concept, seed: number, W: number, H: number): Promise<Surface> {
+// Each painting is kept, so switching concepts or remounting never repaints.
+const paints = new Map<string, Promise<Painted>>()
+
+export function paint(concept: Concept, seed: number, W: number, H: number): Promise<Painted> {
   const key = JSON.stringify([concept.flow, concept.bands.map(b => [b.mix.hex, b.width, b.relief]), seed, W, H])
   let p = paints.get(key)
   if (!p) {
     p = new Promise(resolve => {
       const worker = new Worker(new URL('./relief.worker.ts', import.meta.url), { type: 'module' })
-      worker.onmessage = (e: MessageEvent<{ C: Float32Array; Hm: Float32Array }>) => {
-        const sf = new Surface(W, H)
-        sf.C.set(e.data.C)
-        sf.Hm.set(e.data.Hm)
+      worker.onmessage = (e: MessageEvent<{ C: Float32Array; Hm: Float32Array; shares: number[] }>) => {
+        const surface = new Surface(W, H)
+        surface.C.set(e.data.C)
+        surface.Hm.set(e.data.Hm)
         worker.terminate()
-        resolve(sf)
+        resolve({ surface, shares: e.data.shares })
       }
       worker.postMessage({ spec: concept as unknown as ConceptSpec, W, H, seed })
     })
@@ -33,10 +35,15 @@ export function usePainting(concept: Concept, seed: number, W: number, H: number
   useEffect(() => {
     let alive = true
     setSf(null)
-    paint(concept, seed, W, H).then(s => { if (alive) setSf(s) })
+    paint(concept, seed, W, H).then(p => { if (alive) setSf(p.surface) })
     return () => { alive = false }
   }, [concept, seed, W, H])
   return sf
+}
+
+// Each band's share of the canvas, as painted.
+export async function bandShares(concept: Concept, seed: number, W: number, H: number): Promise<number[]> {
+  return (await paint(concept, seed, W, H)).shares
 }
 
 // Light direction in degrees: 0 = from the right, clockwise on screen (the engine's convention).
