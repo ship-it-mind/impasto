@@ -13,7 +13,7 @@ fal.ai, top tier of each, and need FAL_KEY in .env.
     # only rebuild the comparison sheets from what's on disk
     uv run spikes/image_models.py --sheets
 
-How each model sees the references: Nano Banana, GPT Image and Kontext take them in context
+How each model sees the references: Nano Banana, GPT Image and FLUX 3 take them in context
 with the round 3 prompt ("These photos are an artist's past works..."). Ideogram takes them as
 style references and Recraft as a style made from them, so both get the prompt without
 that opening.
@@ -63,12 +63,14 @@ MODELS = {
         "refs": "prompt",
         "args": {"image_size": "landscape_4_3", "quality": "high", "output_format": "png"},
     },
-    "kontext-max": {
-        "name": "FLUX.1 Kontext max (BFL)",
-        "text": "fal-ai/flux-pro/kontext/max/text-to-image",
-        "ref": "fal-ai/flux-pro/kontext/max/multi",
+    "flux-3": {
+        "name": "FLUX 3 Image (BFL)",
+        "text": "blackforestlabs/flux-3/text-to-image",
+        "ref": "blackforestlabs/flux-3/edit-image",
         "refs": "prompt",
-        "args": {"aspect_ratio": "4:3", "output_format": "png"},
+        # Prompt expansion would rewrite the preset prompt, so every model reads the same words.
+        "args": {"aspect_ratio": "4:3", "resolution": "1k", "output_format": "png",
+                 "enable_prompt_expansion": False},
     },
     "ideogram-v3": {
         "name": "Ideogram 3 Quality",
