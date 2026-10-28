@@ -1,4 +1,4 @@
-"""HTTP API for the web app: brief → concepts, wrapping the pipeline modules.
+"""HTTP API for the web app: brief → concepts → recipe, wrapping the pipeline modules.
 
     uv run uvicorn impasto.api:app --port 8000
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -27,9 +28,12 @@ from pydantic import BaseModel
 
 from impasto import brief as briefs
 from impasto import concepts
-from impasto.mixing import PLACEHOLDER_INVENTORY, without
+from impasto.color import rgb_to_hex
+from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
+from impasto.recipe_cards import band_brief, write_cards
 from impasto.voice import transcribe
+from impasto.volume import Materials, estimate
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "api"
 MAX_MODEL_CALLS = int(os.environ.get("IMPASTO_MAX_MODEL_CALLS", "20"))
@@ -37,6 +41,7 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_REFERENCES = 6
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
+RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -224,6 +229,115 @@ def new_concepts(
         phase("Mixing each band from the tubes on hand…")
         concepts.mix(drafted, without_tubes, paste_in_mix)
         write(run_folder / "concepts.json", drafted)
-        return {key: drafted[key] for key in ("style", "canvas_px", "concepts", "mixing")}
+        return {"run": run_folder.name, **{key: drafted[key] for key in ("style", "canvas_px", "concepts", "mixing")}}
+
+    return start(work)
+
+
+# --- Recipe ------------------------------------------------------------------
+
+class RecipeRequest(BaseModel):
+    brief_id: str
+    run: str
+    concept: int
+    # Each band's share of the canvas, measured from the painted concept (sums to 1).
+    shares: list[float]
+    without: list[str] = []
+    paste_in_mix: bool = False
+
+
+def unique_names(names: list[str]) -> list[str]:
+    """Spark's cards are matched by band name, so repeated names get a number."""
+    seen: dict[str, int] = {}
+    out = []
+    for name in names:
+        seen[name] = seen.get(name, 0) + 1
+        out.append(name if seen[name] == 1 else f"{name} ({seen[name]})")
+    return out
+
+
+@app.post("/api/recipe")
+def new_recipe(body: RecipeRequest, session: Session) -> dict:
+    folder = brief_folder(body.brief_id)
+    run_folder = folder / body.run
+    if not RUN_ID.match(body.run) or not (run_folder / "concepts.json").is_file():
+        raise HTTPException(404, "No such set of concepts. Make them again.")
+    drafted = json.loads((run_folder / "concepts.json").read_text(encoding="utf-8"))
+    if not 0 <= body.concept < len(drafted["concepts"]):
+        raise HTTPException(422, "No such concept.")
+    concept = drafted["concepts"][body.concept]
+    piece = json.loads((folder / "brief.json").read_text(encoding="utf-8"))["brief"]["piece"]
+    if not (piece["width_cm"] and piece["height_cm"]):
+        raise HTTPException(409, "The brief has no piece size yet.")
+    if len(body.shares) != len(concept["bands"]) or min(body.shares) < 0 or abs(sum(body.shares) - 1) > 0.02:
+        raise HTTPException(422, "Band shares must match the bands and add up to the whole canvas.")
+    try:
+        inventory = without(PLACEHOLDER_INVENTORY, body.without)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    spend(session, 1)
+
+    def work(phase: Callable[[str], None]) -> dict:
+        materials = Materials()
+        names = unique_names([band["name"] for band in concept["bands"]])
+        area = piece["width_cm"] * piece["height_cm"]
+        phase("Working out paint and paste per band…")
+        est = estimate(
+            [{"id": i, "name": name, "area_cm2": round(share * area, 1)} for i, (name, share) in enumerate(zip(names, body.shares))],
+            {name: band["relief"] for name, band in zip(names, concept["bands"])},
+            materials,
+        )
+        phase("Mixing each band from the tubes on hand…")
+        mixer = Mixer(inventory, 1 - materials.paint_fraction if body.paste_in_mix else 0.0)
+        recipes = []
+        for name, band, grams in zip(names, concept["bands"], est.bands):
+            de, combo, shares = mixer.recipe(band["hex"])
+            parts_de, parts = mixer.best_parts(band["hex"], combo)
+            recipes.append({
+                "band": name,
+                "target_hex": band["hex"],
+                "predicted_hex": rgb_to_hex(mixer.mix_rgb(combo, shares)),
+                "delta_e": round(de, 2),
+                "parts_delta_e": round(parts_de, 2),
+                "tubes": [
+                    {"name": mixer.names[i], "share": round(float(s), 2), "grams": round(float(s) * grams.paint_g), "parts": p}
+                    for i, s, p in sorted(zip(combo, shares, parts), key=lambda item: -item[1])
+                ],
+                "paste_grams": round(grams.paste_g),
+            })
+        phase("Writing the recipe cards…")
+        cards = write_cards([band_brief(r) for r in recipes])
+
+        tube_g = materials.paint_tube_ml * materials.paint_density_g_cm3
+        tub_g = materials.paste_tub_ml * materials.paste_density_g_cm3
+        per_tube: dict[str, float] = {}
+        for recipe in recipes:
+            for tube in recipe["tubes"]:
+                per_tube[tube["name"]] = per_tube.get(tube["name"], 0) + tube["grams"]
+        paste_buy = est.paste_g * materials.buffer
+        result = {
+            "bands": [
+                {"name": r["band"], "target_hex": r["target_hex"], "mix_hex": r["predicted_hex"], "delta_e": r["delta_e"],
+                 "parts_delta_e": r["parts_delta_e"], "tubes": r["tubes"], "area_cm2": g.area_cm2, "level": g.level,
+                 "paint_g": g.paint_g, "paste_g": g.paste_g,
+                 "card": {key: card[key] for key in ("recipe_line", "steps", "warnings", "rematch")}}
+                for r, g, card in zip(recipes, est.bands, cards)
+            ],
+            "totals": {"paint_g": est.paint_g, "paste_g": est.paste_g, "area_cm2": round(sum(g.area_cm2 for g in est.bands), 1)},
+            "shopping": {
+                "tubes": sorted(
+                    ({"name": name, "grams": round(g), "buy_g": round(g * materials.buffer),
+                      "tubes": math.ceil(g * materials.buffer / tube_g)} for name, g in per_tube.items()),
+                    key=lambda t: -t["grams"],
+                ),
+                "paste": {"grams": round(est.paste_g), "buy_g": round(paste_buy), "tubs": math.ceil(paste_buy / tub_g)},
+            },
+            "materials": {"tube_ml": materials.paint_tube_ml, "tub_ml": materials.paste_tub_ml,
+                          "buffer_pct": round((materials.buffer - 1) * 100), "waste_pct": round((materials.waste_factor - 1) * 100),
+                          "calibrated": est.calibrated},
+            "mixing": {"tubes": mixer.names, "without": body.without, "paste_in_mix": body.paste_in_mix},
+        }
+        write(run_folder / f"recipe-{body.concept + 1}.json", result)
+        return result
 
     return start(work)
