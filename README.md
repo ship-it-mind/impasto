@@ -51,7 +51,16 @@ uv run spikes/image_concept.py --name with-refs --reference spikes/inputs/past/0
 uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inputs/brief.txt
 ```
 
-_TODO: web app run instructions._
+### Web app
+
+Needs Node 22+ and ffmpeg (for voice notes). Run the API and the web app side by side:
+
+```sh
+cd backend && uv run uvicorn impasto.api:app --port 8000
+cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to :8000
+```
+
+Each browser session may make 20 model calls; set `IMPASTO_MAX_MODEL_CALLS` to change that. Uploads and results land in `backend/output/api/` (git-ignored).
 
 ## Credits
 
