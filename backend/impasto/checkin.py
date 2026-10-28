@@ -7,7 +7,8 @@ The plan is the concept spec the artist chose: its band map (which band each
 part of the canvas belongs to) comes from the same geometry the relief preview
 paints (web/relief/bandmap.ts, needs Node 22+), at the same seed and size, so
 it matches what she saw. --seed defaults to N in concept-N.json, as the app and
-`impasto.concepts --render` number them.
+`impasto.concepts --render` number them. --plan-map gives a band map directly
+instead, e.g. one taken from a photo of a piece that had no concept.
 
 The photo is rectified and white-balanced as in impasto.rectify (corners are
 found by SAM unless --corners gives them). The white reference is required:
@@ -18,7 +19,7 @@ ground is primed white unless --ground X,Y points at bare canvas in the photo.
 Per band: coverage = painted / planned area, and color drift = CIEDE2000
 between the band's median painted color and its planned mix, with the tube
 that best pulls it back. Paste use is not measured: a photo shows area, not
-thickness.
+thickness. Canvas that a cut-off corner of the photo leaves out is not counted.
 
 The summary is at most 3 lines; the artist is holding a knife, not reading a
 report. Each check-in is stored with its time under checkins/<concept>/ next
@@ -71,6 +72,10 @@ DRIFT_DE = 6.0
 FIX_SHARES = (0.03, 0.05, 0.08, 0.12, 0.2, 0.3)
 MIN_FIX_GAIN_DE = 2.0
 MAX_LINES = 3
+# Band map value for canvas outside every band, and the share of the canvas that may
+# be out of the photo before the check-in says so.
+NO_BAND = 255
+MAX_OUTSIDE = 0.01
 # Primed canvas, as it reads after white balance against paper.
 WHITE_GROUND_LAB = rgb_to_lab((TARGET_WHITE,) * 3)
 
@@ -300,11 +305,97 @@ def seed_from_name(path: Path) -> int:
     return int(match.group(1)) if match else 1
 
 
+async def check_in(
+    photo: Path,
+    concept_path: Path,
+    size: tuple[float, float],
+    white: tuple[float, float],
+    out: Path,
+    *,
+    corners: list[tuple[float, float]] | None = None,
+    ground: tuple[float, float] | None = None,
+    inventory: dict = PLACEHOLDER_INVENTORY,
+    px_per_cm: float = DEFAULT_PX_PER_CM,
+    seed: int | None = None,
+    plan_map: Path | None = None,
+) -> CheckIn:
+    """Measure one photo against the plan and write checkin.json, rectified.png and progress.png to out."""
+    image = cv2.imread(str(photo))
+    if image is None:
+        raise FileNotFoundError(photo)
+    concept = json.loads(concept_path.read_text(encoding="utf-8"))
+    seed = seed if seed is not None else seed_from_name(concept_path)
+    taken_at = datetime.now(timezone.utc)
+    out.mkdir(parents=True, exist_ok=True)
+
+    height, width = image.shape[:2]
+    if corners:
+        corners_px, source = np.array(corners, dtype=np.float32), "manual"
+    else:
+        corners_px, source = await detect_corners(photo, (width, height)), "auto"
+    warped, info = rectify(image, corners_px, size, px_per_cm, source, white)
+    warnings = list(info.warnings)
+    if ground:
+        (ground_px,) = photo_to_canvas([ground], info.homography)
+        ground_lab = sample_ground(warped, ground_px)
+    else:
+        ground_lab = WHITE_GROUND_LAB
+
+    if plan_map:
+        planned = cv2.imread(str(plan_map), cv2.IMREAD_GRAYSCALE)
+        if planned is None:
+            raise FileNotFoundError(plan_map)
+    else:
+        piece = {"piece": {"width_cm": size[0], "height_cm": size[1]}}
+        planned = plan_band_map(concept_path, seed, canvas_px(piece), out / "plan.png")
+    band_map = cv2.resize(planned, info.output_size, interpolation=cv2.INTER_NEAREST)
+    # Canvas a corner of the photo cut off is neither painted nor bare: leave it out.
+    in_photo = cv2.warpPerspective(
+        np.full((height, width), 255, np.uint8), np.array(info.homography), info.output_size, flags=cv2.INTER_NEAREST,
+    ) > 0
+    outside = 1 - float(in_photo.mean())
+    if outside > MAX_OUTSIDE:
+        warnings.append(f"{outside:.0%} of the canvas is outside the photo and isn't counted.")
+    band_map[~in_photo] = NO_BAND
+
+    bands, painted = measure(warped, band_map, concept, ground_lab, px_per_cm, inventory)
+    total = sum(b.planned_cm2 for b in bands)
+    coverage = round(sum(b.painted_cm2 for b in bands) / total, 3) if total else 0.0
+    checkin = CheckIn(
+        taken_at=taken_at.isoformat(timespec="seconds"),
+        photo=str(photo),
+        concept=str(concept_path),
+        seed=seed,
+        canvas_cm=size,
+        coverage=coverage,
+        bands=bands,
+        summary=summarize(bands, coverage),
+        warnings=warnings,
+    )
+    cv2.imwrite(str(out / "rectified.png"), warped)
+    cv2.imwrite(str(out / "progress.png"), draw_progress(warped, band_map, painted, len(bands)))
+    (out / "checkin.json").write_text(json.dumps(asdict(checkin), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return checkin
+
+
+def print_checkin(checkin: CheckIn) -> None:
+    for line in checkin.summary:
+        print(line)
+    print()
+    for b in checkin.bands:
+        color = f"  {b.measured_hex} vs {b.planned_hex} ΔE {b.delta_e:4.1f}" if b.delta_e is not None else ""
+        print(f"{b.id}. {b.name:<16} {b.coverage:5.0%} of {b.planned_cm2:7.1f} cm²{color}")
+    for warning in checkin.warnings:
+        print(f"Warning: {warning}")
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("photo", type=Path)
     parser.add_argument("--concept", type=Path, required=True, help="the chosen concept's spec (concept-N.json)")
     parser.add_argument("--seed", type=int, help="the concept's seed (default: N in concept-N.json)")
+    parser.add_argument("--plan-map", type=Path,
+                        help=f"band index per pixel as a grayscale PNG ({NO_BAND} = no band), instead of drawing it from the concept")
     parser.add_argument("--size", type=parse_size, required=True, help="canvas WIDTHxHEIGHT in cm")
     parser.add_argument("--corners", type=parse_point, nargs=4, metavar="X,Y",
                         help="canvas corners in photo pixels; skips automatic detection")
@@ -318,62 +409,17 @@ async def main() -> None:
     parser.add_argument("--out", type=Path, help="output folder (default: checkins/<concept>/<time> next to the spec)")
     args = parser.parse_args()
 
-    image = cv2.imread(str(args.photo))
-    if image is None:
-        raise FileNotFoundError(args.photo)
-    concept = json.loads(args.concept.read_text(encoding="utf-8"))
     try:
         inventory = without(PLACEHOLDER_INVENTORY, args.without)
     except ValueError as error:
         parser.error(str(error))
-    seed = args.seed if args.seed is not None else seed_from_name(args.concept)
-    taken_at = datetime.now(timezone.utc)
-    out = args.out or args.concept.parent / "checkins" / args.concept.stem / taken_at.strftime("%Y%m%dT%H%M%SZ")
-    out.mkdir(parents=True, exist_ok=True)
-
-    height, width = image.shape[:2]
-    if args.corners:
-        corners, source = np.array(args.corners, dtype=np.float32), "manual"
-    else:
-        corners, source = await detect_corners(args.photo, (width, height)), "auto"
-    warped, info = rectify(image, corners, args.size, args.px_per_cm, source, args.white)
-    warnings = list(info.warnings)
-    if args.ground:
-        (ground_px,) = photo_to_canvas([args.ground], info.homography)
-        ground_lab = sample_ground(warped, ground_px)
-    else:
-        ground_lab = WHITE_GROUND_LAB
-
-    piece = {"piece": {"width_cm": args.size[0], "height_cm": args.size[1]}}
-    planned = plan_band_map(args.concept, seed, canvas_px(piece), out / "plan.png")
-    band_map = cv2.resize(planned, info.output_size, interpolation=cv2.INTER_NEAREST)
-    bands, painted = measure(warped, band_map, concept, ground_lab, args.px_per_cm, inventory)
-    total = sum(b.planned_cm2 for b in bands)
-    coverage = round(sum(b.painted_cm2 for b in bands) / total, 3) if total else 0.0
-
-    checkin = CheckIn(
-        taken_at=taken_at.isoformat(timespec="seconds"),
-        photo=str(args.photo),
-        concept=str(args.concept),
-        seed=seed,
-        canvas_cm=args.size,
-        coverage=coverage,
-        bands=bands,
-        summary=summarize(bands, coverage),
-        warnings=warnings,
+    out = args.out or args.concept.parent / "checkins" / args.concept.stem / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    checkin = await check_in(
+        args.photo, args.concept, args.size, args.white, out,
+        corners=args.corners, ground=args.ground, inventory=inventory, px_per_cm=args.px_per_cm,
+        seed=args.seed, plan_map=args.plan_map,
     )
-    cv2.imwrite(str(out / "rectified.png"), warped)
-    cv2.imwrite(str(out / "progress.png"), draw_progress(warped, band_map, painted, len(bands)))
-    (out / "checkin.json").write_text(json.dumps(asdict(checkin), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-    for line in checkin.summary:
-        print(line)
-    print()
-    for b in bands:
-        color = f"  {b.measured_hex} vs {b.planned_hex} ΔE {b.delta_e:4.1f}" if b.delta_e is not None else ""
-        print(f"{b.id}. {b.name:<16} {b.coverage:5.0%} of {b.planned_cm2:7.1f} cm²{color}")
-    for warning in warnings:
-        print(f"Warning: {warning}")
+    print_checkin(checkin)
     print(f"Wrote {out}")
 
 
