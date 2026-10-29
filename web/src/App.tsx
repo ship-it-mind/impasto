@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { AppHeader, type Step } from '@/components/app-header'
 import { getPresets, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
+import type { Recipe } from '@/lib/recipe'
+import { CheckInsScreen } from '@/screens/checkins'
 import { BriefScreen } from '@/screens/brief'
 import { ConceptsScreen } from '@/screens/concepts'
 import { RecipeScreen } from '@/screens/recipe'
@@ -9,7 +11,8 @@ import { RecipeScreen } from '@/screens/recipe'
 type Flow =
   | { step: 'Brief' }
   | { step: 'Concepts'; brief: BriefResult; set: ConceptSet; pick?: number }
-  | { step: 'Recipe'; brief: BriefResult; set: ConceptSet; pick: number }
+  | { step: 'Recipe'; brief: BriefResult; set: ConceptSet; pick: number; recipe?: Recipe }
+  | { step: 'Check-ins'; brief: BriefResult; set: ConceptSet; pick: number; recipe: Recipe }
 
 export default function App() {
   const [flow, setFlow] = useState<Flow>({ step: 'Brief' })
@@ -36,7 +39,19 @@ export default function App() {
           concept={flow.set.concepts[flow.pick]}
           seed={flow.pick + 1}
           tubes={tubes}
+          initialRecipe={flow.recipe}
           onBack={() => setFlow({ step: 'Concepts', brief: flow.brief, set: flow.set, pick: flow.pick })}
+          onCheckIns={recipe => setFlow({ ...flow, step: 'Check-ins', recipe })}
+        />
+      )}
+      {flow.step === 'Check-ins' && (
+        <CheckInsScreen
+          brief={flow.brief}
+          set={flow.set}
+          concept={flow.set.concepts[flow.pick]}
+          seed={flow.pick + 1}
+          recipe={flow.recipe}
+          onBack={() => setFlow({ ...flow, step: 'Recipe' })}
         />
       )}
     </div>

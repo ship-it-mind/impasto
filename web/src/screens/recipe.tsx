@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { LitPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
 import { makeRecipe, type ConceptSet } from '@/lib/api'
@@ -79,16 +79,21 @@ type RecipeProps = {
   concept: Concept
   seed: number
   tubes: string[]
+  // The recipe already made for this concept, when coming back from the check-ins.
+  initialRecipe?: Recipe
   onBack: () => void
+  onCheckIns: (recipe: Recipe) => void
 }
 
 // The paint plan as a recipe book: painting, totals and shopping list on the left,
 // one recipe per band on the right.
-export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: RecipeProps) {
+export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, onBack, onCheckIns }: RecipeProps) {
   const [W, H] = set.canvasPx
-  const [settings, setSettings] = useState<MixSettings>({ without: [], pasteInMix: false })
-  const [recipe, setRecipe] = useState<Recipe | null>(null)
-  const [phase, setPhase] = useState<string | null>('Measuring the bands…')
+  const [settings, setSettings] = useState<MixSettings>(
+    initialRecipe ? { without: initialRecipe.mixing.without, pasteInMix: initialRecipe.mixing.paste_in_mix } : { without: [], pasteInMix: false },
+  )
+  const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe ?? null)
+  const [phase, setPhase] = useState<string | null>(initialRecipe ? null : 'Measuring the bands…')
   const [error, setError] = useState<string | null>(null)
 
   const run = useCallback(async (s: MixSettings) => {
@@ -106,7 +111,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: Recip
   }, [brief, set, concept, seed, W, H])
 
   // Once per screen: StrictMode runs effects twice in development, and each run costs a model call.
-  const started = useRef(false)
+  const started = useRef(!!initialRecipe)
   useEffect(() => {
     if (started.current) return
     started.current = true
@@ -186,7 +191,14 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, onBack }: Recip
 
       <div className="flex flex-col" aria-live="polite">
         <header className="flex flex-col gap-2 pt-11 pb-6">
-          <h2 className="text-3xl font-semibold tracking-tight">Mixing recipes</h2>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h2 className="text-3xl font-semibold tracking-tight">Mixing recipes</h2>
+            {recipe && (
+              <Button variant="outline" disabled={!!phase} onClick={() => onCheckIns(recipe)}>
+                <Camera /> Check in on progress
+              </Button>
+            )}
+          </div>
           <p className="max-w-[60ch] text-pretty text-muted-foreground">
             Mix by parts, lightest color first, and add the darker ones a little at a time.
             {recipe && ` Grams are how much each band needs in all, from typical layer depths for thin, medium and heavy paste, plus ${recipe.materials.waste_pct}% for what stays on the palette and knife.`}

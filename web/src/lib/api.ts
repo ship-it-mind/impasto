@@ -3,6 +3,7 @@
 // Model calls run as jobs on the server: each call here starts one and polls it,
 // passing the server's phase ("Transcribing the voice note…") to `onPhase`.
 
+import type { CheckIn, CheckInInput } from './checkin'
 import type { Concept, Piece } from './concepts'
 import type { BriefResult, Preset } from './brief'
 import type { MixSettings, Recipe } from './recipe'
@@ -100,4 +101,27 @@ export function makeRecipe(
       without: settings.without, paste_in_mix: settings.pasteInMix,
     }),
   }), onPhase)
+}
+
+// Measure a photo of the canvas against the chosen concept, painted at `seed`:
+// coverage and color drift per band, against the latest recipe's mixes.
+export function checkIn(
+  result: BriefResult, set: ConceptSet, concept: Concept, seed: number, input: CheckInInput, onPhase?: (phase: string) => void,
+): Promise<CheckIn> {
+  const form = new FormData()
+  form.append('brief_id', result.id)
+  form.append('run', set.run)
+  form.append('concept', String(concept.index))
+  form.append('seed', String(seed))
+  form.append('photo', input.photo)
+  form.append('white', input.white.join(','))
+  input.corners.forEach(c => form.append('corners', c.join(',')))
+  if (input.ground) form.append('ground', input.ground.join(','))
+  return poll(request('/checkins', { method: 'POST', body: form }), onPhase)
+}
+
+// Every check-in on this concept so far, oldest first.
+export async function listCheckIns(result: BriefResult, set: ConceptSet, concept: Concept): Promise<CheckIn[]> {
+  const query = new URLSearchParams({ brief_id: result.id, run: set.run, concept: String(concept.index) })
+  return (await request<{ checkins: CheckIn[] }>(`/checkins?${query}`)).checkins
 }
