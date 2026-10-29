@@ -21,7 +21,8 @@ export type Brief = {
   clarifying_question: string | null
 }
 
-export type BriefResult = { id: string; transcript: string; brief: Brief; warnings: string[] }
+// wall: the client's wall photo (URL), when the brief came with one.
+export type BriefResult = { id: string; transcript: string; brief: Brief; warnings: string[]; wall: string | null }
 
 export type Relief = { default?: string; accent?: string; top?: string; bottom?: string }
 export type Preset = {

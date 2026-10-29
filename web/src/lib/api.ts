@@ -3,7 +3,7 @@
 // Model calls run as jobs on the server: each call here starts one and polls it,
 // passing the server's phase ("Transcribing the voice note…") to `onPhase`.
 
-import type { CheckIn, CheckInInput } from './checkin'
+import type { CheckIn, CheckInInput, Point } from './checkin'
 import type { Concept, Piece } from './concepts'
 import type { BriefResult, Preset } from './brief'
 import type { MixSettings, Recipe } from './recipe'
@@ -152,4 +152,19 @@ export function checkIn(
 export async function listCheckIns(result: BriefResult, set: ConceptSet, concept: Concept): Promise<CheckIn[]> {
   const query = new URLSearchParams({ brief_id: result.id, run: set.run, concept: String(concept.index) })
   return (await request<{ checkins: CheckIn[] }>(`/checkins?${query}`)).checkins
+}
+
+// How the piece hangs on the client's wall photo: a measured line, its length, and the canvas's center (photo pixels).
+export type Mockup = { line: [Point, Point]; length_cm: number; center: Point }
+
+export async function getMockup(briefId: string): Promise<Mockup | null> {
+  return (await request<{ mockup: Mockup | null }>(`/pieces/${briefId}/mockup`)).mockup
+}
+
+export async function saveMockup(briefId: string, mockup: Mockup): Promise<Mockup> {
+  return (await request<{ mockup: Mockup }>(`/pieces/${briefId}/mockup`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(mockup),
+  })).mockup
 }

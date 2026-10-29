@@ -98,6 +98,7 @@ export default function App() {
           canvasPx={set.canvasPx}
           piece={set.piece}
           initialPick={pick}
+          photo={brief.wall ? { briefId: brief.id, url: brief.wall } : undefined}
           onChoose={p => go('Recipe', p === pick ? piece : { brief, set, pick: p })}
         />
       )}
