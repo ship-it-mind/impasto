@@ -114,7 +114,15 @@ function Coverage({ band }: { band: BandProgress }) {
   )
 }
 
-function Result({ checkin }: { checkin: CheckIn }) {
+type Plan = { concept: Concept; seed: number; size: [number, number] }
+
+// The bands in the order she is painting them: furthest along first.
+function paintOrder(checkin: CheckIn): number[] {
+  return checkin.bands.map(b => b.id).sort((a, b) => checkin.bands[b].coverage - checkin.bands[a].coverage || a - b)
+}
+
+function Result({ checkin, plan }: { checkin: CheckIn; plan: Plan }) {
+  const stage = useMemo(() => ({ order: paintOrder(checkin), painted: checkin.coverage }), [checkin])
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
@@ -131,10 +139,20 @@ function Result({ checkin }: { checkin: CheckIn }) {
           ))}
         </ul>
       )}
-      <figure className="flex flex-col gap-2">
-        <img src={checkin.images.progress} alt="The canvas, straightened, with unpainted parts of each band tinted" className="w-full rounded-sm" />
-        <figcaption className="text-xs text-muted-foreground">Straightened and color-corrected. Hatched parts are still to paint, in their band's planned color.</figcaption>
-      </figure>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <figure className="flex flex-col gap-2">
+          <img src={checkin.images.progress} alt="The canvas, straightened, with unpainted parts of each band hatched" className="w-full rounded-sm" />
+          <figcaption className="text-xs text-pretty text-muted-foreground">
+            Your canvas, straightened and color-corrected. Hatched parts are still to paint, in their band's planned color.
+          </figcaption>
+        </figure>
+        <figure className="flex flex-col gap-2">
+          <LitPainting concept={plan.concept} seed={plan.seed} width={plan.size[0]} height={plan.size[1]} light={DEFAULT_LIGHT} stage={stage} className="rounded-sm" />
+          <figcaption className="text-xs text-pretty text-muted-foreground">
+            The plan at the same stage: {percent(checkin.coverage)} painted, bands in the order you're painting them.
+          </figcaption>
+        </figure>
+      </div>
       <ul aria-label="Bands">
         {checkin.bands.map(b => <Coverage key={b.id} band={b} />)}
       </ul>
@@ -334,7 +352,7 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
           </div>
         )}
 
-        {!photo && shown && <Result checkin={shown} />}
+        {!photo && shown && <Result checkin={shown} plan={{ concept: planned, seed, size: [W, H] }} />}
         {!photo && !shown && (
           <button
             type="button"
