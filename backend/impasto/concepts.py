@@ -11,6 +11,14 @@ and a relief level. Code checks them against the preset and adds Lab colors.
 Each spec is what the relief renderer (web/relief/render.ts) paints, and what
 the recipe step mixes, so nothing downstream guesses from pixels.
 
+Path A (OUR-138): Muse Image then paints each spec (`paint`), with the
+reference photos attached when there are any, and impasto.layout reads the
+band layout and knife direction back off the painting. The relief preview,
+the recipe's band areas and the check-ins all use that layout, so the concept
+looks like Muse's composition but in the colors the user can mix. A concept
+whose painting can't be read (a band missing or merged) keeps the drawn
+geometry of the spec instead (Path B), with a note saying so.
+
 Each band also gets its Mixbox mix from the tubes on hand (impasto.mixing), and
 the renderer paints that mix rather than Spark's color, so the preview shows
 what the user can actually mix. A band whose mix is more than MAX_MIX_DE off
@@ -25,19 +33,27 @@ brief, else from the references, else from the preset's fallback.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from math import gcd
 from pathlib import Path
 
+import cv2
+import numpy as np
+
+from impasto import layout as layouts
 from impasto.color import hex_to_rgb, rgb_to_hex, rgb_to_lab
 from impasto.meta import REPO_ROOT, client, data_url
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
-from impasto.presets import DEFAULT_PRESET, PRESETS
+from impasto.presets import BASE_PROMPT, DEFAULT_PRESET, PRESETS
 from impasto.volume import LEVELS, load_materials
 
 MODEL = "muse-spark-1.3"
+IMAGE_MODEL = "muse-image-1.0"
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "concepts"
 RENDERER = REPO_ROOT / "web" / "relief" / "render.ts"
 ALL_FLOWS = sorted({flow for preset in PRESETS.values() for flow in preset["flows"]})
@@ -71,6 +87,22 @@ Palette: {palette}
 """
 
 PRESET_STYLE = "Style: {name}. {prompt}"
+
+# How Muse Image is told to lay out the bands of each flow, and in which order they are listed.
+FLOW_TEXT = {
+    "arc": "The bands are concentric arcs sweeping across the canvas from a center off one corner, listed from the inside out.",
+    "diagonal": "The bands run diagonally across the whole canvas, side by side, listed from one corner to the opposite one.",
+    "wave": "The bands run diagonally across the canvas in long, gentle waves, side by side, listed from one side to the other.",
+    "horizontal": "The bands are horizontal and stacked from top to bottom, edge to edge, listed from the top.",
+    "gentle wave": "The bands are near-horizontal with a gentle wave, stacked from top to bottom, listed from the top.",
+    "grid": "The canvas is a loose grid of rectangular panels, each panel one band's color; neighbors never share a color.",
+    "diagonal split": "The canvas is split into panels by one or two straight diagonals, each panel one band's color.",
+}
+RELIEF_TEXT = {"thin": "thin, smooth paste", "medium": "medium paste", "heavy": "thick, built-up paste with deep knife ridges"}
+REFERENCE_PREFIX = (
+    "These photos are an artist's past works. Use their look and knife texture, but follow the "
+    "composition, colors and relief described below exactly, and copy none of them. "
+)
 REFERENCE_STYLE = (
     "The attached photos show the style to follow: take the look, the palette and how the "
     "paste is laid from them, without copying any one of them."
@@ -241,6 +273,72 @@ def mix(record: dict, unticked: list[str], paste_in_mix: bool) -> None:
                 )
 
 
+def image_prompt(concept: dict, size: tuple[int, int], preset_key: str | None, references: bool) -> str:
+    """Muse Image prompt for one spec: its composition, each band's color, share and relief, and the canvas shape."""
+    width, height = size
+    shape = "a square" if abs(width / height - 1) < 0.05 else ("a landscape" if width > height else "a portrait")
+    total = sum(band["width"] for band in concept["bands"]) or 1
+    bands = " ".join(
+        f"{i}. {band['name']} ({band['hex']}), about {band['width'] / total:.0%} of the canvas, {RELIEF_TEXT[band['relief']]}."
+        for i, band in enumerate(concept["bands"], start=1)
+    )
+    parts = [REFERENCE_PREFIX if references else "", BASE_PROMPT]
+    if preset_key:
+        parts.append(PRESETS[preset_key]["prompt"])
+    parts += [
+        f"The canvas is {shape} format, {width // gcd(width, height)}:{height // gcd(width, height)}.",
+        FLOW_TEXT[concept["flow"]],
+        f"{len(concept['bands'])} bands, each painted in exactly its color: {bands}",
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def paint_one(prompt: str, references: list[Path]) -> np.ndarray:
+    content = [{"type": "input_text", "text": prompt}]
+    content += [{"type": "input_image", "image_url": data_url(path)} for path in references]
+    response = client().responses.create(model=IMAGE_MODEL, input=[{"role": "user", "content": content}])
+    image_b64 = next((item.result for item in response.output if item.type == "image_generation_call"), None)
+    if image_b64 is None:
+        raise RuntimeError(f"Muse Image returned no image ({response.status}, response {response.id}).")
+    image = cv2.imdecode(np.frombuffer(base64.b64decode(image_b64), np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError(f"Muse Image returned an image that can't be read (response {response.id}).")
+    return image
+
+
+def paint(record: dict, folder: Path, references: list[Path]) -> None:
+    """Path A: Muse Image paints each usable concept, and its band layout is read back off the painting.
+
+    Writes concept-N-muse.png and concept-N-layout.png to folder and records them
+    under the concept's "layout". A concept Muse couldn't paint, or whose layout
+    can't be read, gets a "layout_note" and keeps the spec's drawn geometry.
+    """
+    size = tuple(record["canvas_px"])
+    jobs = [(i, c) for i, c in enumerate(record["concepts"], start=1) if not c["warnings"]]
+
+    def one(job: tuple[int, dict]) -> None:
+        i, concept = job
+        prompt = image_prompt(concept, size, record["style"]["preset"], bool(references))
+        try:
+            painting = paint_one(prompt, references)
+        except Exception as error:  # noqa: BLE001 - one failed painting keeps its drawn layout
+            concept["layout_note"] = f"Muse Image couldn't paint it ({str(error)[:120]}); showing the drawn layout."
+            return
+        cv2.imwrite(str(folder / f"concept-{i}-muse.png"), painting)
+        layout = layouts.read_layout(painting, [band["hex"] for band in concept["bands"]], size)
+        if problems := layouts.problems(layout, [band["name"] for band in concept["bands"]]):
+            concept["layout_note"] = f"Muse's painting didn't keep every band ({'; '.join(problems)}); showing the drawn layout."
+            return
+        layouts.write_layout(layout, folder / f"concept-{i}-layout.png")
+        concept["layout"] = {
+            "image": f"concept-{i}-muse.png", "map": f"concept-{i}-layout.png",
+            "shares": layout.shares, "color_de": layout.color_de, "prompt": prompt,
+        }
+
+    with ThreadPoolExecutor(max_workers=len(jobs) or 1) as pool:
+        list(pool.map(one, jobs))
+
+
 def render(record: dict, folder: Path) -> list[Path]:
     """Paint each concept with the relief renderer (needs Node 22+)."""
     node = shutil.which("node")
@@ -272,7 +370,9 @@ def print_concepts(record: dict) -> None:
         for band in concept["bands"]:
             mixed = f"  → mix {band['mix']['hex']} ΔE {band['mix']['delta_e']:.1f}" if "mix" in band else ""
             print(f"   {band['hex']}  {band['name']:<18} width {band['width']:<4g} {band['relief']:<6}{mixed}")
-        for warning in concept["warnings"] + concept.get("mix_warnings", []):
+        if "layout" in concept:
+            print(f"   Muse layout: {concept['layout']['map']}, band shares {concept['layout']['shares']}")
+        for warning in concept["warnings"] + concept.get("mix_warnings", []) + [concept.get("layout_note")] * ("layout_note" in concept):
             print(f"   ⚠️  {warning}")
 
 
@@ -282,7 +382,8 @@ def main() -> None:
     parser.add_argument("--preset", choices=sorted(PRESETS), help=f"style preset (default {DEFAULT_PRESET} if no references)")
     parser.add_argument("--reference", action="append", type=Path, default=[],
                         help="style reference photo; repeat for several")
-    parser.add_argument("--render", action="store_true", help="paint each concept with the relief renderer")
+    parser.add_argument("--muse", action="store_true", help="Path A: Muse Image paints each concept and its band layout is read back")
+    parser.add_argument("--render", action="store_true", help="paint each concept with the relief renderer (drawn layout)")
     parser.add_argument("--without", action="append", default=[], metavar="TUBE",
                         help="leave out a tube for this piece; repeat for several")
     parser.add_argument("--paste-in-mix", action="store_true", help="paste is mixed into the color")
@@ -303,6 +404,8 @@ def main() -> None:
 
     folder = args.out or OUTPUT_ROOT / (args.preset or ("references" if args.reference else DEFAULT_PRESET))
     folder.mkdir(parents=True, exist_ok=True)
+    if args.muse:
+        paint(record, folder, args.reference)
     (folder / "concepts.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print_concepts(record)
     print(f"\nWrote {folder / 'concepts.json'}")
