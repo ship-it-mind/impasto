@@ -27,8 +27,8 @@ We tested each model on a photo of one of the artist's finished pieces before de
 | Model | Job in the app |
 |---|---|
 | Muse Spark | Reads band structure from a painting, turns the voice brief into a structured brief, writes mixing recipes |
-| SAM 3.1 | One mask per color band from the artist's points, for area per band and progress coverage |
-| Muse Image | Concept compositions in the artist's style, steered by her past works |
+| SAM 3.1 | One mask per color band from the artist's points, for area per band; finds the canvas corners in check-in photos |
+| Muse Image | Paints each concept from Spark's band spec, steered by the user's reference photos when given; the band layout read off its painting drives the relief preview, the recipe's band areas and the check-ins |
 | Muse Voice Transcribe | Transcribes the client's voice note |
 
 ## Setup
