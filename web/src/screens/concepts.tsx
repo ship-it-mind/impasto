@@ -112,8 +112,8 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
 
         <section className="flex flex-col gap-2" aria-label="Colors">
           <div className="flex h-10 overflow-hidden rounded-md shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)]">
-            {concept.bands.map(b => (
-              <span key={b.name} title={b.name} style={{ flexGrow: b.width, background: b.mix.hex }} />
+            {concept.bands.map((b, i) => (
+              <span key={b.name} title={b.name} style={{ flexGrow: concept.layout?.shares[i] ?? b.width, background: b.mix.hex }} />
             ))}
           </div>
           <p className="text-xs text-muted-foreground">{concept.bands.map(b => b.name).join(' · ')}</p>
@@ -125,6 +125,20 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
             </p>
           )}
         </section>
+
+        {concept.layout && (
+          <figure className="flex items-center gap-3">
+            <img
+              src={concept.layout.image}
+              alt={`Muse Image's painting of ${concept.title}`}
+              className="h-16 w-auto rounded-sm shadow-[0_0_0_1px_rgb(0_0_0/0.08)]"
+            />
+            <figcaption className="text-xs text-pretty text-muted-foreground">
+              Painted by Muse Image. The preview follows its layout, in the mixes your tubes make.
+            </figcaption>
+          </figure>
+        )}
+        {concept.layout_note && <p className="text-xs text-pretty text-muted-foreground">{concept.layout_note}</p>}
 
         <Button size="lg" className="self-start" onClick={() => onChoose(pick)}>Paint this one</Button>
       </aside>
