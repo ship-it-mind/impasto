@@ -81,11 +81,19 @@ export class Surface {
 }
 
 const CANVAS_WHITE: RGB = [243, 239, 230];
-function blankCanvas(sf: Surface): void {
+function blankCanvas(sf: Surface, only?: (i: number) => boolean): void {
   for (let y = 0, i = 0; y < sf.h; y++) for (let x = 0; x < sf.w; x++, i++) {
+    if (only && !only(i)) continue;
     sf.C[i * 3] = CANVAS_WHITE[0]; sf.C[i * 3 + 1] = CANVAS_WHITE[1]; sf.C[i * 3 + 2] = CANVAS_WHITE[2];
     sf.Hm[i] = (((x >> 1) + (y >> 1)) & 1) ? 0.22 : 0.0;  // canvas weave
   }
+}
+
+// Bare canvas wherever no stroke has reached yet in the bands not finished,
+// toned ground included: how a painting part-way through looks. Finished bands
+// keep their toned ground between strokes.
+export function bareUnpainted(sf: Surface, finished: Set<number>): void {
+  blankCanvas(sf, i => sf.stamp[i] === 0 && !finished.has(sf.band?.[i] ?? -1));
 }
 
 // Toned ground: the scene's colors, pulled toward a warm brown. Blocky, unless
@@ -257,18 +265,29 @@ function planPainting(sf: Surface, o: PaintOptions, scene: Scene, st: StrokeStyl
 }
 
 // Step 0 is the bare canvas, step 1 the toned wash, then one step per stroke.
+// Given a band `order`, strokes are replayed band by band in that order (each
+// band's own in pass order): strokes never leave their band, so the finished
+// painting is the same, and a step can stand for how much has been painted.
 export class Timeline {
   readonly sf: Surface; readonly o: PaintOptions; readonly scene: Scene;
   readonly T: number; k = 0;
   private readonly tz: Noise; private readonly st = KNIFE;
   private readonly ev: StrokeEvent[]; private readonly passEnds: number[];
+  private readonly bandRuns: { band: number; from: number; to: number }[] = [];
   private readonly interval: number;
   private readonly snaps = new Map<number, { c: Uint8ClampedArray; h: Uint16Array }>();
-  constructor(sf: Surface, o: PaintOptions, scene: Scene) {
+  constructor(sf: Surface, o: PaintOptions, scene: Scene, order?: number[]) {
     this.sf = sf; this.o = o; this.scene = scene;
     this.tz = makeNoise(o.seed + 999);
     const plan = planPainting(sf, o, scene, this.st);
     this.ev = plan.events; this.passEnds = plan.passEnds;
+    if (order && scene.bandAt) {
+      const bandOf = (e: StrokeEvent) => scene.bandAt!(e.x | 0, e.y | 0);
+      const byBand = order.map(band => this.ev.filter(e => bandOf(e) === band));
+      this.ev = byBand.flat();
+      let from = 0;
+      order.forEach((band, i) => { this.bandRuns.push({ band, from, to: from + byBand[i].length }); from += byBand[i].length; });
+    }
     this.T = this.ev.length + 1;
     this.interval = Math.max(300, Math.ceil(this.T / 12));
     if (scene.bandAt) {
@@ -312,6 +331,23 @@ export class Timeline {
       if ((this.k & 7) === 0 && performance.now() - t0 > budget) break;
     }
     return this.k === target;
+  }
+  // The step at which `painted` of the canvas is covered, painting bands in the
+  // given order; `shares` is each band's share of the canvas.
+  stepAt(painted: number, shares: number[]): number {
+    let left = painted, events = 0;
+    for (const run of this.bandRuns) {
+      const share = shares[run.band] ?? 0;
+      const f = share > 0 ? Math.min(1, left / share) : 1;
+      events = run.from + Math.round(f * (run.to - run.from));
+      if (f < 1) break;
+      left -= share;
+    }
+    return events ? 1 + events : 0;
+  }
+  // The bands whose strokes are all down by step k, painting in the given order.
+  finishedAt(k: number): Set<number> {
+    return new Set(this.bandRuns.filter(run => run.to <= k - 1).map(run => run.band));
   }
   phase(k: number): string {
     if (k === 0) return 'Bare canvas';

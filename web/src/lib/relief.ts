@@ -7,11 +7,14 @@ import type { Concept } from './concepts'
 
 type Painted = { surface: Surface; shares: number[] }
 
+// Part-way through: `painted` of the canvas covered, painting the bands in `order` (all of them).
+export type Stage = { order: number[]; painted: number }
+
 // Each painting is kept, so switching concepts or remounting never repaints.
 const paints = new Map<string, Promise<Painted>>()
 
-export function paint(concept: Concept, seed: number, W: number, H: number): Promise<Painted> {
-  const key = JSON.stringify([concept.flow, concept.bands.map(b => [b.mix.hex, b.width, b.relief]), seed, W, H])
+export function paint(concept: Concept, seed: number, W: number, H: number, stage?: Stage): Promise<Painted> {
+  const key = JSON.stringify([concept.flow, concept.bands.map(b => [b.mix.hex, b.width, b.relief]), seed, W, H, stage ?? null])
   let p = paints.get(key)
   if (!p) {
     p = new Promise(resolve => {
@@ -23,21 +26,22 @@ export function paint(concept: Concept, seed: number, W: number, H: number): Pro
         worker.terminate()
         resolve({ surface, shares: e.data.shares })
       }
-      worker.postMessage({ spec: concept as unknown as ConceptSpec, W, H, seed })
+      worker.postMessage({ spec: concept as unknown as ConceptSpec, W, H, seed, stage })
     })
     paints.set(key, p)
   }
   return p
 }
 
-export function usePainting(concept: Concept, seed: number, W: number, H: number): Surface | null {
+export function usePainting(concept: Concept, seed: number, W: number, H: number, stage?: Stage): Surface | null {
   const [sf, setSf] = useState<Surface | null>(null)
+  const stageKey = stage ? JSON.stringify(stage) : ''
   useEffect(() => {
     let alive = true
     setSf(null)
-    paint(concept, seed, W, H).then(p => { if (alive) setSf(p.surface) })
+    paint(concept, seed, W, H, stageKey ? JSON.parse(stageKey) as Stage : undefined).then(p => { if (alive) setSf(p.surface) })
     return () => { alive = false }
-  }, [concept, seed, W, H])
+  }, [concept, seed, W, H, stageKey])
   return sf
 }
 

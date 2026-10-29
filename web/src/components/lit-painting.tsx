@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { Concept } from '@/lib/concepts'
-import { lightName, usePainting } from '@/lib/relief'
+import { lightName, usePainting, type Stage } from '@/lib/relief'
 import { relight } from '../../relief/engine.ts'
 
 type LitPaintingProps = {
@@ -12,6 +12,8 @@ type LitPaintingProps = {
   height: number
   light: number
   gloss?: number
+  // Stop part-way, as the painting would look at that stage.
+  stage?: Stage
   className?: string
 }
 
@@ -28,8 +30,8 @@ function flatGradient(concept: Concept): string {
 }
 
 // A concept painted as knife-stroke relief, relit whenever `light` changes (at most once a frame).
-export function LitPainting({ concept, seed, width, height, light, gloss = 0.15, className }: LitPaintingProps) {
-  const sf = usePainting(concept, seed, width, height)
+export function LitPainting({ concept, seed, width, height, light, gloss = 0.15, stage, className }: LitPaintingProps) {
+  const sf = usePainting(concept, seed, width, height, stage)
   const canvas = useRef<HTMLCanvasElement>(null)
   const buffer = useRef<ImageData | null>(null)
   const frame = useRef(0)
