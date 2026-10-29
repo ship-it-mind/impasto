@@ -49,6 +49,7 @@ BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
 CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
 CHECKIN_IMAGES = {"progress.png", "rectified.png"}
+CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|layout)\.png$")
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -228,17 +229,40 @@ def new_concepts(
     run_folder = folder / f"concepts-{uuid.uuid4().hex[:8]}"
     run_folder.mkdir()
     refs = [save(upload, run_folder, f"reference-{i + 1}", "image") for i, upload in enumerate(references)]
-    spend(session, 1)
+    spend(session, 1 + concepts.CONCEPTS)  # Spark drafts, Muse Image paints each
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Drafting 3 concepts…")
         drafted = concepts.draft(record["brief"], preset, refs)
         phase("Mixing each band from the tubes on hand…")
         concepts.mix(drafted, without_tubes, paste_in_mix)
+        phase("Painting each concept with Muse Image…")
+        concepts.paint(drafted, run_folder, refs)
         write(run_folder / "concepts.json", drafted)
-        return {"run": run_folder.name, **{key: drafted[key] for key in ("style", "canvas_px", "concepts", "mixing")}}
+        return {
+            "run": run_folder.name,
+            **{key: drafted[key] for key in ("style", "canvas_px", "mixing")},
+            "concepts": [concept_view(c, brief_id, run_folder.name) for c in drafted["concepts"]],
+        }
 
     return start(work)
+
+
+def concept_view(concept: dict, brief_id: str, run: str) -> dict:
+    """A concept as the web app gets it: its Muse layout as URLs, without the prompt."""
+    if "layout" not in concept:
+        return concept
+    base = f"/api/concepts/{brief_id}/{run}"
+    layout = concept["layout"]
+    return {**concept, "layout": {"image": f"{base}/{layout['image']}", "map": f"{base}/{layout['map']}", "shares": layout["shares"]}}
+
+
+@app.get("/api/concepts/{brief_id}/{run}/{name}")
+def concept_file(brief_id: str, run: str, name: str) -> FileResponse:
+    path = run_folder_for(brief_id, run) / name
+    if not CONCEPT_FILE.match(name) or not path.is_file():
+        raise HTTPException(404, "No such image.")
+    return FileResponse(path, media_type="image/png")
 
 
 # --- Recipe ------------------------------------------------------------------
@@ -423,6 +447,8 @@ def new_checkin(
 
     if corners_px is None:
         spend(session, 1)  # SAM finds the corners
+    # Muse's band layout when the concept has one, else the spec's drawn geometry at the preview's seed.
+    plan_map = run_folder / spec["layout"]["map"] if "layout" in spec else None
     folder = checkin_folder(run_folder, concept) / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
     folder.mkdir(parents=True)
     photo_path = save(photo, folder, "photo", "image")
@@ -432,7 +458,7 @@ def new_checkin(
         phase("Finding the canvas…" if corners_px is None else "Straightening the photo…")
         result = asyncio.run(checkins.check_in(
             photo_path, folder / "plan-concept.json", (piece["width_cm"], piece["height_cm"]), white_px, folder,
-            corners=corners_px, ground=ground_px, inventory=inventory, seed=seed,
+            corners=corners_px, ground=ground_px, inventory=inventory, seed=seed, plan_map=plan_map,
         ))
         return checkin_view(asdict(result), folder, brief_id, run, concept)
 

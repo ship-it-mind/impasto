@@ -360,9 +360,11 @@ async def check_in(
         ground_lab = WHITE_GROUND_LAB
 
     if plan_map:
-        planned = cv2.imread(str(plan_map), cv2.IMREAD_GRAYSCALE)
+        planned = cv2.imread(str(plan_map), cv2.IMREAD_UNCHANGED)
         if planned is None:
             raise FileNotFoundError(plan_map)
+        if planned.ndim == 3:
+            planned = np.ascontiguousarray(planned[..., 2])  # an impasto.layout map: band index in red
     else:
         piece = {"piece": {"width_cm": size[0], "height_cm": size[1]}}
         planned = plan_band_map(concept_path, seed, canvas_px(piece), out / "plan.png")
@@ -413,7 +415,7 @@ async def main() -> None:
     parser.add_argument("--concept", type=Path, required=True, help="the chosen concept's spec (concept-N.json)")
     parser.add_argument("--seed", type=int, help="the concept's seed (default: N in concept-N.json)")
     parser.add_argument("--plan-map", type=Path,
-                        help=f"band index per pixel as a grayscale PNG ({NO_BAND} = no band), instead of drawing it from the concept")
+                        help=f"band index per pixel as a grayscale PNG ({NO_BAND} = no band) or an impasto.layout map, instead of drawing it from the concept")
     parser.add_argument("--size", type=parse_size, required=True, help="canvas WIDTHxHEIGHT in cm")
     parser.add_argument("--corners", type=parse_point, nargs=4, metavar="X,Y",
                         help="canvas corners in photo pixels; skips automatic detection")
