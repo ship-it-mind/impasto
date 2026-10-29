@@ -379,6 +379,64 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
     return start(work)
 
 
+# --- Pieces ------------------------------------------------------------------
+
+def latest_run(folder: Path) -> tuple[Path | None, int | None]:
+    """The run to reopen a piece at: the latest one with a recipe, and its chosen concept; else the latest run."""
+    runs = sorted((r for r in folder.glob("concepts-*") if (r / "concepts.json").is_file()), key=lambda r: r.stat().st_mtime)
+    for run in reversed(runs):
+        recipes = sorted(run.glob("recipe-*.json"), key=lambda r: r.stat().st_mtime)
+        if recipes:
+            return run, int(recipes[-1].stem.split("-")[1]) - 1
+    return (runs[-1] if runs else None), None
+
+
+@app.get("/api/pieces")
+def list_pieces() -> dict:
+    """Every piece read so far, latest first: enough to pick one to reopen."""
+    pieces = []
+    for path in OUTPUT_ROOT.glob("*/brief.json"):
+        folder = path.parent
+        if not BRIEF_ID.match(folder.name):
+            continue
+        record = json.loads(path.read_text(encoding="utf-8"))
+        run, chosen = latest_run(folder)
+        concept = None
+        if run is not None and chosen is not None:
+            drafted = json.loads((run / "concepts.json").read_text(encoding="utf-8"))
+            view = concept_view(drafted["concepts"][chosen], folder.name, run.name)
+            concept = {"title": view["title"], "image": view.get("layout", {}).get("image"),
+                       "checkins": len(list(checkin_folder(run, chosen).glob("*/checkin.json")))}
+        updated = max([folder.stat().st_mtime] + [p.stat().st_mtime for p in folder.rglob("*.json")])
+        pieces.append({
+            "id": folder.name,
+            "summary": record["brief"]["summary"],
+            "updated": datetime.fromtimestamp(updated, timezone.utc).isoformat(timespec="seconds"),
+            "concepts": run is not None,
+            "concept": concept,
+        })
+    return {"pieces": sorted(pieces, key=lambda p: p["updated"], reverse=True)}
+
+
+@app.get("/api/pieces/{brief_id}")
+def open_piece(brief_id: str) -> dict:
+    """A piece as the app left it: the brief, its latest concepts, and the chosen concept with its recipe."""
+    folder = brief_folder(brief_id)
+    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
+    piece = {"brief": {"id": brief_id, "transcript": record["transcript"], "brief": record["brief"], "warnings": record["warnings"]}}
+    run, chosen = latest_run(folder)
+    if run is not None:
+        drafted = json.loads((run / "concepts.json").read_text(encoding="utf-8"))
+        piece["concepts"] = {
+            "run": run.name, **{key: drafted[key] for key in ("style", "canvas_px", "mixing")},
+            "concepts": [concept_view(c, brief_id, run.name) for c in drafted["concepts"]],
+        }
+        if chosen is not None:
+            piece["chosen"] = chosen
+            piece["recipe"] = json.loads((run / f"recipe-{chosen + 1}.json").read_text(encoding="utf-8"))
+    return piece
+
+
 # --- Check-ins ---------------------------------------------------------------
 
 def run_folder_for(brief_id: str, run: str) -> Path:
