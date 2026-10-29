@@ -11,6 +11,14 @@ band and the corners and white point to pass to impasto.checkin.
     uv run spikes/checkin_standin.py output/concepts/flowing-bands/concept-1.json \
         --coverage 1,1,1,0.4,0 --drift 2=-6,4,10 --name drift
 
+For a concept Muse Image painted, --plan-map takes its band layout
+(concept-N-layout.png from impasto.layout) and --canvas its painting, which is
+cropped to the canvas, instead of the drawn band map and the relief render:
+
+    uv run spikes/checkin_standin.py output/api/<brief>/<run>/concepts.json --index 0 \
+        --plan-map output/api/<brief>/<run>/concept-1-layout.png \
+        --canvas output/api/<brief>/<run>/concept-1-muse.png --coverage 1,1,0.5,0,0 --name muse
+
 --coverage gives each band's painted share, in band order; she paints each band
 from the left, with a ragged front. --drift BAND=dL,da,db shifts that band's
 painted color in CIELAB. Writes spikes/output/checkin-standin/<name>/photo.jpg
@@ -32,6 +40,7 @@ from common import output_dir, require_file
 # The check-in code lives in the package; spikes run as plain scripts from backend/.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from impasto.checkin import plan_band_map, seed_from_name, to_lab  # noqa: E402
+from impasto.layout import crop_to  # noqa: E402
 from impasto.rectify import linear_to_srgb, srgb_to_linear  # noqa: E402
 
 PHOTO_SIZE = (1600, 1200)
@@ -94,7 +103,10 @@ def parse_drift(value: str) -> tuple[int, tuple[float, float, float]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("concept", type=Path, help="concept-N.json, rendered next to it as concept-N.png")
+    parser.add_argument("concept", type=Path, help="concept-N.json, rendered next to it as concept-N.png (or a concepts.json with --index)")
+    parser.add_argument("--index", type=int, help="which concept of a concepts.json, from 0")
+    parser.add_argument("--plan-map", type=Path, help="the concept's band layout (impasto.layout PNG) instead of the drawn one")
+    parser.add_argument("--canvas", type=Path, help="the painted canvas (e.g. the Muse painting) instead of concept-N.png")
     parser.add_argument("--coverage", required=True, help="painted share per band, comma-separated, in band order")
     parser.add_argument("--drift", type=parse_drift, metavar="BAND=dL,da,db", help="shift one band's color")
     parser.add_argument("--seed", type=int, help="the concept's seed (default: N in concept-N.json)")
@@ -102,14 +114,22 @@ def main() -> None:
     args = parser.parse_args()
 
     concept = json.loads(require_file(args.concept).read_text(encoding="utf-8"))
-    render = cv2.imread(str(require_file(args.concept.with_suffix(".png"))))
+    if args.index is not None:
+        concept = concept["concepts"][args.index]
+    if args.plan_map:
+        layout = cv2.imread(str(require_file(args.plan_map)))
+        band_map = np.ascontiguousarray(layout[..., 2])  # band index in red
+        render = crop_to(cv2.imread(str(require_file(args.canvas or args.concept.with_suffix(".png")))), band_map.shape[::-1])
+    else:
+        render = cv2.imread(str(require_file(args.canvas or args.concept.with_suffix(".png"))))
     coverage = [float(v) for v in args.coverage.split(",")]
     if len(coverage) != len(concept["bands"]):
         parser.error(f"--coverage needs {len(concept['bands'])} values, one per band.")
     out = output_dir(f"checkin-standin/{args.name}")
     seed = args.seed if args.seed is not None else seed_from_name(args.concept)
     height, width = render.shape[:2]
-    band_map = plan_band_map(args.concept, seed, (width, height), out / "plan.png")
+    if not args.plan_map:
+        band_map = plan_band_map(args.concept, seed, (width, height), out / "plan.png")
     rng = np.random.default_rng(7)
 
     painted = partial(band_map, coverage, rng)
