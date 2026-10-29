@@ -18,7 +18,8 @@ is clearly off the bare ground's color, or a bit off it and textured; the
 ground is primed white unless --ground X,Y points at bare canvas in the photo.
 Per band: coverage = painted / planned area, and color drift = CIEDE2000
 between the band's median painted color and its planned mix, with the tube
-that best pulls it back. Paste use is not measured: a photo shows area, not
+that best pulls it back. In progress.png, what is still bare is hatched in its band's
+planned color. Paste use is not measured: a photo shows area, not
 thickness. Canvas that a cut-off corner of the photo leaves out is not counted.
 
 The summary is at most 3 lines; the artist is holding a knife, not reading a
@@ -44,7 +45,7 @@ import cv2
 import mixbox
 import numpy as np
 
-from impasto.bands import COLOR_EDGE_MARGIN_CM, TINTS, fill_small_holes
+from impasto.bands import COLOR_EDGE_MARGIN_CM, fill_small_holes
 from impasto.color import delta_e2000, hex_to_rgb, rgb_to_hex, rgb_to_lab
 from impasto.concepts import canvas_px
 from impasto.meta import REPO_ROOT
@@ -298,13 +299,20 @@ def summarize(bands: list[BandProgress], coverage: float) -> list[str]:
     return lines
 
 
-def draw_progress(image: np.ndarray, band_map: np.ndarray, painted: np.ndarray, bands: int) -> np.ndarray:
-    """Painted areas as photographed; planned but bare areas tinted in their band's color."""
+def draw_progress(image: np.ndarray, band_map: np.ndarray, painted: np.ndarray, bands: list[BandProgress], px_per_cm: float) -> np.ndarray:
+    """Painted areas as photographed; planned but bare areas hatched in their band's planned color."""
     drawn = image.copy()
-    for index in range(bands):
-        bare = (band_map == index) & ~painted
-        tint = np.array(TINTS[index % len(TINTS)], dtype=np.float32)
-        drawn[bare] = (0.35 * drawn[bare] + 0.65 * tint).astype(np.uint8)
+    height, width = band_map.shape
+    ys, xs = np.mgrid[0:height, 0:width]
+    spacing = max(6, round(2 * px_per_cm))
+    hatch = (xs + ys) % spacing < max(2, spacing // 3)
+    for band in bands:
+        bare = (band_map == band.id) & ~painted
+        red, green, blue = hex_to_rgb(band.planned_hex)
+        tint = np.array((blue, green, red), dtype=np.float32)
+        drawn[bare] = (0.3 * drawn[bare] + 0.7 * tint).astype(np.uint8)
+        lines = bare & hatch
+        drawn[lines] = (0.75 * tint).astype(np.uint8)
     edges = cv2.morphologyEx(band_map, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)) > 0
     drawn[edges] = (40, 40, 40)
     return drawn
@@ -383,7 +391,7 @@ async def check_in(
         warnings=warnings,
     )
     cv2.imwrite(str(out / "rectified.png"), warped)
-    cv2.imwrite(str(out / "progress.png"), draw_progress(warped, band_map, painted, len(bands)))
+    cv2.imwrite(str(out / "progress.png"), draw_progress(warped, band_map, painted, bands, px_per_cm))
     (out / "checkin.json").write_text(json.dumps(asdict(checkin), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return checkin
 
