@@ -272,6 +272,11 @@ def measure(
     return progress, painted
 
 
+def pct(share: float) -> str:
+    """Whole percent, half rounded up as the web app does (format's .0% rounds 0.365 down)."""
+    return f"{int(share * 100 + 0.5)}%"
+
+
 def names(bands: list[BandProgress]) -> str:
     labels = [band.name for band in bands]
     return labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
@@ -283,14 +288,14 @@ def summarize(bands: list[BandProgress], coverage: float) -> list[str]:
     started = [b for b in bands if MIN_STARTED <= b.coverage < DONE]
     waiting = [b for b in bands if b.coverage < MIN_STARTED]
     status = [f"{names(done)} done"] if done else []
-    status += [f"{b.name} {b.coverage:.0%}" for b in started]
+    status += [f"{b.name} {pct(b.coverage)}" for b in started]
     status += [f"{names(waiting)} not started"] if waiting else []
-    lines = [f"{coverage:.0%} painted: " + ", ".join(status) + "."]
+    lines = [f"{pct(coverage)} painted: " + ", ".join(status) + "."]
 
     drifting = sorted((b for b in bands if b.drift), key=lambda b: -b.delta_e)
     room = MAX_LINES - 1
     for band in drifting[: room if len(drifting) <= room else room - 1]:
-        line = f"{band.name.capitalize()} is drifting {band.drift} (ΔE {band.delta_e:.0f})"
+        line = f"{band.name[:1].upper()}{band.name[1:]} is drifting {band.drift} (ΔE {band.delta_e:.0f})"
         lines.append(line + (f": {band.fix}." if band.fix else ": remix it from the recipe."))
     if len(drifting) > room:
         lines.append(f"Also drifting: {names(drifting[room - 1:])}.")
