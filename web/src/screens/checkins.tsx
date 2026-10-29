@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { CheckInTrends } from '@/components/checkin-trends'
 import { LitPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
 import { checkIn, listCheckIns, type ConceptSet } from '@/lib/api'
@@ -283,6 +284,8 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
               </ul>
             )}
         </section>
+
+        <CheckInTrends history={history} shown={shown} onPick={c => { setShown(c); setPhoto(null) }} />
       </aside>
 
       <div className="flex flex-col gap-6" aria-live="polite">

@@ -32,6 +32,8 @@ export type CheckInInput = { photo: File; white: Point; corners: Point[]; ground
 // Same thresholds as DONE and MIN_STARTED in backend/impasto/checkin.py.
 export const DONE = 0.95
 export const MIN_STARTED = 0.05
+// Same as DRIFT_DE: from this ΔE a check-in calls a band's color out.
+export const DRIFT_DE = 6
 
 export const percent = (share: number) => `${Math.round(share * 100)}%`
 
