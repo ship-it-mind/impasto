@@ -1,4 +1,4 @@
-"""HTTP API for the web app: brief → concepts → recipe, wrapping the pipeline modules.
+"""HTTP API for the web app: brief → concepts → recipe → check-ins, wrapping the pipeline modules.
 
     uv run uvicorn impasto.api:app --port 8000
 
@@ -12,6 +12,7 @@ nothing is kept per user.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -20,13 +21,17 @@ import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from impasto import brief as briefs
+from impasto import checkin as checkins
 from impasto import concepts
 from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
@@ -42,6 +47,8 @@ MAX_REFERENCES = 6
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
+CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
+CHECKIN_IMAGES = {"progress.png", "rectified.png"}
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -346,3 +353,107 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
         return result
 
     return start(work)
+
+
+# --- Check-ins ---------------------------------------------------------------
+
+def run_folder_for(brief_id: str, run: str) -> Path:
+    run_folder = brief_folder(brief_id) / run
+    if not RUN_ID.match(run) or not (run_folder / "concepts.json").is_file():
+        raise HTTPException(404, "No such set of concepts. Make them again.")
+    return run_folder
+
+
+def checkin_folder(run_folder: Path, concept: int) -> Path:
+    return run_folder / "checkins" / f"concept-{concept + 1}"
+
+
+def point(value: str, what: str) -> tuple[float, float]:
+    try:
+        x, y = (float(v) for v in value.split(","))
+    except ValueError as error:
+        raise HTTPException(422, f"The {what} should be a point X,Y in photo pixels.") from error
+    return x, y
+
+
+def checkin_view(record: dict, folder: Path, brief_id: str, run: str, concept: int) -> dict:
+    """A stored check-in as the web app shows it: no server paths, image URLs instead."""
+    base = f"/api/checkins/{brief_id}/{run}/{concept}/{folder.name}"
+    return {
+        "id": folder.name,
+        **{key: record[key] for key in ("taken_at", "coverage", "bands", "summary", "warnings")},
+        "images": {"progress": f"{base}/progress.png", "rectified": f"{base}/rectified.png"},
+    }
+
+
+@app.post("/api/checkins")
+def new_checkin(
+    session: Session,
+    brief_id: Annotated[str, Form()],
+    run: Annotated[str, Form()],
+    concept: Annotated[int, Form()],
+    # The seed the relief preview painted the concept with, so the band map matches what she saw.
+    seed: Annotated[int, Form()],
+    photo: Annotated[UploadFile, File()],
+    white: Annotated[str, Form()],
+    corners: Annotated[list[str], Form()] = [],  # noqa: B006 - FastAPI copies defaults
+    ground: Annotated[str | None, Form()] = None,
+) -> dict:
+    run_folder = run_folder_for(brief_id, run)
+    drafted = json.loads((run_folder / "concepts.json").read_text(encoding="utf-8"))
+    if not 0 <= concept < len(drafted["concepts"]):
+        raise HTTPException(422, "No such concept.")
+    piece = json.loads((run_folder.parent / "brief.json").read_text(encoding="utf-8"))["brief"]["piece"]
+    if not (piece["width_cm"] and piece["height_cm"]):
+        raise HTTPException(409, "The brief has no piece size yet.")
+    if corners and len(corners) != 4:
+        raise HTTPException(422, "Tap all 4 corners of the canvas, or none to find them automatically.")
+    white_px = point(white, "white paper")
+    corners_px = [point(c, "corner") for c in corners] or None
+    ground_px = point(ground, "bare canvas") if ground else None
+
+    # Plan against the mixes and tubes of the latest recipe, if she made one.
+    spec = dict(drafted["concepts"][concept])
+    inventory = PLACEHOLDER_INVENTORY
+    recipe_path = run_folder / f"recipe-{concept + 1}.json"
+    if recipe_path.is_file():
+        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+        spec["bands"] = [{**b, "mix": {**b["mix"], "hex": r["mix_hex"]}} for b, r in zip(spec["bands"], recipe["bands"])]
+        inventory = without(PLACEHOLDER_INVENTORY, recipe["mixing"]["without"])
+
+    if corners_px is None:
+        spend(session, 1)  # SAM finds the corners
+    folder = checkin_folder(run_folder, concept) / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
+    folder.mkdir(parents=True)
+    photo_path = save(photo, folder, "photo", "image")
+    write(folder / "plan-concept.json", spec)
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Finding the canvas…" if corners_px is None else "Straightening the photo…")
+        result = asyncio.run(checkins.check_in(
+            photo_path, folder / "plan-concept.json", (piece["width_cm"], piece["height_cm"]), white_px, folder,
+            corners=corners_px, ground=ground_px, inventory=inventory, seed=seed,
+        ))
+        return checkin_view(asdict(result), folder, brief_id, run, concept)
+
+    return start(work)
+
+
+@app.get("/api/checkins")
+def list_checkins(brief_id: str, run: str, concept: int) -> dict:
+    """Every check-in on one concept, oldest first: for the history and the drift over time."""
+    folder = checkin_folder(run_folder_for(brief_id, run), concept)
+    records = []
+    for path in sorted(folder.glob("*/checkin.json")):
+        records.append(checkin_view(json.loads(path.read_text(encoding="utf-8")), path.parent, brief_id, run, concept))
+    return {"checkins": records}
+
+
+@app.get("/api/checkins/{brief_id}/{run}/{concept}/{checkin_id}/{image}")
+def checkin_image(brief_id: str, run: str, concept: int, checkin_id: str, image: str) -> FileResponse:
+    if image not in CHECKIN_IMAGES or not CHECKIN_ID.match(checkin_id):
+        raise HTTPException(404, "No such image.")
+    path = checkin_folder(run_folder_for(brief_id, run), concept) / checkin_id / image
+    if not path.is_file():
+        raise HTTPException(404, "No such image.")
+    return FileResponse(path, media_type="image/png")
