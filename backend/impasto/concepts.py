@@ -111,6 +111,8 @@ FLOW_TEXT = {
     "grid": "The canvas is a loose grid of rectangular panels, each panel one band's color; neighbors never share a color.",
     "diagonal split": "The canvas is split into panels by one or two straight diagonals, each panel one band's color.",
 }
+# Flows made of panels, where a band can sit next to any other.
+PANEL_FLOWS = {"grid", "diagonal split"}
 RELIEF_TEXT = {"thin": "thin, smooth paste", "medium": "medium paste", "heavy": "thick, built-up paste with deep knife ridges"}
 REFERENCE_PREFIX = (
     "These photos are an artist's past works. Use their look and knife texture, but follow the "
@@ -338,7 +340,8 @@ def paint(record: dict, folder: Path, references: list[Path]) -> None:
             concept["layout_note"] = f"Muse Image couldn't paint it ({str(error)[:120]}); showing the drawn layout."
             return
         cv2.imwrite(str(folder / f"concept-{i}-muse.png"), painting)
-        layout = layouts.read_layout(painting, [band["hex"] for band in concept["bands"]], size)
+        ordered = concept["flow"] not in PANEL_FLOWS
+        layout = layouts.read_layout(painting, [band["hex"] for band in concept["bands"]], size, ordered)
         if problems := layouts.problems(layout, [band["name"] for band in concept["bands"]]):
             concept["layout_note"] = f"Muse's painting didn't keep every band ({'; '.join(problems)}); showing the drawn layout."
             return

@@ -10,7 +10,10 @@ a few spare groups for the shadows and highlights of thick paste, which then
 join the band nearest in color. That keeps the band count and order the recipe
 relies on.
 Specks and slivers smaller than MIN_ISLAND are merged into the band around
-them. The knife runs along the bands: the direction is read from the band
+them. In flows whose bands follow each other (all but grids and diagonal
+splits), a band only borders the bands listed next to it, so a patch that
+borders neither is merged too, whatever its size: it is the ridge shadow of
+thick paste read as another band of the same hue. The knife runs along the bands: the direction is read from the band
 edges (and, more weakly, the painting's own stroke texture) as a structure
 tensor, smoothed far enough to reach into the middle of each band.
 
@@ -120,8 +123,8 @@ def vote(labels: np.ndarray, n: int, sigma: float) -> np.ndarray:
     return scores.argmax(axis=0).astype(np.uint8)
 
 
-def merge_islands(labels: np.ndarray, n: int, min_px: int) -> np.ndarray:
-    """Small patches take the band they are surrounded by."""
+def merge_islands(labels: np.ndarray, n: int, min_px: int, ordered: bool) -> np.ndarray:
+    """Small patches take the band they are surrounded by, as do patches out of order (see the module doc)."""
     labels = labels.copy()
     kernel = np.ones((3, 3), np.uint8)
     for _ in range(3):  # merging can leave a patch that is itself small; a few passes settle it
@@ -129,15 +132,18 @@ def merge_islands(labels: np.ndarray, n: int, min_px: int) -> np.ndarray:
         for band in range(n):
             count, components, stats, _ = cv2.connectedComponentsWithStats((labels == band).astype(np.uint8), connectivity=8)
             for c in range(1, count):
-                if stats[c, cv2.CC_STAT_AREA] >= min_px:
+                if stats[c, cv2.CC_STAT_AREA] >= min_px and not ordered:
                     continue
                 patch = components == c
                 ring = cv2.dilate(patch.astype(np.uint8), kernel) > 0
                 around = labels[ring & ~patch]
                 around = around[around != band]
-                if around.size:
-                    labels[patch] = np.bincount(around, minlength=n).argmax()
-                    changed = True
+                if not around.size:
+                    continue
+                if stats[c, cv2.CC_STAT_AREA] >= min_px and np.isin(around, [band - 1, band + 1]).any():
+                    continue  # borders a band listed next to it: a real piece of this one
+                labels[patch] = np.bincount(around, minlength=n).argmax()
+                changed = True
         if not changed:
             break
     return labels
@@ -162,8 +168,10 @@ def stroke_angle(image: np.ndarray, labels: np.ndarray, n: int, sigma: float) ->
     return np.mod(across + np.pi / 2, np.pi).astype(np.float32)
 
 
-def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int]) -> Layout:
-    """The band layout of a painting of `colors` (the spec's bands, in order), at the canvas size."""
+def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int], ordered: bool = True) -> Layout:
+    """The band layout of a painting of `colors` (the spec's bands, in order), at the canvas size.
+
+    ordered: the bands follow each other across the canvas (every flow but grids and diagonal splits)."""
     image = crop_to(painting, size)
     long_side = max(size)
     n = len(colors)
@@ -178,7 +186,7 @@ def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int]) 
     # Every pixel to its nearest color group, then group → band.
     labels = group_bands(centers, targets)[nearest(lab, centers)].reshape(size[1], size[0])
     labels = vote(labels, n, VOTE_BLUR * long_side)
-    labels = merge_islands(labels, n, round(MIN_ISLAND * size[0] * size[1]))
+    labels = merge_islands(labels, n, round(MIN_ISLAND * size[0] * size[1]), ordered)
 
     counts = np.bincount(labels.ravel(), minlength=n)
     edges = cv2.morphologyEx(labels, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)) > 0
@@ -229,6 +237,7 @@ def main() -> None:
     parser.add_argument("painting", type=Path)
     parser.add_argument("--colors", required=True, help="the bands' hex colors in spec order, comma-separated")
     parser.add_argument("--size", required=True, help="canvas WIDTHxHEIGHT in pixels")
+    parser.add_argument("--panels", action="store_true", help="a grid or diagonal split: bands needn't follow each other")
     parser.add_argument("--out", type=Path, required=True, help="layout PNG; a -check.png for the eye is written beside it")
     args = parser.parse_args()
 
@@ -237,7 +246,7 @@ def main() -> None:
         parser.error(f"Can't read {args.painting}")
     colors = args.colors.split(",")
     width, height = (int(v) for v in args.size.lower().split("x"))
-    layout = read_layout(painting, colors, (width, height))
+    layout = read_layout(painting, colors, (width, height), ordered=not args.panels)
     write_layout(layout, args.out)
     cv2.imwrite(str(args.out.with_name(args.out.stem + "-check.png")), draw_layout(layout, colors))
     for color, share, de in zip(colors, layout.shares, layout.color_de):
