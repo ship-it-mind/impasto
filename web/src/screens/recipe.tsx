@@ -81,13 +81,15 @@ type RecipeProps = {
   tubes: string[]
   // The recipe already made for this concept, when coming back from the check-ins.
   initialRecipe?: Recipe
+  // Each recipe made here, so the check-ins and a return visit use the latest one.
+  onRecipe: (recipe: Recipe) => void
   onBack: () => void
-  onCheckIns: (recipe: Recipe) => void
+  onCheckIns: () => void
 }
 
 // The paint plan as a recipe book: painting, totals and shopping list on the left,
 // one recipe per band on the right.
-export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, onBack, onCheckIns }: RecipeProps) {
+export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, onRecipe, onBack, onCheckIns }: RecipeProps) {
   const [W, H] = set.canvasPx
   const [settings, setSettings] = useState<MixSettings>(
     initialRecipe ? { without: initialRecipe.mixing.without, pasteInMix: initialRecipe.mixing.paste_in_mix } : { without: [], pasteInMix: false },
@@ -101,14 +103,16 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     setPhase('Measuring the bands…')
     try {
       const shares = await bandShares(concept, seed, W, H)
-      setRecipe(await makeRecipe(brief, set, concept, shares, s, setPhase))
+      const made = await makeRecipe(brief, set, concept, shares, s, setPhase)
+      setRecipe(made)
+      onRecipe(made)
       setSettings(s)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
     } finally {
       setPhase(null)
     }
-  }, [brief, set, concept, seed, W, H])
+  }, [brief, set, concept, seed, W, H, onRecipe])
 
   // Once per screen: StrictMode runs effects twice in development, and each run costs a model call.
   const started = useRef(!!initialRecipe)
@@ -194,7 +198,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
           <div className="flex flex-wrap items-end justify-between gap-4">
             <h2 className="text-3xl font-semibold tracking-tight">Mixing recipes</h2>
             {recipe && (
-              <Button variant="outline" disabled={!!phase} onClick={() => onCheckIns(recipe)}>
+              <Button variant="outline" disabled={!!phase} onClick={onCheckIns}>
                 <Camera /> Check in on progress
               </Button>
             )}

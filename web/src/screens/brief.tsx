@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, ChevronDown, Frame, Images, LoaderCircle, Palette, X } from 'lucide-react'
 import { BriefDetails, QuestionForm } from '@/components/brief-details'
+import { PieceList } from '@/components/piece-list'
 import { PresetPicker } from '@/components/preset-picker'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -21,9 +22,18 @@ function Chip({ icon, label, onRemove }: { icon: ReactNode; label: string; onRem
   )
 }
 
+type BriefProps = {
+  // A piece reopened at its brief: shown as read, ready to make concepts again.
+  initial?: BriefResult
+  openError?: string | null
+  onOpen: (id: string) => void
+  onConcepts: (set: ConceptSet, brief: BriefResult) => void
+}
+
 // One box takes the client's brief (voice note or text), the wall photo and the style;
-// the structured brief comes back below it, to check before making concepts.
-export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet, brief: BriefResult) => void }) {
+// the structured brief comes back below it, to check before making concepts. Under an
+// empty box, the pieces read before, to carry on with one.
+export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: BriefProps) {
   const [audio, setAudio] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
@@ -31,9 +41,9 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet, brie
   const [preset, setPreset] = useState<string | null>(null)
   const [styleOpen, setStyleOpen] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
-  const [result, setResult] = useState<BriefResult | null>(null)
+  const [result, setResult] = useState<BriefResult | null>(initial ?? null)
   const [making, setMaking] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(openError)
   const [presets, setPresets] = useState<Preset[]>([])
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
@@ -168,6 +178,8 @@ export function BriefScreen({ onConcepts }: { onConcepts: (set: ConceptSet, brie
           </article>
         )}
       </section>
+
+      {!result && !phase && <PieceList onOpen={onOpen} />}
     </main>
   )
 }

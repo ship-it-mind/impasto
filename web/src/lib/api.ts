@@ -73,18 +73,46 @@ export async function makeConcepts(result: BriefResult, style: StyleInput, onPha
   if (style.preset) form.append('preset', style.preset)
   style.references.forEach(file => form.append('references', file))
   style.without?.forEach(tube => form.append('without', tube))
-  const record = await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase)
-  // A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.
-  // Each keeps its index in the run, which is how the recipe asks for it.
-  const usable = record.concepts.map((c, index) => ({ ...c, index })).filter(c => c.warnings.length === 0)
-  if (usable.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
+  const set = conceptSet(await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase), result)
+  if (set.concepts.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
+  return set
+}
+
+// A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.
+// Each keeps its index in the run, which is how the recipe and check-ins ask for it.
+function conceptSet(record: ConceptsRecord, result: BriefResult): ConceptSet {
   const { piece, room } = result.brief
   return {
     run: record.run,
-    concepts: usable,
+    concepts: record.concepts.map((c, index) => ({ ...c, index })).filter(c => c.warnings.length === 0),
     canvasPx: record.canvas_px,
     piece: { widthCm: piece.width_cm ?? 120, heightCm: piece.height_cm ?? 90, wallWidthCm: room.wall_width_cm },
   }
+}
+
+// A piece read earlier, for the list to reopen it from.
+export type PieceSummary = {
+  id: string
+  summary: string
+  updated: string
+  concepts: boolean
+  concept: { title: string; image: string | null; checkins: number } | null
+}
+
+export async function listPieces(): Promise<PieceSummary[]> {
+  return (await request<{ pieces: PieceSummary[] }>('/pieces')).pieces
+}
+
+// A piece as it was left: the brief, its latest concepts, and the chosen concept (its
+// place among the usable ones, as the screens count them) with its saved recipe.
+export type OpenedPiece = { brief: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe }
+
+export async function openPiece(id: string): Promise<OpenedPiece> {
+  const saved = await request<{ brief: BriefResult; concepts?: ConceptsRecord; chosen?: number; recipe?: Recipe }>(`/pieces/${id}`)
+  if (!saved.concepts) return { brief: saved.brief }
+  const set = conceptSet(saved.concepts, saved.brief)
+  const pick = set.concepts.findIndex(c => c.index === saved.chosen)
+  return pick < 0 ? { brief: saved.brief, set } : { brief: saved.brief, set, pick, recipe: saved.recipe }
 }
 
 // The paint plan for one concept: grams per band, Mixbox recipes from the tubes
