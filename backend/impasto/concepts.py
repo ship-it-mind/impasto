@@ -67,7 +67,9 @@ PROMPT = """You are the studio assistant of a palette-knife / impasto painter. D
 compositions for one piece. Each composition is a set of color bands laid across the canvas.
 
 Write each one as a spec:
-- flow: how the bands run. One of: {flows}.
+- flow: how the bands run. One of:
+{flows}
+  Describe the composition in the title and idea as the flow draws it.
 - bands: {band_rule}, listed in order across the canvas (top to bottom for horizontal flows,
   from the inside out for arcs, from one side to the other for diagonals and waves; for grids
   and diagonal splits, the order only sets which colors sit next to each other).
@@ -87,6 +89,17 @@ Palette: {palette}
 """
 
 PRESET_STYLE = "Style: {name}. {prompt}"
+
+# What each flow draws, for Spark: its title and idea must match (a "wave" is diagonal, never horizontal).
+FLOW_MEANING = {
+    "arc": "concentric arcs around a center off one corner of the canvas",
+    "diagonal": "straight bands running diagonally across the canvas",
+    "wave": "bands running diagonally across the canvas in long, gentle waves; never horizontal",
+    "horizontal": "horizontal bands stacked from top to bottom",
+    "gentle wave": "near-horizontal bands with a gentle wave, stacked from top to bottom",
+    "grid": "a loose grid of rectangular panels",
+    "diagonal split": "panels split by one or two straight diagonals",
+}
 
 # How Muse Image is told to lay out the bands of each flow, and in which order they are listed.
 FLOW_TEXT = {
@@ -208,7 +221,7 @@ def draft(brief: dict | None, preset_key: str | None, references: list[Path]) ->
         style.append(REFERENCE_STYLE)
     prompt = PROMPT.format(
         n=CONCEPTS,
-        flows=", ".join(flows),
+        flows="\n".join(f"  - {flow}: {FLOW_MEANING[flow]}" for flow in flows),
         band_rule=f"{band_range[0]} to {band_range[1]} bands" if band_range else "2 to 6 bands",
         levels=" / ".join(LEVELS),
         relief_rule=relief_rule(preset["relief"]) if preset else "follow the reference photos: thick where they are thick.",
