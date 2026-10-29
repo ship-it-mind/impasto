@@ -154,7 +154,15 @@ def read(record: dict, folder: Path, phase: Callable[[str], None]) -> dict:
     record["brief"] = briefs.structure(record["transcript"], wall, record["answers"])
     record["warnings"] = briefs.warnings(record["brief"])
     write(folder / "brief.json", record)
-    return {"id": folder.name, "transcript": record["transcript"], "brief": record["brief"], "warnings": record["warnings"]}
+    return brief_view(record, folder.name)
+
+
+def brief_view(record: dict, brief_id: str) -> dict:
+    """A read brief as the web app gets it, with its wall photo as a URL."""
+    return {
+        "id": brief_id, "transcript": record["transcript"], "brief": record["brief"], "warnings": record["warnings"],
+        "wall": f"/api/pieces/{brief_id}/wall" if record.get("wall_photo") else None,
+    }
 
 
 @app.post("/api/brief")
@@ -423,7 +431,7 @@ def open_piece(brief_id: str) -> dict:
     """A piece as the app left it: the brief, its latest concepts, and the chosen concept with its recipe."""
     folder = brief_folder(brief_id)
     record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
-    piece = {"brief": {"id": brief_id, "transcript": record["transcript"], "brief": record["brief"], "warnings": record["warnings"]}}
+    piece = {"brief": brief_view(record, brief_id)}
     run, chosen = latest_run(folder)
     if run is not None:
         drafted = json.loads((run / "concepts.json").read_text(encoding="utf-8"))
@@ -435,6 +443,37 @@ def open_piece(brief_id: str) -> dict:
             piece["chosen"] = chosen
             piece["recipe"] = json.loads((run / f"recipe-{chosen + 1}.json").read_text(encoding="utf-8"))
     return piece
+
+
+@app.get("/api/pieces/{brief_id}/wall")
+def wall_photo(brief_id: str) -> FileResponse:
+    folder = brief_folder(brief_id)
+    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
+    path = Path(record["wall_photo"]) if record.get("wall_photo") else None
+    if path is None or path.parent != folder or not path.is_file():
+        raise HTTPException(404, "This piece has no wall photo.")
+    return FileResponse(path)
+
+
+class Mockup(BaseModel):
+    """How the piece hangs on the wall photo: a measured line (photo pixels and its length) and the canvas's center."""
+    line: tuple[tuple[float, float], tuple[float, float]]
+    length_cm: float
+    center: tuple[float, float]
+
+
+@app.get("/api/pieces/{brief_id}/mockup")
+def get_mockup(brief_id: str) -> dict:
+    path = brief_folder(brief_id) / "mockup.json"
+    return {"mockup": json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None}
+
+
+@app.put("/api/pieces/{brief_id}/mockup")
+def save_mockup(brief_id: str, body: Mockup) -> dict:
+    if not 1 <= body.length_cm <= 5000:
+        raise HTTPException(422, "Give the length in cm, between 1 and 5000.")
+    write(brief_folder(brief_id) / "mockup.json", body.model_dump())
+    return {"mockup": body.model_dump()}
 
 
 # --- Check-ins ---------------------------------------------------------------
