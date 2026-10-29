@@ -36,6 +36,27 @@ export function bandScene(spec: ConceptSpec, W: number, H: number, seed: number)
   };
 }
 
+// Path A: the bands as Muse Image painted them (backend/impasto/layout.py):
+// a band index and a stroke angle (0–255 for 0–180°) per pixel, read nearest
+// at the scene's size.
+export interface BandLayout { w: number; h: number; band: Uint8Array; angle: Uint8Array }
+
+export function layoutScene(spec: ConceptSpec, layout: BandLayout, W: number, H: number): BandScene {
+  const sx = layout.w / W, sy = layout.h / H;
+  const at = (x: number, y: number) => clamp(y * sy | 0, 0, layout.h - 1) * layout.w + clamp(x * sx | 0, 0, layout.w - 1);
+  const colors: RGB[] = spec.bands.map(b => hex(b.mix?.hex ?? b.hex));
+  const last = spec.bands.length - 1;
+  const bandAt = (x: number, y: number) => Math.min(layout.band[at(x, y)], last);
+  return {
+    bandAt,
+    at(x: number, y: number): Sample {
+      const i = at(x, y), band = Math.min(layout.band[i], last);
+      const r = RELIEF[spec.bands[band].relief];
+      return { c: colors[band], a: (layout.angle[i] / 255) * Math.PI, s: r.s, t: r.t };
+    },
+  };
+}
+
 type Region = (x: number, y: number) => { band: number; a: number };
 
 // Flowing layouts: a scalar field whose level sets are the band edges.

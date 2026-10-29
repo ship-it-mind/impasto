@@ -14,7 +14,7 @@ export type Stage = { order: number[]; painted: number }
 const paints = new Map<string, Promise<Painted>>()
 
 export function paint(concept: Concept, seed: number, W: number, H: number, stage?: Stage): Promise<Painted> {
-  const key = JSON.stringify([concept.flow, concept.bands.map(b => [b.mix.hex, b.width, b.relief]), seed, W, H, stage ?? null])
+  const key = JSON.stringify([concept.flow, concept.layout?.map, concept.bands.map(b => [b.mix.hex, b.width, b.relief]), seed, W, H, stage ?? null])
   let p = paints.get(key)
   if (!p) {
     p = new Promise(resolve => {
