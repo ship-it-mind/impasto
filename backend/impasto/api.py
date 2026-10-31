@@ -53,6 +53,7 @@ MAX_REFERENCES = 6
 MAX_PHOTO_SIDE = 2048
 MAX_PHOTO_BYTES = 3 * 1024 * 1024
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+MIN_PIECE_CM, MAX_PIECE_CM = 5, 2000
 BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
 CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
@@ -219,7 +220,15 @@ def read(brief_id: str, record: dict, wall: dict[str, bytes], phase: Callable[[s
         record["brief"] = briefs.structure(record["transcript"], folder / record["wall_photo"] if wall else None, record["answers"])
     record["warnings"] = briefs.warnings(record["brief"])
     store.save_piece(brief_id, record, wall)
+    if fit := record["brief"].get("wall_fit"):
+        store.save_mockup(brief_id, walls.from_fit(fit, record["brief"]["piece"], photo_size(wall[record["wall_photo"]])))
     return brief_view(record, brief_id)
+
+
+def photo_size(data: bytes) -> tuple[int, int]:
+    """A photo's width and height as seen, turned upright as a browser shows it."""
+    with Image.open(io.BytesIO(data)) as image:
+        return ImageOps.exif_transpose(image).size
 
 
 def brief_view(record: dict, brief_id: str) -> dict:
@@ -261,25 +270,35 @@ def new_brief(
     return start(lambda phase: read(brief_id, record, dict([photo]) if photo else {}, phase))
 
 
-class Answer(BaseModel):
-    answer: str
-
-
-@app.post("/api/brief/{brief_id}/answer")
-def answer_brief(brief_id: str, body: Answer) -> dict:
-    record = piece_or_404(brief_id)["record"]
-    question = record["brief"]["clarifying_question"]
-    if not question:
-        raise HTTPException(409, "This brief has no open question.")
-    if not body.answer.strip():
-        raise HTTPException(422, "Type the answer first.")
-    record["answers"].append({"question": question, "answer": body.answer.strip()[:500]})
-    name = record["wall_photo"]
-    wall = {name: store.image(brief_id, name)} if name else {}
-    return start(lambda phase: read(brief_id, record, wall, phase), key=f"brief:{brief_id}")
-
-
 # --- Concepts ----------------------------------------------------------------
+
+def settled(record: dict, width_cm: float | None, height_cm: float | None) -> dict:
+    """The piece's record at the size the painter settled on. It's kept once the concepts are made: until then, the concepts on show keep theirs."""
+    if width_cm is None or height_cm is None:
+        width_cm, height_cm = record["brief"]["piece"]["width_cm"], record["brief"]["piece"]["height_cm"]
+    if not (width_cm and height_cm):
+        raise HTTPException(422, "Give the piece's width and height first.")
+    if not (MIN_PIECE_CM <= width_cm <= MAX_PIECE_CM and MIN_PIECE_CM <= height_cm <= MAX_PIECE_CM):
+        raise HTTPException(422, f"Give the width and height in cm, between {MIN_PIECE_CM} and {MAX_PIECE_CM}.")
+    brief = briefs.set_size(record["brief"], width_cm, height_cm)
+    return {**record, "brief": brief, "warnings": briefs.warnings(brief)}
+
+
+def parsed_mockup(value: str | None) -> dict | None:
+    if not value:
+        return None
+    try:
+        mockup = Mockup.model_validate_json(value)
+    except ValueError as error:
+        raise HTTPException(422, "Couldn't read where the piece hangs on the wall.") from error
+    return checked_mockup(mockup)
+
+
+def keep_size(brief_id: str, record: dict, mockup: dict | None) -> None:
+    store.save_piece(brief_id, record, {})
+    if mockup:
+        store.save_mockup(brief_id, mockup)
+
 
 @app.post("/api/concepts")
 def new_concepts(
@@ -289,8 +308,12 @@ def new_concepts(
     paste_in_mix: Annotated[bool, Form()] = False,
     exact: Annotated[UploadFile | None, File()] = None,
     corners: Annotated[list[str], Form()] = [],  # noqa: B006
+    width_cm: Annotated[float | None, Form()] = None,
+    height_cm: Annotated[float | None, Form()] = None,
+    mockup: Annotated[str | None, Form()] = None,
 ) -> dict:
-    record = piece_or_404(brief_id)["record"]
+    record = settled(piece_or_404(brief_id)["record"], width_cm, height_cm)
+    wall_mockup = parsed_mockup(mockup)
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
     if exact and references:
@@ -303,7 +326,7 @@ def new_concepts(
         raise HTTPException(422, str(error)) from error
     run = f"concepts-{uuid.uuid4().hex[:8]}"
     if exact:
-        return start(exact_work(brief_id, run, record, exact_picture(exact), [point(c, "corner") for c in corners], without_tubes, paste_in_mix), key=concepts_key(brief_id))
+        return start(exact_work(brief_id, run, record, wall_mockup, exact_picture(exact), [point(c, "corner") for c in corners], without_tubes, paste_in_mix), key=concepts_key(brief_id))
     refs = dict(read_image(upload, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references))
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -316,8 +339,9 @@ def new_concepts(
             concepts.mix(drafted, without_tubes, paste_in_mix)
             phase("Painting each concept with Muse Image…")
             concepts.paint(drafted, folder, paths)
+            keep_size(brief_id, record, wall_mockup)
             store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
-        return run_view(drafted, brief_id, run)
+        return {**run_view(drafted, brief_id, run), "brief": brief_view(record, brief_id)}
 
     return start(work, key=concepts_key(brief_id))
 
@@ -332,7 +356,7 @@ def exact_picture(upload: UploadFile) -> bytes:
 
 
 def exact_work(
-    brief_id: str, run: str, record: dict, picture: bytes, corners: list[tuple[float, float]], without_tubes: list[str], paste_in_mix: bool,
+    brief_id: str, run: str, record: dict, wall_mockup: dict | None, picture: bytes, corners: list[tuple[float, float]], without_tubes: list[str], paste_in_mix: bool,
 ) -> Callable[[Callable[[str], None]], dict]:
     """The one concept an exact picture gives: no drafting and no painting, so one Spark call and no Muse Image."""
 
@@ -342,8 +366,9 @@ def exact_work(
             drafted = exact_pictures.draft(record["brief"], folder / "exact.jpg", folder, corners or None)
             phase("Mixing each color from the tubes on hand…")
             concepts.mix(drafted, without_tubes, paste_in_mix)
+            keep_size(brief_id, record, wall_mockup)
             store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
-        return run_view(drafted, brief_id, run)
+        return {**run_view(drafted, brief_id, run), "brief": brief_view(record, brief_id)}
 
     return work
 
@@ -659,13 +684,18 @@ def get_mockup(brief_id: str) -> dict:
     return {"mockup": walls.with_corners(saved["mockup"], saved["record"]["brief"]["piece"])}
 
 
+def checked_mockup(mockup: Mockup) -> dict:
+    if not 1 <= mockup.length_cm <= 5000:
+        raise HTTPException(422, "Give the length in cm, between 1 and 5000.")
+    return mockup.model_dump()
+
+
 @app.put("/api/pieces/{brief_id}/mockup")
 def save_mockup(brief_id: str, body: Mockup) -> dict:
-    if not 1 <= body.length_cm <= 5000:
-        raise HTTPException(422, "Give the length in cm, between 1 and 5000.")
+    mockup = checked_mockup(body)
     piece_or_404(brief_id)
-    store.save_mockup(brief_id, body.model_dump())
-    return {"mockup": body.model_dump()}
+    store.save_mockup(brief_id, mockup)
+    return {"mockup": mockup}
 
 
 # --- Check-ins ---------------------------------------------------------------

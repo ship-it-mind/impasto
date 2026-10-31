@@ -38,7 +38,7 @@ Rules:
 - budget and deadline: as the client said them, e.g. "around 15,000 pounds", "mid-December".
 - summary: one sentence a painter could read at a glance.
 - clarifying_question: {question_rule}
-
+{wall_fit_rule}
 Client brief:
 {transcript}
 """
@@ -51,8 +51,18 @@ NO_QUESTION_RULE = "null. The client has already answered a follow-up question."
 PHOTO_RULE = (
     " or what the wall photo clearly shows. From the photo, fill in room.wall_color_hex, "
     "room.lighting and room.notes (furniture, style, what hangs nearby); do not estimate "
-    "the wall's size from the photo"
+    "the wall's size for room.wall_width_cm from the photo"
 )
+WALL_FIT_RULE = """- wall_fit: your own recommendation from the wall photo, and the one place you may estimate sizes:
+  - visible_width_cm: how wide the wall is across the whole width of the photo, at the wall's distance,
+    judged from things of known size (a door is about 200 cm tall, a sofa about 200 cm wide, a socket 8 cm).
+  - width_cm, height_cm: the painting that would suit this wall best, in multiples of 5 cm. Keep to any shape
+    the client asked for. Over furniture, about two thirds of its width usually looks right.
+  - center_x, center_y: where the painting's center should hang, from 0 at the photo's top left to 1 at its bottom right.
+  - reason: one short sentence saying why this size, naming what you judged the scale from.
+"""
+# A recommended painting smaller than this means the estimate went wrong.
+MIN_CM = 5
 
 NULLABLE_STRING = {"type": ["string", "null"]}
 NULLABLE_NUMBER = {"type": ["number", "null"]}
@@ -67,42 +77,64 @@ def strict_object(properties: dict) -> dict:
     }
 
 
-BRIEF_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "client_brief",
-        "schema": strict_object({
-            "summary": {"type": "string"},
-            "piece": strict_object({
-                "width_cm": NULLABLE_NUMBER,
-                "height_cm": NULLABLE_NUMBER,
-                "orientation": {"type": "string", "enum": ["landscape", "portrait", "square", "unspecified"]},
-            }),
-            "mood": {"type": "array", "items": {"type": "string"}},
-            "palette": strict_object({
-                "temperature": {"type": "string", "enum": ["warm", "cool", "neutral", "mixed", "unspecified"]},
-                "intensity": {"type": "string", "enum": ["muted", "bright", "mixed", "unspecified"]},
-                "colors": {
-                    "type": "array",
-                    "items": strict_object({"name": {"type": "string"}, "approx_hex": {"type": "string"}}),
-                },
-                "avoid": {"type": "array", "items": {"type": "string"}},
-            }),
-            "style": {"type": "array", "items": {"type": "string"}},
-            "room": strict_object({
-                "name": NULLABLE_STRING,
-                "placement": NULLABLE_STRING,
-                "wall_width_cm": NULLABLE_NUMBER,
-                "wall_color_hex": NULLABLE_STRING,
-                "lighting": NULLABLE_STRING,
-                "notes": NULLABLE_STRING,
-            }),
-            "budget": NULLABLE_STRING,
-            "deadline": NULLABLE_STRING,
-            "clarifying_question": NULLABLE_STRING,
-        }),
-    },
+BRIEF_PROPERTIES = {
+    "summary": {"type": "string"},
+    "piece": strict_object({
+        "width_cm": NULLABLE_NUMBER,
+        "height_cm": NULLABLE_NUMBER,
+        "orientation": {"type": "string", "enum": ["landscape", "portrait", "square", "unspecified"]},
+    }),
+    "mood": {"type": "array", "items": {"type": "string"}},
+    "palette": strict_object({
+        "temperature": {"type": "string", "enum": ["warm", "cool", "neutral", "mixed", "unspecified"]},
+        "intensity": {"type": "string", "enum": ["muted", "bright", "mixed", "unspecified"]},
+        "colors": {
+            "type": "array",
+            "items": strict_object({"name": {"type": "string"}, "approx_hex": {"type": "string"}}),
+        },
+        "avoid": {"type": "array", "items": {"type": "string"}},
+    }),
+    "style": {"type": "array", "items": {"type": "string"}},
+    "room": strict_object({
+        "name": NULLABLE_STRING,
+        "placement": NULLABLE_STRING,
+        "wall_width_cm": NULLABLE_NUMBER,
+        "wall_color_hex": NULLABLE_STRING,
+        "lighting": NULLABLE_STRING,
+        "notes": NULLABLE_STRING,
+    }),
+    "budget": NULLABLE_STRING,
+    "deadline": NULLABLE_STRING,
+    "clarifying_question": NULLABLE_STRING,
 }
+WALL_FIT = strict_object({
+    "visible_width_cm": {"type": "number"},
+    "width_cm": {"type": "number"},
+    "height_cm": {"type": "number"},
+    "center_x": {"type": "number"},
+    "center_y": {"type": "number"},
+    "reason": {"type": "string"},
+})
+
+
+def brief_schema(wall: bool) -> dict:
+    properties = {**BRIEF_PROPERTIES, "wall_fit": WALL_FIT} if wall else BRIEF_PROPERTIES
+    return {"type": "json_schema", "json_schema": {"name": "client_brief", "schema": strict_object(properties)}}
+
+
+def usable_fit(fit: dict | None) -> dict | None:
+    """Spark's recommendation for the wall, or None if it isn't a size that could hang on what the photo shows."""
+    if not fit or min(fit["width_cm"], fit["height_cm"]) < MIN_CM or max(fit["width_cm"], fit["height_cm"]) > fit["visible_width_cm"] * 2:
+        return None
+    if not (0 <= fit["center_x"] <= 1 and 0 <= fit["center_y"] <= 1):
+        return None
+    return fit
+
+
+def set_size(brief: dict, width: float, height: float) -> dict:
+    """The brief with the size the painter settled on, which answers any question about it."""
+    orientation = "square" if width == height else "landscape" if width > height else "portrait"
+    return {**brief, "piece": {"width_cm": width, "height_cm": height, "orientation": orientation}, "clarifying_question": None}
 
 
 def with_answers(transcript: str, answers: list[dict]) -> str:
@@ -116,6 +148,7 @@ def structure(transcript: str, wall: Path | None = None, answers: list[dict] = (
     prompt = PROMPT.format(
         photo_rule=PHOTO_RULE if wall else "",
         question_rule=NO_QUESTION_RULE if answers else QUESTION_RULE,
+        wall_fit_rule=WALL_FIT_RULE if wall else "",
         transcript=with_answers(transcript, answers),
     )
     content: list[dict] = [{"type": "text", "text": prompt}]
@@ -124,9 +157,11 @@ def structure(transcript: str, wall: Path | None = None, answers: list[dict] = (
     response = client().chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": content}],
-        response_format=BRIEF_SCHEMA,
+        response_format=brief_schema(bool(wall)),
     )
     brief = json.loads(response.choices[0].message.content)
+    if wall:
+        brief["wall_fit"] = usable_fit(brief["wall_fit"])
 
     piece = brief["piece"]
     if piece["width_cm"] and piece["height_cm"]:

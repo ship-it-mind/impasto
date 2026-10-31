@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Crop, Frame, Images, LoaderCircle, X } from 'lucide-react'
-import { BriefDetails, QuestionForm } from '@/components/brief-details'
+import { BriefDetails } from '@/components/brief-details'
 import { DictateButton } from '@/components/dictate-button'
 import { NO_TAPS, PhotoStage } from '@/components/photo-stage'
 import { PieceList } from '@/components/piece-list'
+import { PieceSize, sizeFrom, type SizeText } from '@/components/piece-size'
 import { Button } from '@/components/ui/button'
-import { answerQuestion, joinConcepts, makeConcepts, readBrief, webImage, type ConceptSet } from '@/lib/api'
+import { getMockup, joinConcepts, makeConcepts, readBrief, saveMockup, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Point } from '@/lib/checkin'
 import { useObjectUrl } from '@/lib/use-object-url'
 import { cn } from '@/lib/utils'
+import { pxPerCm, quadCm, resizeQuad, type Mockup, type SizeCm } from '@/lib/wall'
 
 const MAX_REFERENCES = 6
 const IMAGE_TYPES = 'image/*,.heic,.heif'
@@ -94,6 +96,9 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const [result, setResult] = useState<BriefResult | null>(initial ?? null)
   const [making, setMaking] = useState<string | null>(joining ? 'Starting…' : null)
   const [error, setError] = useState<string | null>(openError)
+  const [size, setSize] = useState<SizeText>({ w: '', h: '' })
+  // Where the piece hangs on the wall photo. undefined: not loaded yet.
+  const [mockup, setMockup] = useState<Mockup | null | undefined>(undefined)
   const box = useRef<HTMLTextAreaElement>(null)
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
@@ -112,12 +117,59 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   useEffect(() => {
     if (!joining || !initial) return
     let stop = false
-    joinConcepts(joining, initial, setMaking)
-      .then(set => { if (!stop) concepts.current(set, initial) })
+    joinConcepts(joining, setMaking)
+      .then(made => { if (!stop) concepts.current(made.set, made.brief) })
       .catch(e => { if (!stop) setError(e instanceof Error ? e.message : 'Something went wrong. Try again.') })
       .finally(() => { if (!stop) setMaking(null) })
     return () => { stop = true }
   }, [joining, initial])
+
+  // A brief that's been read: the size starts as the client's, else what was marked on the wall, else
+  // what Spark recommends for it. What hangs on the wall is drawn at that size.
+  const briefId = result?.id
+  const hasWall = !!result?.wall
+  const opened = useRef(result)
+  opened.current = result
+  useEffect(() => {
+    const read = opened.current
+    if (!briefId || !read) return
+    let stop = false
+    const start = (saved: Mockup | null) => {
+      if (stop) return
+      const { piece, wall_fit: fit } = read.brief
+      const chosen: SizeCm | null = piece.width_cm && piece.height_cm
+        ? { w: piece.width_cm, h: piece.height_cm }
+        : saved ? quadCm(saved) : fit ? { w: fit.width_cm, h: fit.height_cm } : null
+      setSize(chosen ? { w: String(chosen.w), h: String(chosen.h) } : { w: '', h: '' })
+      setMockup(saved && chosen ? { ...saved, corners: resizeQuad(saved.corners, chosen.w * pxPerCm(saved), chosen.h * pxPerCm(saved)) } : saved)
+    }
+    if (hasWall) getMockup(briefId).then(start).catch(() => start(null))
+    else start(null)
+    return () => { stop = true }
+  }, [briefId, hasWall])
+
+  // The size the concepts on show were made for, if any: changing it means making new ones.
+  const madeSize = hasConcepts && result?.brief.piece.width_cm && result.brief.piece.height_cm
+    ? { w: result.brief.piece.width_cm, h: result.brief.piece.height_cm } : null
+  const settledSize = sizeFrom(size)
+  const sizeChanged = !!madeSize && (settledSize?.w !== madeSize.w || settledSize?.h !== madeSize.h)
+
+  // Typing a size draws the piece at it.
+  const typed = (next: SizeText) => {
+    setSize(next)
+    const cm = sizeFrom(next)
+    if (cm && mockup) placed({ ...mockup, corners: resizeQuad(mockup.corners, cm.w * pxPerCm(mockup), cm.h * pxPerCm(mockup)) }, cm)
+  }
+  const placed = (next: Mockup, cm = settledSize) => {
+    setMockup(next)
+    keepPlace(next, cm).catch(() => {})  // making the concepts sends it again
+  }
+  // Saved as soon as it can't disagree with the concepts on show; otherwise once new ones are made.
+  const keepPlace = async (next: Mockup, cm = settledSize) => {
+    if (!result) return
+    if (madeSize && (cm?.w !== madeSize.w || cm?.h !== madeSize.h)) return
+    await saveMockup(result.id, next)
+  }
 
   const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.')
   const canRead = text.trim().length > 0 && !phase && !making && !dictating && converting === 0
@@ -150,6 +202,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
     if (result && lastRead.current?.text === text.trim() && lastRead.current.wall === wall) return
     setError(null)
     setResult(null)
+    setMockup(undefined)
     try {
       const read = await readBrief({ text, wall }, setPhase)
       lastRead.current = { text: text.trim(), wall }
@@ -161,24 +214,15 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
       setPhase(null)
     }
   }
-  const answer = async (a: string) => {
-    if (!result) return
-    setError(null)
-    try {
-      const answered = await answerQuestion(result, a)
-      setResult(answered)
-      onBrief(answered)
-    } catch (e) {
-      setError(message(e))
-    }
-  }
   const make = async () => {
-    if (!result) return
+    if (!result || !settledSize) return
     setError(null)
     setMaking('Starting…')
     try {
-      const set = await makeConcepts(result, exact ? { references: [], exact, corners } : { references: refs }, setMaking)
-      if (!left.current) onConcepts(set, result)
+      const made = await makeConcepts(result, exact ? { references: [], exact, corners } : { references: refs }, { size: settledSize, mockup }, setMaking)
+      if (left.current) return
+      setResult(made.brief)
+      onConcepts(made.set, made.brief)
     } catch (e) {
       setError(message(e))
     } finally {
@@ -267,7 +311,18 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
               <h2 className="text-xs font-medium text-muted-foreground">The brief</h2>
               <p className="text-xl leading-snug text-pretty">{result.brief.summary}</p>
             </div>
-            {result.brief.clarifying_question && <QuestionForm question={result.brief.clarifying_question} onAnswer={answer} />}
+            <PieceSize
+              size={size}
+              disabled={!!making}
+              fit={result.brief.wall_fit}
+              wall={result.wall}
+              mockup={mockup}
+              wallWidthCm={result.brief.room.wall_width_cm}
+              onTyped={typed}
+              onSize={cm => setSize({ w: String(cm.w), h: String(cm.h) })}
+              onMockup={setMockup}
+              onMockupDone={next => keepPlace(next, quadCm(next))}
+            />
             <BriefDetails brief={result.brief} />
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Transcript</summary>
@@ -275,12 +330,16 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             </details>
             {exact && <ExactPicture file={exact} corners={corners} disabled={!!making} onCorners={setCorners} />}
             <div className="flex items-center gap-3">
-              {hasConcepts && !making && <Button size="lg" onClick={onShowConcepts}>See the concepts</Button>}
-              <Button size="lg" variant={hasConcepts && !exact ? 'ghost' : 'default'} onClick={make} disabled={!!making || !!result.brief.clarifying_question || (corners.length > 0 && corners.length < 4)}>
+              {hasConcepts && !making && <Button size="lg" variant={sizeChanged ? 'ghost' : 'default'} onClick={onShowConcepts}>See the concepts</Button>}
+              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || (corners.length > 0 && corners.length < 4)}>
                 {making ? <><LoaderCircle className="animate-spin" /> {making}</> : exact ? 'Plan this picture' : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">
-                {exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
+                {!settledSize
+                  ? 'Give the width and height first'
+                  : sizeChanged && madeSize
+                    ? `The concepts on show are for ${madeSize.w} × ${madeSize.h} cm. New ones are needed at this size.`
+                    : exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
               </span>
             </div>
           </article>

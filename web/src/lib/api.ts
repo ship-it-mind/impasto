@@ -9,7 +9,7 @@ import type { BriefResult } from './brief'
 import type { Guide } from './guide'
 import type { MixSettings, PasteAdvice, Recipe } from './recipe'
 import type { HaveMap, Supplies } from './supplies'
-import type { Mockup } from './wall'
+import type { Mockup, SizeCm } from './wall'
 
 export type BriefInput = { text: string; wall: File | null }
 // exact: a picture to paint as it is, in place of style pictures; corners: the painting's corners in it, in its own pixels.
@@ -75,38 +75,37 @@ export function readBrief(input: BriefInput, onPhase: (phase: string) => void): 
   return poll(request('/brief', { method: 'POST', body: form }), onPhase)
 }
 
-// The client's answer to Spark's one clarifying question (the size).
-export function answerQuestion(result: BriefResult, answer: string): Promise<BriefResult> {
-  return poll(request(`/brief/${result.id}/answer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ answer }),
-  }))
-}
-
 type ConceptsRecord = { run: string; canvas_px: [number, number]; concepts: (Concept & { warnings: string[]; index: number })[] }
+// The concepts, and the brief at the size they were made for.
+export type MadeConcepts = { set: ConceptSet; brief: BriefResult }
+// The size settled on, and where the piece hangs at it: kept once the concepts are made.
+export type Settled = { size: SizeCm; mockup?: Mockup | null }
 
 // Spark drafts 3 band specs, steered by the style pictures if any; each band gets its Mixbox mix.
 // An exact picture gives one concept instead, read straight off the picture.
-export function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
+export function makeConcepts(result: BriefResult, style: StyleInput, settled: Settled, onPhase?: (phase: string) => void): Promise<MadeConcepts> {
   const form = new FormData()
   form.append('brief_id', result.id)
+  form.append('width_cm', String(settled.size.w))
+  form.append('height_cm', String(settled.size.h))
+  if (settled.mockup) form.append('mockup', JSON.stringify(settled.mockup))
   style.references.forEach(file => form.append('references', file))
   style.without?.forEach(tube => form.append('without', tube))
   if (style.exact) form.append('exact', style.exact)
   style.corners?.forEach(c => form.append('corners', c.join(',')))
-  return usableConcepts(request('/concepts', { method: 'POST', body: form }), result, onPhase)
+  return usableConcepts(request('/concepts', { method: 'POST', body: form }), onPhase)
 }
 
 // Concepts already being made for this piece, from before a reload.
-export function joinConcepts(job: string, result: BriefResult, onPhase?: (phase: string) => void): Promise<ConceptSet> {
-  return usableConcepts(Promise.resolve({ job }), result, onPhase)
+export function joinConcepts(job: string, onPhase?: (phase: string) => void): Promise<MadeConcepts> {
+  return usableConcepts(Promise.resolve({ job }), onPhase)
 }
 
-async function usableConcepts(start: Promise<{ job: string }>, result: BriefResult, onPhase?: (phase: string) => void): Promise<ConceptSet> {
-  const set = conceptSet(await poll<ConceptsRecord>(start, onPhase), result)
+async function usableConcepts(start: Promise<{ job: string }>, onPhase?: (phase: string) => void): Promise<MadeConcepts> {
+  const { brief, ...record } = await poll<ConceptsRecord & { brief: BriefResult }>(start, onPhase)
+  const set = conceptSet(record, brief)
   if (set.concepts.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
-  return set
+  return { set, brief }
 }
 
 // A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.

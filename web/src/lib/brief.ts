@@ -18,7 +18,11 @@ export type Brief = {
   budget: string | null
   deadline: string | null
   clarifying_question: string | null
+  // Spark's recommendation from the wall photo, when there is one and it made sense.
+  wall_fit?: WallFit | null
 }
+
+export type WallFit = { visible_width_cm: number; width_cm: number; height_cm: number; center_x: number; center_y: number; reason: string }
 
 // wall: the client's wall photo (URL), when the brief came with one.
 export type BriefResult = { id: string; transcript: string; brief: Brief; warnings: string[]; wall: string | null }
