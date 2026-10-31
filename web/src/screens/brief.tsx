@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Crop, Frame, Images, LoaderCircle, X } from 'lucide-react'
+import { ArrowUp, Crop, Frame, Images, LoaderCircle, TriangleAlert, X } from 'lucide-react'
 import { BriefDetails } from '@/components/brief-details'
 import { DictateButton } from '@/components/dictate-button'
 import { NO_TAPS, PhotoStage } from '@/components/photo-stage'
@@ -11,6 +11,7 @@ import type { BriefResult } from '@/lib/brief'
 import type { Point } from '@/lib/checkin'
 import { useObjectUrl } from '@/lib/use-object-url'
 import { cn } from '@/lib/utils'
+import { cornersRatio, pictureRatio, shapeOff } from '@/lib/picture-shape'
 import { pxPerCm, quadCm, resizeQuad, type Mockup, type SizeCm } from '@/lib/wall'
 
 const MAX_REFERENCES = 6
@@ -96,6 +97,8 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const [result, setResult] = useState<BriefResult | null>(initial ?? null)
   const [making, setMaking] = useState<string | null>(joining ? 'Starting…' : null)
   const [error, setError] = useState<string | null>(openError)
+  // Each picked picture's width over height.
+  const [ratios, setRatios] = useState(new Map<File, number>())
   const [size, setSize] = useState<SizeText>({ w: '', h: '' })
   // Where the piece hangs on the wall photo. undefined: not loaded yet.
   const [mockup, setMockup] = useState<Mockup | null | undefined>(undefined)
@@ -154,6 +157,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const settledSize = sizeFrom(size)
   const sizeChanged = !!madeSize && (settledSize?.w !== madeSize.w || settledSize?.h !== madeSize.h)
 
+  // The exact picture has to fit the canvas, or a big part of it is cut off. Style pictures only steer the look, so they get a warning.
+  const exactRatio = exact && corners.length === 4 ? cornersRatio(corners) : exact ? ratios.get(exact) : undefined
+  const exactOff = exactRatio && settledSize ? shapeOff(exactRatio, settledSize) : null
+  const refsOff = settledSize ? refs.filter(r => { const ratio = ratios.get(r); return ratio && shapeOff(ratio, settledSize) }).length : 0
+
   // Typing a size draws the piece at it.
   const typed = (next: SizeText) => {
     setSize(next)
@@ -189,7 +197,10 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
     setError(null)
     setConverting(n => n + files.length)
     try {
-      add(await Promise.all(files.map(webImage)))
+      const images = await Promise.all(files.map(webImage))
+      const measured = await Promise.all(images.map(async image => [image, await pictureRatio(image)] as const))
+      setRatios(known => new Map([...known, ...measured]))
+      add(images)
     } catch (e) {
       setError(message(e))
     } finally {
@@ -329,9 +340,21 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
               <p className="mt-2 max-w-[65ch] text-pretty">{result.transcript}</p>
             </details>
             {exact && <ExactPicture file={exact} corners={corners} disabled={!!making} onCorners={setCorners} />}
+            {exactOff && settledSize && (
+              <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-pretty text-amber-950">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                This picture is much {exactOff} than a {settledSize.w} × {settledSize.h} cm canvas, so they don't match. Try uploading another picture, or change the size.
+              </p>
+            )}
+            {refsOff > 0 && settledSize && (
+              <p role="status" className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-pretty text-amber-950">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {refsOff === 1 && refs.length === 1 ? 'This style picture is' : refsOff === refs.length ? 'These style pictures are' : `${refsOff} of the style pictures are`} a very different shape from a {settledSize.w} × {settledSize.h} cm canvas, so they don't match. Try uploading another, or change the size. You can still make concepts with {refsOff === 1 ? 'it' : 'them'}.
+              </p>
+            )}
             <div className="flex items-center gap-3">
               {hasConcepts && !making && <Button size="lg" variant={sizeChanged ? 'ghost' : 'default'} onClick={onShowConcepts}>See the concepts</Button>}
-              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || (corners.length > 0 && corners.length < 4)}>
+              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || !!exactOff || (corners.length > 0 && corners.length < 4)}>
                 {making ? <><LoaderCircle className="animate-spin" /> {making}</> : exact ? 'Plan this picture' : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">

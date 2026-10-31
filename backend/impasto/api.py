@@ -326,7 +326,14 @@ def new_concepts(
         raise HTTPException(422, str(error)) from error
     run = f"concepts-{uuid.uuid4().hex[:8]}"
     if exact:
-        return start(exact_work(brief_id, run, record, wall_mockup, exact_picture(exact), [point(c, "corner") for c in corners], without_tubes, paste_in_mix), key=concepts_key(brief_id))
+        picture = exact_picture(exact)
+        corners_px = [point(c, "corner") for c in corners]
+        width, height = photo_size(picture)
+        ratio = exact_pictures.corners_ratio(corners_px) if corners_px else width / height
+        piece = record["brief"]["piece"]
+        if problem := exact_pictures.shape_problem(ratio, piece["width_cm"], piece["height_cm"]):
+            raise HTTPException(422, problem)
+        return start(exact_work(brief_id, run, record, wall_mockup, picture, corners_px, without_tubes, paste_in_mix), key=concepts_key(brief_id))
     refs = dict(read_image(upload, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references))
 
     def work(phase: Callable[[str], None]) -> dict:

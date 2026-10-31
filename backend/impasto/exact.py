@@ -30,7 +30,7 @@ from impasto import layout as layouts
 from impasto.color import hex_to_rgb, rgb_to_hex, rgb_to_lab
 from impasto.concepts import ALL_FLOWS, MODEL, canvas_px, strict_object
 from impasto.meta import client, data_url
-from impasto.rectify import rectify
+from impasto.rectify import order_corners, rectify
 from impasto.volume import LEVELS
 
 MAX_COLORS = 8
@@ -43,6 +43,8 @@ SAME_PAINT_DE = 6.0
 MIN_SHARE = 0.005
 # Cropping less than this share of the picture to fit the canvas isn't worth mentioning.
 NOTABLE_CROP = 0.02
+# Fitting the picture would cut off more than this share of it: it and the canvas don't match.
+MAX_SHAPE_CROP = 0.15
 # Not a regular flow: the colors sit wherever the picture has them.
 FREEFORM = "freeform"
 IMAGE = "concept-1-exact.png"
@@ -176,6 +178,23 @@ def describe(path: Path, colors: list[str], layout: layouts.Layout) -> dict:
     if len(described["colors"]) != len(colors):
         raise RuntimeError(f"Spark described {len(described['colors'])} colors of {len(colors)} (response {response.id}).")
     return {**described, "prompt": prompt}
+
+
+def shape_problem(picture_ratio: float, width_cm: float, height_cm: float) -> str | None:
+    """Why this picture can't fill a canvas of this size, if fitting it would cut off too much."""
+    ratio = picture_ratio / (width_cm / height_cm)
+    if 1 - min(ratio, 1 / ratio) <= MAX_SHAPE_CROP:
+        return None
+    return (f"This picture is much {'wider' if ratio > 1 else 'taller'} than a {width_cm:g} × {height_cm:g} cm canvas, "
+            "so they don't match. Try uploading another picture, or change the size.")
+
+
+def corners_ratio(corners: list[tuple[float, float]]) -> float:
+    """Width over height of the painting those four corners mark, taken as seen straight on."""
+    top_left, top_right, bottom_right, bottom_left = order_corners(np.array(corners, dtype=np.float32))
+    across = np.linalg.norm(top_right - top_left) + np.linalg.norm(bottom_right - bottom_left)
+    down = np.linalg.norm(bottom_left - top_left) + np.linalg.norm(bottom_right - top_right)
+    return float(across / down)
 
 
 def crop_note(picture: np.ndarray, size: tuple[int, int]) -> str | None:
