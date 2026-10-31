@@ -6,7 +6,9 @@
 import type { CheckIn, CheckInInput, Point } from './checkin'
 import type { Concept, Piece } from './concepts'
 import type { BriefResult } from './brief'
-import type { MixSettings, Recipe } from './recipe'
+import type { Guide } from './guide'
+import type { MixSettings, PasteAdvice, Recipe } from './recipe'
+import type { HaveMap, Supplies } from './supplies'
 
 export type BriefInput = { text: string; wall: File | null }
 export type StyleInput = { references: File[]; without?: string[] }
@@ -167,6 +169,36 @@ export function makeRecipe(
       brief_id: result.id, run: set.run, concept: concept.index, shares,
       without: settings.without, paste_in_mix: settings.pasteInMix,
     }),
+  }), onPhase)
+}
+
+// Paste mixed in or underneath: which suits this painting, and what each way can mix from these tubes.
+export function getPasteAdvice(result: BriefResult, set: ConceptSet, concept: Concept, without: string[]): Promise<PasteAdvice> {
+  const query = new URLSearchParams({ run: set.run, concept: String(concept.index) })
+  without.forEach(tube => query.append('without', tube))
+  return request(`/pieces/${result.id}/method?${query}`)
+}
+
+// The tools this painting needs with this paste method, and what's already owned for this piece.
+export function getSupplies(result: BriefResult, set: ConceptSet, concept: Concept, pasteInMix: boolean): Promise<Supplies> {
+  const query = new URLSearchParams({ run: set.run, concept: String(concept.index), paste_in_mix: String(pasteInMix) })
+  return request(`/pieces/${result.id}/supplies?${query}`)
+}
+
+export async function saveSupplies(briefId: string, have: HaveMap): Promise<void> {
+  await send(`/pieces/${briefId}/supplies`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ have }),
+  })
+}
+
+// How to paint the concept, for one recipe. Spark writes it the first time; after that it comes back as it was.
+export function makeGuide(result: BriefResult, set: ConceptSet, concept: Concept, settings: MixSettings, onPhase?: (phase: string) => void): Promise<Guide> {
+  return poll(request('/guide', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brief_id: result.id, run: set.run, concept: concept.index, without: settings.without, paste_in_mix: settings.pasteInMix }),
   }), onPhase)
 }
 

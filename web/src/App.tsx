@@ -6,19 +6,20 @@ import type { Recipe } from '@/lib/recipe'
 import { CheckInsScreen } from '@/screens/checkins'
 import { BriefScreen } from '@/screens/brief'
 import { ConceptsScreen } from '@/screens/concepts'
+import { PaintScreen } from '@/screens/paint'
 import { RecipeScreen } from '@/screens/recipe'
 
 // One piece as far as it has got: its brief, concepts, the chosen one and its recipe.
 type Piece = { brief?: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string }
 
-const SLUGS: Record<Step, string> = { Brief: 'brief', Concepts: 'concepts', Recipe: 'recipe', 'Check-ins': 'checkins' }
+const SLUGS: Record<Step, string> = { Brief: 'brief', Concepts: 'concepts', Recipe: 'recipe', Paint: 'paint', 'Check-ins': 'checkins' }
 
 function reachable(p: Piece): Step[] {
   return [
     'Brief',
     ...(p.set ? ['Concepts' as const] : []),
     ...(p.set && p.pick !== undefined ? ['Recipe' as const] : []),
-    ...(p.recipe ? ['Check-ins' as const] : []),
+    ...(p.recipe ? ['Paint' as const, 'Check-ins' as const] : []),
   ]
 }
 
@@ -133,6 +134,21 @@ export default function App() {
             initialRecipe={recipe}
             onRecipe={r => setPiece(p => (p.set?.run === set.run && p.pick === pick ? { ...p, recipe: r } : p))}
             onBack={() => go('Concepts', piece)}
+            onPaint={() => go('Paint', piece)}
+          />
+        </Kept>
+      )}
+      {!opening && brief && set && concept && pick !== undefined && recipe && (
+        <Kept key={`paint-${session}`} active={step === 'Paint'}>
+          <PaintScreen
+            key={`${set.run}-${pick}-${recipe.mixing.paste_in_mix}-${recipe.mixing.without.join()}`}
+            brief={brief}
+            set={set}
+            concept={concept}
+            seed={pick + 1}
+            recipe={recipe}
+            active={step === 'Paint'}
+            onBack={() => go('Recipe', piece)}
             onCheckIns={() => go('Check-ins', piece)}
           />
         </Kept>
@@ -146,7 +162,7 @@ export default function App() {
             concept={concept}
             seed={pick + 1}
             recipe={recipe}
-            onBack={() => go('Recipe', piece)}
+            onBack={() => go('Paint', piece)}
           />
         </Kept>
       )}

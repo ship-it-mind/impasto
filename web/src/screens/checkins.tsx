@@ -260,7 +260,7 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
       <aside className="order-last flex flex-col gap-8 lg:sticky lg:top-6 lg:order-none lg:self-start">
         <div className="flex flex-col gap-3">
           <Button variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground" onClick={onBack}>
-            <ArrowLeft /> Recipe
+            <ArrowLeft /> How to paint it
           </Button>
           <ConceptPainting
             concept={planned}

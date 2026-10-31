@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 
-export const STEPS = ['Brief', 'Concepts', 'Recipe', 'Check-ins'] as const
+export const STEPS = ['Brief', 'Concepts', 'Recipe', 'Paint', 'Check-ins'] as const
 export type Step = (typeof STEPS)[number]
 
 type AppHeaderProps = {

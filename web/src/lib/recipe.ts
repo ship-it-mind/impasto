@@ -30,6 +30,17 @@ export type Recipe = {
 
 export type MixSettings = { without: string[]; pasteInMix: boolean }
 
+// Paste mixed in or underneath, for one painting (GET /api/pieces/{id}/method).
+export type WayBand = { name: string; target_hex: string; mix_hex: string; delta_e: number }
+export type PasteAdvice = {
+  recommended: 'under' | 'tinted'
+  reason: string
+  paste_pct: number
+  dry_time: string
+  under: WayBand[]
+  tinted: WayBand[]
+}
+
 export const parts = (n: number) => `${n} ${n === 1 ? 'part' : 'parts'}`
 export const grams = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(2)} kg` : `${Math.round(g)} g`)
 export const cm2 = (a: number) => `${Math.round(a).toLocaleString('en-GB')} cm²`
