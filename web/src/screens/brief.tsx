@@ -1,24 +1,35 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, ChevronDown, Frame, Images, LoaderCircle, Palette, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ArrowUp, Frame, Images, LoaderCircle, X } from 'lucide-react'
 import { BriefDetails, QuestionForm } from '@/components/brief-details'
+import { DictateButton } from '@/components/dictate-button'
 import { PieceList } from '@/components/piece-list'
-import { PresetPicker } from '@/components/preset-picker'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { VoiceButtons, VoiceNote } from '@/components/voice-input'
-import { answerQuestion, getPresets, makeConcepts, readBrief, type ConceptSet } from '@/lib/api'
-import type { BriefResult, Preset } from '@/lib/brief'
+import { answerQuestion, makeConcepts, readBrief, webImage, type ConceptSet } from '@/lib/api'
+import type { BriefResult } from '@/lib/brief'
+import { useObjectUrl } from '@/lib/use-object-url'
 import { cn } from '@/lib/utils'
 
 const MAX_REFERENCES = 6
+const IMAGE_TYPES = 'image/*,.heic,.heif'
 
-function Chip({ icon, label, onRemove }: { icon: ReactNode; label: string; onRemove: () => void }) {
+// A picked picture: a thumbnail, what it's for, and a way to remove it.
+function Thumbnail({ file, label, onRemove }: { file: File; label: string; onRemove: () => void }) {
+  const url = useObjectUrl(file)
   return (
-    <span className="flex h-8 items-center gap-1.5 rounded-md bg-muted pr-0.5 pl-2 text-xs">
-      {icon}
-      <span className="max-w-40 truncate">{label}</span>
-      <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${label}`} onClick={onRemove}><X /></Button>
-    </span>
+    <figure className="relative flex w-20 flex-col gap-1">
+      {url && <img src={url} alt={file.name} title={file.name} className="size-20 rounded-lg object-cover -outline-offset-1 outline-1 outline-black/10" />}
+      <figcaption className="text-xs text-muted-foreground">{label}</figcaption>
+      <Button
+        type="button"
+        variant="secondary"
+        size="icon-xs"
+        aria-label={`Remove ${file.name}`}
+        onClick={onRemove}
+        className="absolute top-1 right-1 rounded-full shadow-[0_0_0_1px_rgb(0_0_0/0.08)]"
+      >
+        <X />
+      </Button>
+    </figure>
   )
 }
 
@@ -30,39 +41,55 @@ type BriefProps = {
   onConcepts: (set: ConceptSet, brief: BriefResult) => void
 }
 
-// One box takes the client's brief (voice note or text), the wall photo and the style;
+// One box takes the client's brief (typed or dictated), the wall photo and the style pictures;
 // the structured brief comes back below it, to check before making concepts. Under an
 // empty box, the pieces read before, to carry on with one.
 export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: BriefProps) {
-  const [audio, setAudio] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
   const [refs, setRefs] = useState<File[]>([])
-  const [preset, setPreset] = useState<string | null>(null)
-  const [styleOpen, setStyleOpen] = useState(false)
+  const [converting, setConverting] = useState(0)
+  const [dictating, setDictating] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
   const [result, setResult] = useState<BriefResult | null>(initial ?? null)
   const [making, setMaking] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(openError)
-  const [presets, setPresets] = useState<Preset[]>([])
+  const box = useRef<HTMLTextAreaElement>(null)
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    getPresets().then(p => setPresets(p.presets)).catch(() => setError("Couldn't reach the server. Is the API running?"))
-  }, [])
-
   const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.')
-  const presetName = preset && presets.find(p => p.key === preset)?.name
-  const style = [presetName, refs.length && `${refs.length} picture${refs.length > 1 ? 's' : ''}`].filter(Boolean).join(' + ')
-  const canRead = (!!audio || text.trim().length > 0) && !phase && !making
+  const canRead = text.trim().length > 0 && !phase && !making && !dictating && converting === 0
+
+  // Dictated words go where the caret is, and the caret stays after them, ready to correct or carry on.
+  const dictated = (words: string) => {
+    const el = box.current
+    if (!el) return
+    const before = el.value.slice(0, el.selectionStart)
+    el.setRangeText(`${before && !/\s$/.test(before) ? ' ' : ''}${words}`, el.selectionStart, el.selectionEnd, 'end')
+    setText(el.value)
+    el.focus()
+  }
+
+  // HEIC photos are converted first, so the thumbnail and everything after it can read them.
+  const pick = async (files: File[], add: (images: File[]) => void) => {
+    setError(null)
+    setConverting(n => n + files.length)
+    try {
+      add(await Promise.all(files.map(webImage)))
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      setConverting(n => n - files.length)
+    }
+  }
 
   const read = async () => {
     if (!canRead) return
     setError(null)
     setResult(null)
     try {
-      setResult(await readBrief({ audio, text, wall }, setPhase))
+      setResult(await readBrief({ text, wall }, setPhase))
     } catch (e) {
       setError(message(e))
     } finally {
@@ -83,7 +110,7 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
     setError(null)
     setMaking('Starting…')
     try {
-      onConcepts(await makeConcepts(result, { preset, references: refs }, setMaking), result)
+      onConcepts(await makeConcepts(result, { references: refs }, setMaking), result)
     } catch (e) {
       setError(message(e))
       setMaking(null)
@@ -98,57 +125,56 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
         onSubmit={e => { e.preventDefault(); read() }}
         className="flex flex-col gap-2 rounded-2xl bg-background p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_2px_6px_rgb(0_0_0/0.04),0_12px_32px_-12px_rgb(0_0_0/0.12)]"
       >
-        {(wall || refs.length > 0 || presetName) && (
-          <div className="flex flex-wrap gap-1.5">
-            {wall && <Chip icon={<Frame className="size-3.5" aria-hidden />} label={`Wall: ${wall.name}`} onRemove={() => setWall(null)} />}
+        {(wall || refs.length > 0 || converting > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {wall && <Thumbnail file={wall} label="Wall" onRemove={() => setWall(null)} />}
             {refs.map((r, i) => (
-              <Chip key={r.name + i} icon={<Images className="size-3.5" aria-hidden />} label={r.name} onRemove={() => setRefs(refs.filter((_, j) => j !== i))} />
+              <Thumbnail key={r.name + i} file={r} label="Style" onRemove={() => setRefs(refs.filter((_, j) => j !== i))} />
             ))}
-            {presetName && <Chip icon={<Palette className="size-3.5" aria-hidden />} label={presetName} onRemove={() => setPreset(null)} />}
+            {Array.from({ length: converting }, (_, i) => (
+              <div key={i} role="status" aria-label="Preparing the photo" className="flex size-20 items-center justify-center rounded-lg bg-muted">
+                <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-hidden />
+              </div>
+            ))}
           </div>
         )}
-        {audio ? (
-          <VoiceNote file={audio} onRemove={() => setAudio(null)} />
-        ) : (
-          <textarea
-            aria-label="The client's brief"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); read() } }}
-            placeholder="Paste the client's message, or record their voice note below…"
-            rows={3}
-            className="field-sizing-content max-h-60 min-h-20 resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground"
-          />
-        )}
+        <textarea
+          ref={box}
+          aria-label="The client's brief"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); read() } }}
+          placeholder="Paste the client's message, or dictate it…"
+          rows={3}
+          className="field-sizing-content max-h-60 min-h-20 resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground"
+        />
         <div className="flex flex-wrap items-center gap-1">
-          {!audio && <VoiceButtons onFile={setAudio} />}
+          <DictateButton onText={dictated} onBusy={setDictating} />
           <Button type="button" variant="ghost" onClick={() => wallInput.current?.click()}><Frame /> Wall photo</Button>
           <Button type="button" variant="ghost" onClick={() => refsInput.current?.click()}><Images /> Style pictures</Button>
-          <Popover open={styleOpen} onOpenChange={setStyleOpen}>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost"><Palette /> {presetName ?? 'Style'} <ChevronDown /></Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-[min(560px,90vw)] p-3">
-              <PresetPicker presets={presets} value={preset} onChange={k => { setPreset(k); setStyleOpen(false) }} />
-            </PopoverContent>
-          </Popover>
           <Button type="submit" size="icon-lg" aria-label="Read the brief" disabled={!canRead} className="ml-auto rounded-full">
             {phase ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
           </Button>
-          <input ref={wallInput} type="file" accept="image/*" hidden onChange={e => setWall(e.target.files?.[0] ?? null)} />
+          <input
+            ref={wallInput}
+            type="file"
+            accept={IMAGE_TYPES}
+            hidden
+            onChange={e => { const f = e.target.files?.[0]; if (f) pick([f], ([image]) => setWall(image)); e.target.value = '' }}
+          />
           <input
             ref={refsInput}
             type="file"
-            accept="image/*"
+            accept={IMAGE_TYPES}
             multiple
             hidden
-            onChange={e => setRefs([...refs, ...(e.target.files ?? [])].slice(0, MAX_REFERENCES))}
+            onChange={e => { pick([...(e.target.files ?? [])], images => setRefs(r => [...r, ...images].slice(0, MAX_REFERENCES))); e.target.value = '' }}
           />
         </div>
       </form>
       {!result && !phase && (
         <p className="-mt-4 text-center text-xs text-muted-foreground">
-          Enter to read it. No style picked means Flowing Bands, unless you add style pictures.
+          Enter to read it. Add style pictures to steer the look.
         </p>
       )}
 
@@ -173,7 +199,9 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
               <Button size="lg" onClick={make} disabled={!!making || !!result.brief.clarifying_question}>
                 {making ? <><LoaderCircle className="animate-spin" /> {making}</> : 'Make 3 concepts'}
               </Button>
-              <span className="text-xs text-muted-foreground">Style: {style || 'Flowing Bands (default)'}</span>
+              <span className="text-xs text-muted-foreground">
+                Style: {refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}
+              </span>
             </div>
           </article>
         )}

@@ -1,15 +1,15 @@
 // What the screens ask the backend for (backend/impasto/api.py, proxied at /api).
 //
 // Model calls run as jobs on the server: each call here starts one and polls it,
-// passing the server's phase ("Transcribing the voice note…") to `onPhase`.
+// passing the server's phase ("Reading the brief…") to `onPhase`.
 
 import type { CheckIn, CheckInInput, Point } from './checkin'
 import type { Concept, Piece } from './concepts'
 import type { BriefResult, Preset } from './brief'
 import type { MixSettings, Recipe } from './recipe'
 
-export type BriefInput = { audio: File | null; text: string; wall: File | null }
-export type StyleInput = { preset: string | null; references: File[]; without?: string[] }
+export type BriefInput = { text: string; wall: File | null }
+export type StyleInput = { references: File[]; without?: string[] }
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { default: string; presets: Preset[]; tubes: string[] }
 
@@ -56,11 +56,17 @@ export async function webImage(file: File): Promise<File> {
   return new File([jpeg], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })
 }
 
-// Voice Transcribe (if there is a voice note), then Spark reads the brief.
+// Voice Transcribe: dictated audio as text, for the brief box.
+export async function transcribe(audio: File): Promise<string> {
+  const form = new FormData()
+  form.append('audio', audio)
+  return (await poll<{ transcript: string }>(request('/transcribe', { method: 'POST', body: form }))).transcript
+}
+
+// Spark reads the brief.
 export function readBrief(input: BriefInput, onPhase: (phase: string) => void): Promise<BriefResult> {
   const form = new FormData()
   form.append('text', input.text)
-  if (input.audio) form.append('audio', input.audio)
   if (input.wall) form.append('wall', input.wall)
   return poll(request('/brief', { method: 'POST', body: form }), onPhase)
 }
@@ -76,11 +82,10 @@ export function answerQuestion(result: BriefResult, answer: string): Promise<Bri
 
 type ConceptsRecord = { run: string; canvas_px: [number, number]; concepts: (Concept & { warnings: string[]; index: number })[] }
 
-// Spark drafts 3 band specs in the chosen style; each band gets its Mixbox mix.
+// Spark drafts 3 band specs, steered by the style pictures if any; each band gets its Mixbox mix.
 export async function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
   const form = new FormData()
   form.append('brief_id', result.id)
-  if (style.preset) form.append('preset', style.preset)
   style.references.forEach(file => form.append('references', file))
   style.without?.forEach(tube => form.append('without', tube))
   const set = conceptSet(await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase), result)

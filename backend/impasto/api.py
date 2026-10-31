@@ -4,8 +4,7 @@
 
 Model calls take 5–30 s, so they run as background jobs: a POST returns a job
 id, and the web app polls GET /api/jobs/{id} for the phase and the result.
-Everything lives in memory and in output/api/;
-nothing is kept per user.
+Everything lives in memory and in output/api/; nothing is kept per user.
 """
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ import json
 import logging
 import math
 import re
+import tempfile
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
@@ -92,13 +92,11 @@ def read_upload(upload: UploadFile) -> bytes:
     return data
 
 
-def save(upload: UploadFile, folder: Path, name: str, kind: str) -> Path:
+def save_image(upload: UploadFile, folder: Path, name: str) -> Path:
     suffix = Path(upload.filename or "").suffix.lower()
-    if kind == "image" and suffix not in IMAGE_SUFFIXES:
+    if suffix not in IMAGE_SUFFIXES:
         raise HTTPException(415, f"{upload.filename}: use a JPG, PNG, WebP or HEIC photo.")
-    if kind == "audio" and not (upload.content_type or "").startswith(("audio/", "video/")):
-        raise HTTPException(415, f"{upload.filename}: that doesn't look like a voice note.")
-    path = folder / f"{name}{suffix or '.bin'}"
+    path = folder / f"{name}{suffix}"
     path.write_bytes(read_upload(upload))
     return path
 
@@ -170,32 +168,37 @@ def brief_view(record: dict, brief_id: str) -> dict:
     }
 
 
+@app.post("/api/transcribe")
+def new_transcript(audio: Annotated[UploadFile, File()]) -> dict:
+    """Dictation: speech to text for the brief box, to check and edit before the brief is read."""
+    if not (audio.content_type or "").startswith(("audio/", "video/")):
+        raise HTTPException(415, f"{audio.filename}: that doesn't look like audio.")
+    data = read_upload(audio)
+    suffix = Path(audio.filename or "").suffix.lower() or ".bin"
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Transcribing…")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / f"dictation{suffix}"
+            path.write_bytes(data)
+            return {"transcript": transcribe(path)}
+
+    return start(work)
+
+
 @app.post("/api/brief")
 def new_brief(
     text: Annotated[str, Form(max_length=5000)] = "",
-    audio: Annotated[UploadFile | None, File()] = None,
     wall: Annotated[UploadFile | None, File()] = None,
 ) -> dict:
-    if not audio and not text.strip():
-        raise HTTPException(422, "Add the client's voice note or type their brief.")
+    if not text.strip():
+        raise HTTPException(422, "Type or dictate the client's brief first.")
     brief_id = uuid.uuid4().hex
     folder = OUTPUT_ROOT / brief_id
     folder.mkdir(parents=True)
-    audio_path = save(audio, folder, "voice-note", "audio") if audio else None
-    wall_path = save(wall, folder, "wall", "image") if wall else None
-
-    def work(phase: Callable[[str], None]) -> dict:
-        transcript = text.strip()
-        if audio_path:
-            phase("Transcribing the voice note…")
-            transcript = transcribe(audio_path)
-            if not transcript:
-                raise RuntimeError("The voice note came back empty. Is there speech on it?")
-        record = {"source": str(audio_path or "typed"), "transcript": transcript,
-                  "wall_photo": str(wall_path) if wall_path else None, "answers": []}
-        return read(record, folder, phase)
-
-    return start(work)
+    wall_path = save_image(wall, folder, "wall") if wall else None
+    record = {"source": "web", "transcript": text.strip(), "wall_photo": str(wall_path) if wall_path else None, "answers": []}
+    return start(lambda phase: read(record, folder, phase))
 
 
 class Answer(BaseModel):
@@ -220,15 +223,12 @@ def answer_brief(brief_id: str, body: Answer) -> dict:
 @app.post("/api/concepts")
 def new_concepts(
     brief_id: Annotated[str, Form()],
-    preset: Annotated[str | None, Form()] = None,
     references: Annotated[list[UploadFile], File()] = [],  # noqa: B006 - FastAPI copies defaults
     without_tubes: Annotated[list[str], Form(alias="without")] = [],  # noqa: B006
     paste_in_mix: Annotated[bool, Form()] = False,
 ) -> dict:
     folder = brief_folder(brief_id)
     record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
-    if preset is not None and preset not in PRESETS:
-        raise HTTPException(422, f"Unknown style preset {preset!r}.")
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
     try:
@@ -237,11 +237,11 @@ def new_concepts(
         raise HTTPException(422, str(error)) from error
     run_folder = folder / f"concepts-{uuid.uuid4().hex[:8]}"
     run_folder.mkdir()
-    refs = [save(upload, run_folder, f"reference-{i + 1}", "image") for i, upload in enumerate(references)]
+    refs = [save_image(upload, run_folder, f"reference-{i + 1}") for i, upload in enumerate(references)]
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Drafting 3 concepts…")
-        drafted = concepts.draft(record["brief"], preset, refs)
+        drafted = concepts.draft(record["brief"], None, refs)  # no pictures: the default preset
         phase("Mixing each band from the tubes on hand…")
         concepts.mix(drafted, without_tubes, paste_in_mix)
         phase("Painting each concept with Muse Image…")
@@ -544,7 +544,7 @@ def new_checkin(
     plan_map = run_folder / spec["layout"]["map"] if "layout" in spec else None
     folder = checkin_folder(run_folder, concept) / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
     folder.mkdir(parents=True)
-    photo_path = save(photo, folder, "photo", "image")
+    photo_path = save_image(photo, folder, "photo")
     write(folder / "plan-concept.json", spec)
 
     def work(phase: Callable[[str], None]) -> dict:

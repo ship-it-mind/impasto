@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useObjectUrl } from '@/lib/use-object-url'
 
-export function useObjectUrl(file: File | null): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!file) { setUrl(null); return }
-    const u = URL.createObjectURL(file)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [file])
-  return url
-}
+export { useObjectUrl }
 
 // The voice note once it's in: name, a player, and a way to remove it.
 export function VoiceNote({ file, onRemove }: { file: File; onRemove: () => void }) {

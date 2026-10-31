@@ -4,7 +4,7 @@ A studio co-pilot for palette-knife / impasto artists, built for the Meta Global
 
 ## What it does
 
-1. **Brief → concepts** — a client voice note is transcribed and structured into a brief, then turned into three concept compositions and a wall mockup at true scale.
+1. **Brief → concepts** — the client's request, typed or dictated, is structured into a brief, then turned into three concept compositions and a wall mockup at true scale.
 2. **Concept → recipe** — the chosen concept is segmented into color bands; each band's area becomes grams of paint and paste, with mixing ratios from the artist's own tubes.
 3. **Progress check-ins** — a mid-way photo of the canvas reports coverage, color drift against the plan, and paste shortfalls.
 
@@ -26,10 +26,10 @@ We tested each model on a photo of one of the artist's finished pieces before de
 
 | Model | Job in the app |
 |---|---|
-| Muse Spark | Reads band structure from a painting, turns the voice brief into a structured brief, writes mixing recipes |
+| Muse Spark | Reads band structure from a painting, turns the client's request into a structured brief, writes mixing recipes |
 | SAM 3.1 | One mask per color band from the artist's points, for area per band; finds the canvas corners in check-in photos |
 | Muse Image | Paints each concept from Spark's band spec, steered by the user's reference photos when given; the band layout read off its painting drives the relief preview, the recipe's band areas and the check-ins |
-| Muse Voice Transcribe | Transcribes the client's voice note |
+| Muse Voice Transcribe | Turns dictation into text in the brief box, to check and edit before the brief is read |
 
 ## Setup
 
@@ -53,7 +53,7 @@ uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inpu
 
 ### Web app
 
-Needs Node 22+ and ffmpeg (for voice notes). Run the API and the web app side by side:
+Needs Node 22+ and ffmpeg (for dictation). Run the API and the web app side by side:
 
 ```sh
 cd backend && uv run uvicorn impasto.api:app --port 8000
