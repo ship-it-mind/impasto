@@ -14,6 +14,23 @@ export type Layout = { image: string; map: string; shares: number[] }
 export type Concept = {
   title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number
   layout?: Layout; layout_note?: string; exact?: boolean
+  // This concept is a change the painter asked for in the chat: from which concept, and what they asked.
+  edit?: { from: number; message: string; area: Area | null }
+}
+
+// A part of the canvas as shares of it: left, top, right, bottom.
+export type Area = [number, number, number, number]
+
+// The concept an edit started from, or the concept itself if it isn't one.
+function originalOf(concepts: Concept[], concept: Concept): Concept {
+  const from = concept.edit && concepts.find(c => c.index === concept.edit?.from)
+  return from ? originalOf(concepts, from) : concept
+}
+
+// A concept's versions: the original, then each edit of it in the order they were made.
+export function versionsOf(concepts: Concept[], concept: Concept): Concept[] {
+  const original = originalOf(concepts, concept)
+  return concepts.filter(c => originalOf(concepts, c) === original)
 }
 
 export type Piece = { widthCm: number; heightCm: number; wallWidthCm: number | null }

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
+import { AreaPicker, ConceptChat } from '@/components/concept-chat'
 import { WallMockup } from '@/components/wall-mockup'
-import { getMockup, saveMockup } from '@/lib/api'
+import { getMockup, saveMockup, type ConceptChange } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { offBands, reliefSummary, type Concept, type Piece } from '@/lib/concepts'
+import { offBands, reliefSummary, versionsOf, type Area, type Concept, type Piece } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
 import type { Mockup } from '@/lib/wall'
 
@@ -25,6 +26,8 @@ type ConceptsProps = {
   photo?: { briefId: string; url: string }
   // This screen is the one showing, rather than kept hidden.
   active: boolean
+  // Ask for a change to a concept; it comes back as a new version, added to `concepts`.
+  onEdit: (concept: Concept, change: ConceptChange, onPhase: (phase: string) => void) => Promise<Concept>
 }
 
 const SHADOW = 'shadow-[0_2px_3px_rgb(0_0_0/0.25),0_14px_28px_-10px_rgb(0_0_0/0.4)]'
@@ -60,16 +63,32 @@ function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }:
   )
 }
 
-// The concepts hung on the client's wall at true scale, picked from an editorial index.
-export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo, active }: ConceptsProps) {
+// The picture hung on the client's wall in the size chosen, changed in the chat until it's the one to paint.
+export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo, active, onEdit }: ConceptsProps) {
   const [pick, setPick] = useState(initialPick)
   const [onPhoto, setOnPhoto] = useState(!!photo)
   const [light, setLight] = useState(DEFAULT_LIGHT)
+  const [area, setArea] = useState<Area | null>(null)
+  const [selecting, setSelecting] = useState(false)
+  const [editing, setEditing] = useState(false)
   const drag = useLightDrag(light, setLight)
   const concept = concepts[pick]
   const off = offBands(concept)
   // Only the relief preview has a light to move; Muse's painting is a finished picture.
   const relief = !concept.layout
+  const originals = concepts.filter(c => !c.edit)
+  const versions = versionsOf(concepts, concept)
+
+  // A selection belongs to the picture it was drawn on.
+  const show = (position: number) => {
+    setPick(position)
+    setArea(null)
+    setSelecting(false)
+  }
+  const send = async (message: string, onPhase: (phase: string) => void) => {
+    await onEdit(concept, { message, area }, onPhase)
+    show(concepts.length)  // the new version goes at the end
+  }
 
   const wall = {
     w: piece.wallWidthCm ?? DEFAULT_WALL_WIDTH,
@@ -85,7 +104,8 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   return (
     <div className="grid flex-1 gap-8 px-6 pb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:px-10">
       <div className="flex flex-col gap-3">
-        {photo && (
+        {selecting && <p className="text-xs text-muted-foreground">Drag over the part of the painting to change.</p>}
+        {photo && !selecting && (
           <div role="radiogroup" aria-label="Wall" className="flex gap-1 self-start rounded-lg bg-muted p-0.5 text-xs">
             {[{ v: true, l: "Client's wall" }, { v: false, l: 'Sketch' }].map(o => (
               <button
@@ -101,7 +121,11 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
             ))}
           </div>
         )}
-        {photo && onPhoto ? (
+        {selecting ? (
+          <AreaPicker ratio={W / H} area={area} onArea={setArea}>
+            <ConceptPainting concept={concept} seed={pick + 1} width={W} height={H} light={light} />
+          </AreaPicker>
+        ) : photo && onPhoto ? (
           <ConceptOnWall photo={photo} concept={concept} seed={pick + 1} canvasPx={[W, H]} piece={piece} light={light} active={active} />
         ) : (
           <figure className="flex flex-col gap-3">
@@ -152,26 +176,32 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
       </div>
 
       <aside className="flex flex-col gap-8 lg:pt-2">
-        {concepts.length > 1 && <ol className="flex flex-col" aria-label="Concepts">
-          {concepts.map((c, i) => (
-            <li key={c.title}>
-              <button
-                type="button"
-                aria-pressed={i === pick}
-                onClick={() => setPick(i)}
-                className={cn(
-                  'flex w-full items-baseline gap-4 border-b py-3 text-left transition-colors duration-150 ease-out',
-                  i === pick ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <span className="text-xs tabular-nums">{String(i + 1).padStart(2, '0')}</span>
-                <span className="flex-1 truncate text-base">{c.title}</span>
-                <span className="flex gap-0.5" aria-hidden>
-                  {c.bands.map(b => <span key={b.name} className="h-3 w-1.5 rounded-[1px]" style={{ background: b.mix.hex }} />)}
-                </span>
-              </button>
-            </li>
-          ))}
+        {originals.length > 1 && <ol className="flex flex-col" aria-label="Concepts">
+          {originals.map((c, i) => {
+            // A concept that's been changed opens at its latest version.
+            const latest = versionsOf(concepts, c).at(-1) ?? c
+            const on = versions.includes(c)
+            return (
+              <li key={c.index}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  disabled={editing}
+                  onClick={() => { if (!on) show(concepts.indexOf(latest)) }}
+                  className={cn(
+                    'flex w-full items-baseline gap-4 border-b py-3 text-left transition-colors duration-150 ease-out',
+                    on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <span className="text-xs tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="flex-1 truncate text-base">{c.title}</span>
+                  <span className="flex gap-0.5" aria-hidden>
+                    {latest.bands.map(b => <span key={b.name} className="h-3 w-1.5 rounded-[1px]" style={{ background: b.mix.hex }} />)}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ol>}
 
         <section className="flex flex-col gap-3">
@@ -198,7 +228,23 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
 
         {concept.layout_note && <p className="text-xs text-pretty text-muted-foreground">{concept.layout_note}</p>}
 
-        <Button size="lg" className="self-start" onClick={() => onChoose(pick)}>{concepts.length > 1 ? 'Paint this one' : 'Paint this'}</Button>
+        {concept.layout ? (
+          <ConceptChat
+            versions={versions}
+            current={concept}
+            onShow={v => { if (!editing) show(concepts.indexOf(v)) }}
+            area={area}
+            selecting={selecting}
+            onSelecting={setSelecting}
+            onClearArea={() => setArea(null)}
+            onSend={send}
+            onBusy={setEditing}
+          />
+        ) : (
+          <p className="text-xs text-pretty text-muted-foreground">This concept has only a drawn preview, so there's no painting to change in a chat. Pick another, or make new ones.</p>
+        )}
+
+        <Button size="lg" className="self-start" disabled={editing} onClick={() => onChoose(pick)}>Let's start painting</Button>
       </aside>
     </div>
   )

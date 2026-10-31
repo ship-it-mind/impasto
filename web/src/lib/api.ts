@@ -4,7 +4,7 @@
 // passing the server's phase ("Reading the brief…") to `onPhase`.
 
 import type { CheckIn, CheckInInput, Point } from './checkin'
-import type { Concept, Piece } from './concepts'
+import type { Area, Concept, Piece } from './concepts'
 import type { BriefResult } from './brief'
 import type { Guide } from './guide'
 import type { MixSettings, PasteAdvice, Recipe } from './recipe'
@@ -118,6 +118,18 @@ function conceptSet(record: ConceptsRecord, result: BriefResult): ConceptSet {
     canvasPx: record.canvas_px,
     piece: { widthCm: piece.width_cm ?? 120, heightCm: piece.height_cm ?? 90, wallWidthCm: room.wall_width_cm },
   }
+}
+
+// A change the painter asked for: Muse Image repaints the concept, and it comes back as a new version in the run.
+export type ConceptChange = { message: string; area: Area | null }
+
+export async function editConcept(result: BriefResult, set: ConceptSet, concept: Concept, change: ConceptChange, onPhase?: (phase: string) => void): Promise<Concept> {
+  const edited = await poll<{ concept: Concept; index: number }>(request(`/concepts/${result.id}/${set.run}/${concept.index}/edit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  }), onPhase)
+  return { ...edited.concept, index: edited.index }
 }
 
 // A piece read earlier, for the list to reopen it from.

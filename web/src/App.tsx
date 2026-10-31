@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppHeader, type Step } from '@/components/app-header'
-import { getPresets, openPiece, type ConceptSet } from '@/lib/api'
+import { editConcept, getPresets, openPiece, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Recipe } from '@/lib/recipe'
 import { CheckInsScreen } from '@/screens/checkins'
@@ -120,6 +120,11 @@ export default function App() {
             active={step === 'Concepts'}
             photo={brief.wall ? { briefId: brief.id, url: brief.wall } : undefined}
             onChoose={p => go('Recipe', p === pick ? piece : { brief, set, pick: p })}
+            onEdit={async (c, change, onPhase) => {
+              const edited = await editConcept(brief, set, c, change, onPhase)
+              setPiece(p => (p.set?.run === set.run ? { ...p, set: { ...p.set, concepts: [...p.set.concepts, edited] } } : p))
+              return edited
+            }}
           />
         </Kept>
       )}
