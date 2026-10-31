@@ -37,14 +37,6 @@ export function versionsOf(concepts: Concept[], concept: Concept): Concept[] {
 
 export type Piece = { widthCm: number; heightCm: number; wallWidthCm: number | null }
 
-// Same threshold as MAX_MIX_DE in backend/impasto/concepts.py.
-const MAX_MIX_DE = 3
-
-// Bands the tubes on hand can only mix close to, not exactly.
-export function offBands(c: Concept): Band[] {
-  return c.bands.filter(b => b.mix.delta_e > MAX_MIX_DE)
-}
-
 export function reliefSummary(c: Concept): string {
   const heavy = c.bands.filter(b => b.relief === 'heavy').length
   const summary = `${c.bands.length} bands · ${heavy ? `${heavy} heavy` : 'no heavy'}`

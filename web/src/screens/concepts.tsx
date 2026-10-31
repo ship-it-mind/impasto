@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
 import { ConceptChat, SegmentPicker } from '@/components/concept-chat'
 import { WallMockup } from '@/components/wall-mockup'
 import { getMockup, saveMockup, type ConceptChange } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { offBands, reliefSummary, versionsOf, type Concept, type Piece, type Segment } from '@/lib/concepts'
+import { reliefSummary, versionsOf, type Concept, type Piece, type Segment } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
 import type { Mockup } from '@/lib/wall'
 
@@ -73,7 +72,6 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   const [editing, setEditing] = useState(false)
   const drag = useLightDrag(light, setLight)
   const concept = concepts[pick]
-  const off = offBands(concept)
   // Only the relief preview has a light to move; Muse's painting is a finished picture.
   const relief = !concept.layout
   const originals = concepts.filter(c => !c.edit)
@@ -217,13 +215,6 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
             ))}
           </div>
           <p className="text-xs text-muted-foreground">{concept.bands.map(b => b.name).join(' · ')}</p>
-          {off.length > 0 && (
-            <p className="flex items-center gap-1.5 text-xs text-amber-700">
-              <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-              {off.map(b => b.name).join(', ')}: the closest mix from your tubes is slightly off
-              (ΔE {off.map(b => b.mix.delta_e.toFixed(1)).join(', ')}).
-            </p>
-          )}
         </section>
 
         {concept.layout_note && <p className="text-xs text-pretty text-muted-foreground">{concept.layout_note}</p>}
