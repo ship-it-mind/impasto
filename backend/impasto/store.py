@@ -1,4 +1,4 @@
-"""Everything the app keeps, in one SQLite file: pieces, concept runs, recipes, check-ins and their pictures.
+"""Everything the app keeps, in one SQLite file: accounts, pieces, concept runs, recipes, check-ins and their pictures.
 
 Records are the pipeline's JSON as is. A recipe is kept per concept and per mixing
 settings, so going back to one never asks a model for it again.
@@ -19,11 +19,27 @@ BACKEND = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.environ.get("IMPASTO_DB", BACKEND / "output" / "impasto.db"))
 # Where pieces lived before the database. Read once, to import them, and never changed.
 OLD_FOLDERS = BACKEND / "output" / "api"
-VERSION = 1
+VERSION = 2
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,  -- trimmed and lowercased
+    password_hash TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS spent (  -- model use so far, against the caps in impasto.auth
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    credits INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pieces (
     id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),  -- empty only for pieces from before accounts, until the first sign-up
     record TEXT NOT NULL,
     mockup TEXT,
     run TEXT,            -- the concepts on show
@@ -109,8 +125,12 @@ def init() -> None:
         db.execute("PRAGMA journal_mode = WAL")
         db.executescript(SCHEMA)
         version = db.execute("PRAGMA user_version").fetchone()[0]
-    if version < VERSION:
+        if not any(column["name"] == "user_id" for column in db.execute("PRAGMA table_info(pieces)")):
+            db.execute("ALTER TABLE pieces ADD COLUMN user_id TEXT REFERENCES users(id)")
+        db.execute("CREATE INDEX IF NOT EXISTS pieces_by_user ON pieces (user_id, updated_at)")
+    if version < 1:
         import_folders(OLD_FOLDERS)
+    if version < VERSION:
         with connect() as db:
             db.execute(f"PRAGMA user_version = {VERSION}")
 
@@ -140,6 +160,67 @@ def image(owner: str, name: str) -> bytes | None:
     return row["data"] if row else None
 
 
+# --- Accounts ----------------------------------------------------------------
+
+def add_user(user_id: str, email: str, password_hash: str) -> bool:
+    """A new account, or False if the email has one. The first account gets the pieces made before there were accounts."""
+    try:
+        with connect() as db:
+            db.execute(
+                "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                (user_id, email, password_hash, time.time()),
+            )
+            if db.execute("SELECT count(*) FROM users").fetchone()[0] == 1:
+                db.execute("UPDATE pieces SET user_id = ? WHERE user_id IS NULL", (user_id,))
+    except sqlite3.IntegrityError:
+        return False
+    return True
+
+
+def user_by_email(email: str) -> dict | None:
+    with connect() as db:
+        row = db.execute("SELECT id, email, password_hash FROM users WHERE email = ?", (email,)).fetchone()
+    return dict(row) if row else None
+
+
+def add_session(token_hash: str, user_id: str, expires_at: float) -> None:
+    with connect() as db:
+        db.execute("DELETE FROM sessions WHERE expires_at <= ?", (time.time(),))
+        db.execute("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)", (token_hash, user_id, expires_at))
+
+
+def session_user(token_hash: str) -> dict | None:
+    """Whose session this is, while it lasts."""
+    with connect() as db:
+        row = db.execute(
+            "SELECT users.id, users.email FROM sessions JOIN users ON users.id = sessions.user_id "
+            "WHERE sessions.token_hash = ? AND sessions.expires_at > ?",
+            (token_hash, time.time()),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def end_session(token_hash: str) -> None:
+    with connect() as db:
+        db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+
+def spend(user_id: str, credits: int, account_limit: int, total_limit: int) -> str | None:
+    """Spend credits if both caps allow it. If not, nothing is spent, and which cap stopped it: account or total."""
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")  # two jobs starting together can't both take the last credits
+        row = db.execute("SELECT credits FROM spent WHERE user_id = ?", (user_id,)).fetchone()
+        if (row["credits"] if row else 0) + credits > account_limit:
+            return "account"
+        if db.execute("SELECT coalesce(sum(credits), 0) FROM spent").fetchone()[0] + credits > total_limit:
+            return "total"
+        db.execute(
+            "INSERT INTO spent (user_id, credits) VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET credits = credits + excluded.credits",
+            (user_id, credits),
+        )
+    return None
+
+
 # --- Pieces ------------------------------------------------------------------
 
 def piece_row(row: sqlite3.Row) -> dict:
@@ -149,27 +230,33 @@ def piece_row(row: sqlite3.Row) -> dict:
     }
 
 
-def piece(piece_id: str) -> dict | None:
+def piece(piece_id: str, user_id: str) -> dict | None:
+    """A piece, if it's this user's."""
     with connect() as db:
-        row = db.execute("SELECT * FROM pieces WHERE id = ?", (piece_id,)).fetchone()
+        row = db.execute("SELECT * FROM pieces WHERE id = ? AND user_id = ?", (piece_id, user_id)).fetchone()
     return piece_row(row) if row else None
 
 
-def pieces() -> list[dict]:
-    """Every piece, latest first."""
+def pieces(user_id: str) -> list[dict]:
+    """Every piece of this user's, latest first."""
     with connect() as db:
-        return [piece_row(row) for row in db.execute("SELECT * FROM pieces ORDER BY updated_at DESC")]
+        return [piece_row(row) for row in db.execute("SELECT * FROM pieces WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))]
 
 
-def save_piece(piece_id: str, record: dict, images: dict[str, bytes]) -> None:
+def add_piece(piece_id: str, user_id: str, record: dict, images: dict[str, bytes]) -> None:
     now = time.time()
     with connect() as db:
         db.execute(
-            "INSERT INTO pieces (id, record, created_at, updated_at) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (id) DO UPDATE SET record = excluded.record, updated_at = excluded.updated_at",
-            (piece_id, dumps(record), now, now),
+            "INSERT INTO pieces (id, user_id, record, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (piece_id, user_id, dumps(record), now, now),
         )
         put_images(db, piece_id, images)
+
+
+def save_piece(piece_id: str, record: dict) -> None:
+    with connect() as db:
+        db.execute("UPDATE pieces SET record = ? WHERE id = ?", (dumps(record), piece_id))
+        touch(db, piece_id)
 
 
 def save_mockup(piece_id: str, mockup: dict) -> None:
@@ -297,6 +384,11 @@ def checkins(run_id: str, concept: int) -> list[tuple[str, dict]]:
     return [(row["id"], json.loads(row["record"])) for row in rows]
 
 
+def has_checkin(checkin_id: str, run_id: str, concept: int) -> bool:
+    with connect() as db:
+        return db.execute("SELECT 1 FROM checkins WHERE id = ? AND run = ? AND concept = ?", (checkin_id, run_id, concept)).fetchone() is not None
+
+
 def checkin_count(run_id: str, concept: int) -> int:
     with connect() as db:
         return db.execute("SELECT count(*) FROM checkins WHERE run = ? AND concept = ?", (run_id, concept)).fetchone()[0]
@@ -319,6 +411,11 @@ def checks(run_id: str, concept: int, kind: str) -> list[tuple[str, dict]]:
             "SELECT id, record FROM checks WHERE run = ? AND concept = ? AND kind = ? ORDER BY id", (run_id, concept, kind),
         ).fetchall()
     return [(row["id"], json.loads(row["record"])) for row in rows]
+
+
+def has_check(check_id: str, run_id: str, concept: int) -> bool:
+    with connect() as db:
+        return db.execute("SELECT 1 FROM checks WHERE id = ? AND run = ? AND concept = ?", (check_id, run_id, concept)).fetchone() is not None
 
 
 def save_question(piece_id: str, run_id: str, concept: int, record: dict) -> None:

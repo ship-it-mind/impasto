@@ -4,7 +4,10 @@
 
 Model calls take 5–30 s, so they run as background jobs: a POST returns a job
 id, and the web app polls GET /api/jobs/{id} for the phase and the result.
-Pieces live in SQLite (impasto.store); jobs only in memory. Nothing is kept per user.
+Pieces live in SQLite (impasto.store); jobs only in memory.
+
+Everything here needs a signed-in user (impasto.auth), and a user only reaches their own pieces and jobs:
+routes get a piece through piece_or_404 or run_or_404, and pictures also check they belong to what's asked for.
 """
 
 from __future__ import annotations
@@ -28,11 +31,12 @@ from typing import Annotated, Callable, Iterator
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 
+from impasto import auth
 from impasto import brief as briefs
 from impasto import checkin as checkins
 from impasto import coach
@@ -44,6 +48,7 @@ from impasto import method
 from impasto import mix_check
 from impasto import store
 from impasto import wall as walls
+from impasto.auth import CurrentUser
 from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
@@ -63,15 +68,20 @@ BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
 CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
 CHECKIN_IMAGES = {"progress.png", "rectified.png"}
-# A stored picture never changes, so the browser needn't fetch it again.
-CACHE_FOREVER = {"Cache-Control": "public, max-age=31536000, immutable"}
+# A stored picture never changes, so the browser needn't fetch it again; private, so nothing between keeps someone's pictures.
+CACHE_FOREVER = {"Cache-Control": "private, max-age=31536000, immutable"}
 CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|edit|layout)\.png$")
 MAX_EDIT_CHARS = 1000
 MAX_QUESTION_CHARS = 1000
+# Jobs spend 1 credit unless they're dearer: Spark and three Muse Images, or one Muse Image repaint and its mix.
+CONCEPTS_CREDITS, EDIT_CREDITS = 5, 2
 CHECK_IMAGES = {"photo.jpg"}
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
+app.include_router(auth.router)
+# Signing in is the only thing open to anyone: a route added here needs a user without having to ask for one.
+api = APIRouter(dependencies=[Depends(auth.current_user)])
 pool = ThreadPoolExecutor(max_workers=4)
 jobs: dict[str, dict] = {}
 # What's being worked on right now, so asking again joins the job instead of paying for a second one.
@@ -84,12 +94,14 @@ store.init()
 
 # --- Jobs --------------------------------------------------------------------
 
-def start(work: Callable[[Callable[[str], None]], dict], key: str | None = None) -> dict:
+def start(user: dict, work: Callable[[Callable[[str], None]], dict], key: str | None = None, credits: int = 1) -> dict:
+    """Start a job, spending credits for its model calls. Joining one already running costs nothing."""
     with running_lock:
         if key in running:
             return {"job": running[key]}
+        auth.charge(user, credits)
         job_id = uuid.uuid4().hex
-        jobs[job_id] = {"status": "running", "phase": "Starting…", "result": None, "error": None}
+        jobs[job_id] = {"user": user["id"], "status": "running", "phase": "Starting…", "result": None, "error": None}
         if key:
             running[key] = job_id
 
@@ -109,18 +121,19 @@ def start(work: Callable[[Callable[[str], None]], dict], key: str | None = None)
     return {"job": job_id}
 
 
-def finished(result: dict) -> dict:
+def finished(user: dict, result: dict) -> dict:
     """A job that's already done, for an answer that's already stored."""
     job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "done", "phase": "Done", "result": result, "error": None}
+    jobs[job_id] = {"user": user["id"], "status": "done", "phase": "Done", "result": result, "error": None}
     return {"job": job_id}
 
 
-@app.get("/api/jobs/{job_id}")
-def job_state(job_id: str) -> dict:
-    if job_id not in jobs:
+@api.get("/api/jobs/{job_id}")
+def job_state(user: CurrentUser, job_id: str) -> dict:
+    job = jobs.get(job_id)
+    if job is None or job["user"] != user["id"]:
         raise HTTPException(404, "No such job.")
-    return jobs[job_id]
+    return {key: job[key] for key in ("status", "phase", "result", "error")}
 
 
 # --- Uploads -----------------------------------------------------------------
@@ -181,7 +194,7 @@ def stored_image(owner: str, name: str) -> Response:
     return Response(data, media_type=mimetypes.guess_type(name)[0], headers=CACHE_FOREVER)
 
 
-@app.post("/api/images/heic")
+@api.post("/api/images/heic")
 def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
     """Browsers can't show HEIC, so the web app swaps one for this JPEG as soon as it's picked."""
     try:
@@ -190,15 +203,16 @@ def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
         raise HTTPException(415, f"{photo.filename}: couldn't read this HEIC photo.") from error
 
 
-def piece_or_404(brief_id: str) -> dict:
-    piece = store.piece(brief_id) if BRIEF_ID.match(brief_id) else None
+def piece_or_404(brief_id: str, user: dict) -> dict:
+    """The piece, if it's this user's. Someone else's gets the same answer as one that doesn't exist."""
+    piece = store.piece(brief_id, user["id"]) if BRIEF_ID.match(brief_id) else None
     if piece is None:
         raise HTTPException(404, "No such brief. Read the brief again.")
     return piece
 
 
-def run_or_404(brief_id: str, run: str) -> dict:
-    piece_or_404(brief_id)
+def run_or_404(brief_id: str, run: str, user: dict) -> dict:
+    piece_or_404(brief_id, user)
     drafted = store.run(brief_id, run) if RUN_ID.match(run) else None
     if drafted is None:
         raise HTTPException(404, "No such set of concepts. Make them again.")
@@ -207,7 +221,7 @@ def run_or_404(brief_id: str, run: str) -> dict:
 
 # --- Presets and tubes -------------------------------------------------------
 
-@app.get("/api/presets")
+@api.get("/api/presets")
 def presets() -> dict:
     return {
         "default": DEFAULT_PRESET,
@@ -222,12 +236,12 @@ def presets() -> dict:
 
 # --- Brief -------------------------------------------------------------------
 
-def read(brief_id: str, record: dict, wall: dict[str, bytes], phase: Callable[[str], None]) -> dict:
+def read(brief_id: str, user: dict, record: dict, wall: dict[str, bytes], phase: Callable[[str], None]) -> dict:
     phase("Reading the brief and the wall photo…" if wall else "Reading the brief…")
     with scratch(wall) as folder:
         record["brief"] = briefs.structure(record["transcript"], folder / record["wall_photo"] if wall else None, record["answers"])
     record["warnings"] = briefs.warnings(record["brief"])
-    store.save_piece(brief_id, record, wall)
+    store.add_piece(brief_id, user["id"], record, wall)
     if fit := record["brief"].get("wall_fit"):
         store.save_mockup(brief_id, walls.from_fit(fit, record["brief"]["piece"], photo_size(wall[record["wall_photo"]])))
     return brief_view(record, brief_id)
@@ -247,8 +261,8 @@ def brief_view(record: dict, brief_id: str) -> dict:
     }
 
 
-@app.post("/api/transcribe")
-def new_transcript(audio: Annotated[UploadFile, File()]) -> dict:
+@api.post("/api/transcribe")
+def new_transcript(user: CurrentUser, audio: Annotated[UploadFile, File()]) -> dict:
     """Dictation: speech to text for the brief box, to check and edit before the brief is read."""
     if not (audio.content_type or "").startswith(("audio/", "video/")):
         raise HTTPException(415, f"{audio.filename}: that doesn't look like audio.")
@@ -262,11 +276,12 @@ def new_transcript(audio: Annotated[UploadFile, File()]) -> dict:
             path.write_bytes(data)
             return {"transcript": transcribe(path)}
 
-    return start(work)
+    return start(user, work)
 
 
-@app.post("/api/brief")
+@api.post("/api/brief")
 def new_brief(
+    user: CurrentUser,
     text: Annotated[str, Form(max_length=5000)] = "",
     wall: Annotated[UploadFile | None, File()] = None,
 ) -> dict:
@@ -275,7 +290,7 @@ def new_brief(
     brief_id = uuid.uuid4().hex
     photo = read_image(wall, "wall", shrink=True) if wall else None
     record = {"source": "web", "transcript": text.strip(), "wall_photo": photo[0] if photo else None, "answers": []}
-    return start(lambda phase: read(brief_id, record, dict([photo]) if photo else {}, phase))
+    return start(user, lambda phase: read(brief_id, user, record, dict([photo]) if photo else {}, phase))
 
 
 # --- Concepts ----------------------------------------------------------------
@@ -303,13 +318,14 @@ def parsed_mockup(value: str | None) -> dict | None:
 
 
 def keep_size(brief_id: str, record: dict, mockup: dict | None) -> None:
-    store.save_piece(brief_id, record, {})
+    store.save_piece(brief_id, record)
     if mockup:
         store.save_mockup(brief_id, mockup)
 
 
-@app.post("/api/concepts")
+@api.post("/api/concepts")
 def new_concepts(
+    user: CurrentUser,
     brief_id: Annotated[str, Form()],
     references: Annotated[list[UploadFile], File()] = [],  # noqa: B006 - FastAPI copies defaults
     without_tubes: Annotated[list[str], Form(alias="without")] = [],  # noqa: B006
@@ -320,7 +336,7 @@ def new_concepts(
     height_cm: Annotated[float | None, Form()] = None,
     mockup: Annotated[str | None, Form()] = None,
 ) -> dict:
-    record = settled(piece_or_404(brief_id)["record"], width_cm, height_cm)
+    record = settled(piece_or_404(brief_id, user)["record"], width_cm, height_cm)
     wall_mockup = parsed_mockup(mockup)
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
@@ -341,7 +357,7 @@ def new_concepts(
         piece = record["brief"]["piece"]
         if problem := exact_pictures.shape_problem(ratio, piece["width_cm"], piece["height_cm"]):
             raise HTTPException(422, problem)
-        return start(exact_work(brief_id, run, record, wall_mockup, picture, corners_px, without_tubes, paste_in_mix), key=concepts_key(brief_id))
+        return start(user, exact_work(brief_id, run, record, wall_mockup, picture, corners_px, without_tubes, paste_in_mix), key=concepts_key(brief_id))
     refs = dict(read_image(upload, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references))
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -358,7 +374,7 @@ def new_concepts(
             store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
         return {**run_view(drafted, brief_id, run), "brief": brief_view(record, brief_id)}
 
-    return start(work, key=concepts_key(brief_id))
+    return start(user, work, key=concepts_key(brief_id), credits=CONCEPTS_CREDITS)
 
 
 def exact_picture(upload: UploadFile) -> bytes:
@@ -409,9 +425,9 @@ def concept_view(concept: dict, brief_id: str, run: str) -> dict:
     return {**concept, "layout": {"image": f"{base}/{layout['image']}", "map": f"{base}/{layout['map']}", "shares": layout["shares"]}}
 
 
-@app.get("/api/concepts/{brief_id}/{run}/{name}")
-def concept_file(brief_id: str, run: str, name: str) -> Response:
-    run_or_404(brief_id, run)
+@api.get("/api/concepts/{brief_id}/{run}/{name}")
+def concept_file(user: CurrentUser, brief_id: str, run: str, name: str) -> Response:
+    run_or_404(brief_id, run, user)
     if not CONCEPT_FILE.match(name):
         raise HTTPException(404, "No such image.")
     return stored_image(run, name)
@@ -423,10 +439,10 @@ class EditRequest(BaseModel):
     segments: list[tuple[float, float]] = []
 
 
-@app.post("/api/concepts/{brief_id}/{run}/{concept}/edit")
-def edit_concept(brief_id: str, run: str, concept: int, body: EditRequest) -> dict:
+@api.post("/api/concepts/{brief_id}/{run}/{concept}/edit")
+def edit_concept(user: CurrentUser, brief_id: str, run: str, concept: int, body: EditRequest) -> dict:
     """The painter's change, as a new concept in the run. One edit at a time per run: asking again joins it."""
-    drafted = run_or_404(brief_id, run)
+    drafted = run_or_404(brief_id, run, user)
     source = known_concept(drafted, concept)
     message = body.message.strip()
     if not message:
@@ -454,7 +470,7 @@ def edit_concept(brief_id: str, run: str, concept: int, body: EditRequest) -> di
             index = store.add_concept(brief_id, run, edited, {path.name: path.read_bytes() for path in folder.iterdir()})
         return {"concept": concept_view(edited, brief_id, run), "index": index}
 
-    return start(work, key=f"edit:{run}")
+    return start(user, work, key=f"edit:{run}", credits=EDIT_CREDITS)
 
 
 # --- Recipe ------------------------------------------------------------------
@@ -483,10 +499,10 @@ def known_concept(drafted: dict, concept: int) -> dict:
     return drafted["concepts"][concept]
 
 
-@app.put("/api/pieces/{brief_id}/choice")
-def choose(brief_id: str, body: Choice) -> dict:
+@api.put("/api/pieces/{brief_id}/choice")
+def choose(user: CurrentUser, brief_id: str, body: Choice) -> dict:
     """Keep the choice, and hand back the recipe already made for it, if any: then no model needs asking."""
-    known_concept(run_or_404(brief_id, body.run), body.concept)
+    known_concept(run_or_404(brief_id, body.run, user), body.concept)
     store.choose(brief_id, body.concept)
     if body.without is None:
         return {"recipe": store.latest_recipe(body.run, body.concept)}
@@ -503,13 +519,13 @@ def unique_names(names: list[str]) -> list[str]:
     return out
 
 
-@app.post("/api/recipe")
-def new_recipe(body: RecipeRequest) -> dict:
-    drafted = run_or_404(body.brief_id, body.run)
+@api.post("/api/recipe")
+def new_recipe(user: CurrentUser, body: RecipeRequest) -> dict:
+    drafted = run_or_404(body.brief_id, body.run, user)
     concept = known_concept(drafted, body.concept)
     if made := store.recipe(body.run, body.concept, body.without, body.paste_in_mix):
-        return finished(made)
-    piece = piece_or_404(body.brief_id)["record"]["brief"]["piece"]
+        return finished(user, made)
+    piece = piece_or_404(body.brief_id, user)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     if len(body.shares) != len(concept["bands"]) or min(body.shares) < 0 or abs(sum(body.shares) - 1) > 0.02:
@@ -587,18 +603,19 @@ def new_recipe(body: RecipeRequest) -> dict:
         store.save_recipe(body.brief_id, body.run, body.concept, body.without, body.paste_in_mix, result)
         return result
 
-    return start(work, key=f"recipe:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
+    return start(user, work, key=f"recipe:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
 
 
-@app.get("/api/pieces/{brief_id}/method")
+@api.get("/api/pieces/{brief_id}/method")
 def paste_method(
+    user: CurrentUser,
     brief_id: str,
     run: str,
     concept: int,
     without_tubes: Annotated[list[str], Query(alias="without")] = [],  # noqa: B006 - FastAPI copies defaults
 ) -> dict:
     """Paste mixed in or underneath, for this painting: the recommendation and what each way can mix."""
-    bands = known_concept(run_or_404(brief_id, run), concept)["bands"]
+    bands = known_concept(run_or_404(brief_id, run, user), concept)["bands"]
     try:
         return method.advise(bands, without_tubes)
     except ValueError as error:
@@ -617,11 +634,11 @@ class Supplies(BaseModel):
     have: dict[str, Have]
 
 
-@app.get("/api/pieces/{brief_id}/supplies")
-def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = False) -> dict:
+@api.get("/api/pieces/{brief_id}/supplies")
+def get_supplies(user: CurrentUser, brief_id: str, run: str, concept: int, paste_in_mix: bool = False) -> dict:
     """The tools this painting needs, what the painter already has, and what the app needs to work out what's left to buy."""
-    drafted = known_concept(run_or_404(brief_id, run), concept)
-    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
+    drafted = known_concept(run_or_404(brief_id, run, user), concept)
+    piece = piece_or_404(brief_id, user)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     materials = Materials()
@@ -632,9 +649,9 @@ def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = Fal
     }
 
 
-@app.put("/api/pieces/{brief_id}/supplies")
-def save_supplies(brief_id: str, body: Supplies) -> dict:
-    piece_or_404(brief_id)
+@api.put("/api/pieces/{brief_id}/supplies")
+def save_supplies(user: CurrentUser, brief_id: str, body: Supplies) -> dict:
+    piece_or_404(brief_id, user)
     if any(item.qty < 1 or (item.size or 0) < 0 for item in body.have.values()):
         raise HTTPException(422, "Quantities start at 1 and sizes can't be negative; leave out what you don't have.")
     have = body.model_dump()["have"]
@@ -652,16 +669,16 @@ class GuideRequest(BaseModel):
     paste_in_mix: bool = False
 
 
-@app.post("/api/guide")
-def new_guide(body: GuideRequest) -> dict:
+@api.post("/api/guide")
+def new_guide(user: CurrentUser, body: GuideRequest) -> dict:
     """How to paint the concept, for one recipe. A guide already written comes back as it was."""
-    concept = known_concept(run_or_404(body.brief_id, body.run), body.concept)
+    concept = known_concept(run_or_404(body.brief_id, body.run, user), body.concept)
     if made := store.guide(body.run, body.concept, body.without, body.paste_in_mix):
-        return finished(made)
+        return finished(user, made)
     recipe = store.recipe(body.run, body.concept, body.without, body.paste_in_mix)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
-    piece = piece_or_404(body.brief_id)["record"]["brief"]["piece"]
+    piece = piece_or_404(body.brief_id, user)["record"]["brief"]["piece"]
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Writing how to paint it…")
@@ -669,16 +686,16 @@ def new_guide(body: GuideRequest) -> dict:
         store.save_guide(body.brief_id, body.run, body.concept, body.without, body.paste_in_mix, made)
         return made
 
-    return start(work, key=f"guide:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
+    return start(user, work, key=f"guide:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
 
 
 # --- Pieces ------------------------------------------------------------------
 
-@app.get("/api/pieces")
-def list_pieces() -> dict:
-    """Every piece read so far, latest first: enough to pick one to reopen."""
+@api.get("/api/pieces")
+def list_pieces(user: CurrentUser) -> dict:
+    """Every piece of this user's read so far, latest first: enough to pick one to reopen."""
     pieces = []
-    for piece in store.pieces():
+    for piece in store.pieces(user["id"]):
         run, chosen = piece["run"], piece["chosen"]
         concept = None
         if run is not None and chosen is not None:
@@ -696,10 +713,10 @@ def list_pieces() -> dict:
     return {"pieces": pieces}
 
 
-@app.get("/api/pieces/{brief_id}")
-def open_piece(brief_id: str) -> dict:
+@api.get("/api/pieces/{brief_id}")
+def open_piece(user: CurrentUser, brief_id: str) -> dict:
     """A piece as the app left it: the brief, its latest concepts, the chosen concept with its recipe, and any concepts still being made."""
-    saved = piece_or_404(brief_id)
+    saved = piece_or_404(brief_id, user)
     piece = {"brief": brief_view(saved["record"], brief_id)}
     run, chosen = saved["run"], saved["chosen"]
     if run is not None:
@@ -712,9 +729,9 @@ def open_piece(brief_id: str) -> dict:
     return piece
 
 
-@app.get("/api/pieces/{brief_id}/wall")
-def wall_photo(brief_id: str) -> Response:
-    name = piece_or_404(brief_id)["record"].get("wall_photo")
+@api.get("/api/pieces/{brief_id}/wall")
+def wall_photo(user: CurrentUser, brief_id: str) -> Response:
+    name = piece_or_404(brief_id, user)["record"].get("wall_photo")
     if not name:
         raise HTTPException(404, "This piece has no wall photo.")
     return stored_image(brief_id, name)
@@ -733,9 +750,9 @@ class Mockup(BaseModel):
     estimated: bool = False
 
 
-@app.get("/api/pieces/{brief_id}/mockup")
-def get_mockup(brief_id: str) -> dict:
-    saved = piece_or_404(brief_id)
+@api.get("/api/pieces/{brief_id}/mockup")
+def get_mockup(user: CurrentUser, brief_id: str) -> dict:
+    saved = piece_or_404(brief_id, user)
     return {"mockup": walls.with_corners(saved["mockup"], saved["record"]["brief"]["piece"])}
 
 
@@ -745,10 +762,10 @@ def checked_mockup(mockup: Mockup) -> dict:
     return mockup.model_dump()
 
 
-@app.put("/api/pieces/{brief_id}/mockup")
-def save_mockup(brief_id: str, body: Mockup) -> dict:
+@api.put("/api/pieces/{brief_id}/mockup")
+def save_mockup(user: CurrentUser, brief_id: str, body: Mockup) -> dict:
     mockup = checked_mockup(body)
-    piece_or_404(brief_id)
+    piece_or_404(brief_id, user)
     store.save_mockup(brief_id, mockup)
     return {"mockup": mockup}
 
@@ -773,8 +790,9 @@ def checkin_view(record: dict, checkin_id: str, brief_id: str, run: str, concept
     }
 
 
-@app.post("/api/checkins")
+@api.post("/api/checkins")
 def new_checkin(
+    user: CurrentUser,
     brief_id: Annotated[str, Form()],
     run: Annotated[str, Form()],
     concept: Annotated[int, Form()],
@@ -786,9 +804,9 @@ def new_checkin(
     corners: Annotated[list[str], Form()] = [],  # noqa: B006 - FastAPI copies defaults
     ground: Annotated[str | None, Form()] = None,
 ) -> dict:
-    drafted = run_or_404(brief_id, run)
+    drafted = run_or_404(brief_id, run, user)
     known_concept(drafted, concept)
-    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
+    piece = piece_or_404(brief_id, user)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     if corners and len(corners) != 4:
@@ -827,20 +845,20 @@ def new_checkin(
         store.save_checkin(brief_id, checkin_id, run, concept, result, {photo_name: photo_data, **kept})
         return checkin_view(result, checkin_id, brief_id, run, concept)
 
-    return start(work)
+    return start(user, work)
 
 
-@app.get("/api/checkins")
-def list_checkins(brief_id: str, run: str, concept: int) -> dict:
+@api.get("/api/checkins")
+def list_checkins(user: CurrentUser, brief_id: str, run: str, concept: int) -> dict:
     """Every check-in on one concept, oldest first: for the history and the drift over time."""
-    run_or_404(brief_id, run)
+    run_or_404(brief_id, run, user)
     return {"checkins": [checkin_view(record, checkin_id, brief_id, run, concept) for checkin_id, record in store.checkins(run, concept)]}
 
 
-@app.get("/api/checkins/{brief_id}/{run}/{concept}/{checkin_id}/{image}")
-def checkin_image(brief_id: str, run: str, concept: int, checkin_id: str, image: str) -> Response:
-    run_or_404(brief_id, run)
-    if image not in CHECKIN_IMAGES or not CHECKIN_ID.match(checkin_id):
+@api.get("/api/checkins/{brief_id}/{run}/{concept}/{checkin_id}/{image}")
+def checkin_image(user: CurrentUser, brief_id: str, run: str, concept: int, checkin_id: str, image: str) -> Response:
+    run_or_404(brief_id, run, user)
+    if image not in CHECKIN_IMAGES or not store.has_checkin(checkin_id, run, concept):
         raise HTTPException(404, "No such image.")
     return stored_image(checkin_id, image)
 
@@ -865,16 +883,16 @@ def upright_jpeg(upload: UploadFile, max_side: int | None = None) -> bytes:
         raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
 
 
-def painting_plan(brief_id: str, run: str, concept: int) -> tuple[dict, dict, dict, str]:
+def painting_plan(brief_id: str, run: str, concept: int, user: dict) -> tuple[dict, dict, dict, str]:
     """The concept, its latest recipe and guide, and the plan in words for Spark."""
-    source = known_concept(run_or_404(brief_id, run), concept)
+    source = known_concept(run_or_404(brief_id, run, user), concept)
     recipe = store.latest_recipe(run, concept)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
     guide = store.guide(run, concept, recipe["mixing"]["without"], recipe["mixing"]["paste_in_mix"])
     if guide is None:
         raise HTTPException(409, "The steps aren't written yet. Try again in a moment.")
-    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
+    piece = piece_or_404(brief_id, user)["record"]["brief"]["piece"]
     return source, recipe, guide, coach.plan_text(source, recipe, guide, piece["width_cm"], piece["height_cm"])
 
 
@@ -898,8 +916,9 @@ def drying_note(steps: list[dict], step_id: str, run: str, concept: int) -> str:
     )
 
 
-@app.post("/api/step-checks")
+@api.post("/api/step-checks")
 def new_step_check(
+    user: CurrentUser,
     brief_id: Annotated[str, Form()],
     run: Annotated[str, Form()],
     concept: Annotated[int, Form()],
@@ -909,7 +928,7 @@ def new_step_check(
     expected: Annotated[UploadFile, File()],
 ) -> dict:
     """Spark's look at a photo of one step of the guide. Color is measured by the mix and whole-canvas checks, so nothing here measures."""
-    _, recipe, guide, plan = painting_plan(brief_id, run, concept)
+    _, recipe, guide, plan = painting_plan(brief_id, run, concept, user)
     stage = next((s for s in guide["steps"] if s["id"] == step), None)
     if stage is None:
         raise HTTPException(422, "This painting has no such step.")
@@ -925,11 +944,12 @@ def new_step_check(
         store.save_check(brief_id, check_id, run, concept, "step", record, {"photo.jpg": photo_data})
         return check_view(record, check_id, brief_id, run, concept)
 
-    return start(work)
+    return start(user, work)
 
 
-@app.post("/api/mix-checks")
+@api.post("/api/mix-checks")
 def new_mix_check(
+    user: CurrentUser,
     brief_id: Annotated[str, Form()],
     run: Annotated[str, Form()],
     concept: Annotated[int, Form()],
@@ -941,7 +961,7 @@ def new_mix_check(
     white: Annotated[str | None, Form()] = None,
 ) -> dict:
     """The paint in the bowl against the recipe: measured, with what to do if it's off."""
-    known_concept(run_or_404(brief_id, run), concept)
+    known_concept(run_or_404(brief_id, run, user), concept)
     recipe = store.latest_recipe(run, concept)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
@@ -960,13 +980,13 @@ def new_mix_check(
         store.save_check(brief_id, check_id, run, concept, "mix", record, {"photo.jpg": photo_data})
         return check_view(record, check_id, brief_id, run, concept)
 
-    return start(work)
+    return start(user, work, credits=0)  # measured here, with no model
 
 
-@app.get("/api/checks")
-def list_checks(brief_id: str, run: str, concept: int) -> dict:
+@api.get("/api/checks")
+def list_checks(user: CurrentUser, brief_id: str, run: str, concept: int) -> dict:
     """Everything on the check-ins screen besides the whole-canvas check-ins: step and mix checks, oldest first, and the chat."""
-    run_or_404(brief_id, run)
+    run_or_404(brief_id, run, user)
 
     def views(kind: str) -> list[dict]:
         return [check_view(record, check_id, brief_id, run, concept) for check_id, record in store.checks(run, concept, kind)]
@@ -974,10 +994,10 @@ def list_checks(brief_id: str, run: str, concept: int) -> dict:
     return {"steps": views("step"), "mixes": views("mix"), "questions": store.questions(run, concept)}
 
 
-@app.get("/api/checks/{brief_id}/{run}/{concept}/{check_id}/{image}")
-def check_image(brief_id: str, run: str, concept: int, check_id: str, image: str) -> Response:
-    run_or_404(brief_id, run)
-    if image not in CHECK_IMAGES or not CHECKIN_ID.match(check_id):
+@api.get("/api/checks/{brief_id}/{run}/{concept}/{check_id}/{image}")
+def check_image(user: CurrentUser, brief_id: str, run: str, concept: int, check_id: str, image: str) -> Response:
+    run_or_404(brief_id, run, user)
+    if image not in CHECK_IMAGES or not store.has_check(check_id, run, concept):
         raise HTTPException(404, "No such image.")
     return stored_image(check_id, image)
 
@@ -1010,15 +1030,15 @@ class Question(BaseModel):
     section: str | None = None
 
 
-@app.post("/api/questions")
-def ask(body: Question) -> dict:
+@api.post("/api/questions")
+def ask(user: CurrentUser, body: Question) -> dict:
     """Spark answers a question about the painting. One at a time per painting: asking again joins it."""
     question = body.question.strip()
     if not question:
         raise HTTPException(422, "Ask something first.")
     if len(question) > MAX_QUESTION_CHARS:
         raise HTTPException(422, f"Keep it under {MAX_QUESTION_CHARS} characters.")
-    _, recipe, guide, plan = painting_plan(body.brief_id, body.run, body.concept)
+    _, recipe, guide, plan = painting_plan(body.brief_id, body.run, body.concept, user)
     method = recipe["mixing"]["paste_in_mix"]
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -1035,4 +1055,7 @@ def ask(body: Question) -> dict:
         store.save_question(body.brief_id, body.run, body.concept, record)
         return record
 
-    return start(work, key=f"question:{body.run}:{body.concept}")
+    return start(user, work, key=f"question:{body.run}:{body.concept}")
+
+
+app.include_router(api)
