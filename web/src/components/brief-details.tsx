@@ -41,8 +41,6 @@ export function BriefDetails({ brief }: { brief: Brief }) {
           </span>
         )}
       </Row>
-      <Row label="Budget">{brief.budget ?? '—'}</Row>
-      <Row label="Deadline">{brief.deadline ?? '—'}</Row>
     </dl>
   )
 }

@@ -17,8 +17,6 @@ export type Brief = {
     name: string | null; placement: string | null; wall_width_cm: number | null
     wall_color_hex: string | null; lighting: string | null; notes: string | null
   }
-  budget: string | null
-  deadline: string | null
   clarifying_question: string | null
   // Spark's recommendation from the wall photo, when there is one and it made sense.
   wall_fit?: WallFit | null

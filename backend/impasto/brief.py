@@ -27,7 +27,7 @@ PROMPT = """You are the studio assistant of a palette-knife / impasto painter. A
 described the piece they want. Turn it into a structured brief for the painter.
 
 Rules:
-- Record only what the client said{photo_rule}. Do not invent sizes, colors, budgets or dates.
+- Record only what the client said{photo_rule}. Do not invent sizes or colors.
   Use null or an empty list when something was not mentioned.
 - Spoken numbers become digits: "one twenty by eighty centimeters" is width 120, height 80;
   "two meters eighty" is 280 cm. Width is the horizontal side.
@@ -37,7 +37,6 @@ Rules:
 - paint_as_is: true only if they explicitly ask for a picture to be painted as it is, as an exact copy or match
   ("paint this exactly", "copy this picture", "exactly like the photo"). Otherwise false, also when a picture is
   only inspiration or a style to follow ("something like this", "in this style").
-- budget and deadline: as the client said them, e.g. "around 15,000 pounds", "mid-December".
 - summary: one sentence a painter could read at a glance.
 - clarifying_question: {question_rule}
 {wall_fit_rule}
@@ -106,8 +105,6 @@ BRIEF_PROPERTIES = {
         "lighting": NULLABLE_STRING,
         "notes": NULLABLE_STRING,
     }),
-    "budget": NULLABLE_STRING,
-    "deadline": NULLABLE_STRING,
     "clarifying_question": NULLABLE_STRING,
 }
 WALL_FIT = strict_object({
@@ -208,7 +205,6 @@ def print_brief(record: dict) -> None:
             room["name"], room["placement"], wall_width, room["wall_color_hex"], room["lighting"], room["notes"]
         ) if value
     ))
-    print(f"Budget:  {brief['budget'] or '-'}   Deadline: {brief['deadline'] or '-'}")
     for warning in record["warnings"]:
         print(f"⚠️  {warning}")
     if brief["clarifying_question"]:
