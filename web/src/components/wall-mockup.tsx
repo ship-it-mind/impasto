@@ -2,12 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Keyb
 import { Download, Ruler, SquareDashedMousePointer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Point } from '@/lib/checkin'
-import { drawOnQuad, isConvex, keepOnPhoto, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
+import { dragCorner, drawOnQuad, isConvex, keepOnPhoto, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
 import { cn } from '@/lib/utils'
 
 const CORNERS = ['Top-left', 'Top-right', 'Bottom-right', 'Bottom-left']
 // Arrow keys nudge a corner by this share of the photo's width.
 const NUDGE = 0.005
+// The smallest piece the corners can make, the same as the smallest size that can be typed.
+const MIN_SIDE_CM = 5
 
 type WallMockupProps = {
   wall: string
@@ -27,7 +29,8 @@ type WallMockupProps = {
 }
 
 // The wall photo with the piece on it at true size. The scale comes from a line marked on something of known
-// length, or Spark's estimate; the piece is dragged to where it hangs, and its corners can be moved or marked.
+// length, or Spark's estimate; the piece is dragged to where it hangs. Dragging a corner changes its width and height
+// and keeps it a rectangle; marking 4 corners can fit it to a wall photographed at an angle.
 export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note }: WallMockupProps) {
   const img = useRef<HTMLImageElement>(null)
   const painting = useRef<HTMLDivElement>(null)
@@ -124,9 +127,7 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     if (!held || !at) return
     const [x, y] = toPhoto(e)
     if ('corner' in held) {
-      const corners = at.corners.map((c, i) => (i === held.corner ? [x, y] : c)) as Quad
-      if (!isConvex(corners)) return
-      const next = { ...at, corners }
+      const next = { ...at, corners: dragCorner(at.corners, held.corner, [x, y], MIN_SIDE_CM * pxPerCm(at)) }
       update(next)
       onResize?.(quadCm(next))
     } else {
@@ -143,9 +144,8 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     if (!step || !mockup || !photo) return
     e.preventDefault()
     const by = photo[0] * NUDGE
-    const corners = mockup.corners.map((c, i) => (i === corner ? [c[0] + step[0] * by, c[1] + step[1] * by] : c)) as Quad
-    if (!isConvex(corners)) return
-    const next = { ...mockup, corners }
+    const [x, y] = mockup.corners[corner]
+    const next = { ...mockup, corners: dragCorner(mockup.corners, corner, [x + step[0] * by, y + step[1] * by], MIN_SIDE_CM * pxPerCm(mockup)) }
     update(next)
     onResize?.(quadCm(next))
     commit(next)

@@ -56,6 +56,18 @@ export function resizeQuad(q: Quad, width: number, height: number): Quad {
   }) as Quad
 }
 
+// The rectangle with one corner dragged to a point and the corner opposite it staying put. It comes out upright with
+// square corners, whatever shape it had, and at least minSide across and down, so it can't flip over.
+export function dragCorner(q: Quad, corner: number, [x, y]: Point, minSide: number): Quad {
+  const [fixedX, fixedY] = q[(corner + 2) % 4]
+  const toRight = corner === 1 || corner === 2, toBottom = corner === 2 || corner === 3
+  const movedX = toRight ? Math.max(x, fixedX + minSide) : Math.min(x, fixedX - minSide)
+  const movedY = toBottom ? Math.max(y, fixedY + minSide) : Math.min(y, fixedY - minSide)
+  const [left, right] = toRight ? [fixedX, movedX] : [movedX, fixedX]
+  const [top, bottom] = toBottom ? [fixedY, movedY] : [movedY, fixedY]
+  return [[left, top], [right, top], [right, bottom], [left, bottom]]
+}
+
 // Four points tapped in any order, as top-left, top-right, bottom-right, bottom-left.
 export function orderQuad(points: Point[]): Quad {
   const by = (score: (p: Point) => number) => points.reduce((best, p) => (score(p) < score(best) ? p : best))

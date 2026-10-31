@@ -86,7 +86,7 @@ export function PieceSize({ size, disabled, fit, wall, mockup, wallWidthCm, onTy
           onChange={onMockup}
           onCommit={onMockupDone}
           onResize={onSize}
-          note="Drag the corners to change its size and shape, or the middle to move it."
+          note="Drag the corners to change its width and height, or the middle to move it."
         />
       )}
     </section>
