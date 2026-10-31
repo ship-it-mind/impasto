@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
@@ -39,6 +39,11 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
     h: Math.max(210, SKIRTING + SOFA.h + HANG_GAP + piece.heightCm + 30),
   }
   const pct = (cm: number, of: number) => `${(cm / of) * 100}%`
+
+  // Fetch all the paintings up front, so switching concepts shows the next one at once.
+  useEffect(() => {
+    concepts.forEach(c => { if (c.layout) new Image().src = c.layout.image })
+  }, [concepts])
 
   return (
     <div className="grid flex-1 gap-8 px-6 pb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:px-10">

@@ -83,12 +83,21 @@ export function answerQuestion(result: BriefResult, answer: string): Promise<Bri
 type ConceptsRecord = { run: string; canvas_px: [number, number]; concepts: (Concept & { warnings: string[]; index: number })[] }
 
 // Spark drafts 3 band specs, steered by the style pictures if any; each band gets its Mixbox mix.
-export async function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
+export function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
   const form = new FormData()
   form.append('brief_id', result.id)
   style.references.forEach(file => form.append('references', file))
   style.without?.forEach(tube => form.append('without', tube))
-  const set = conceptSet(await poll<ConceptsRecord>(request('/concepts', { method: 'POST', body: form }), onPhase), result)
+  return usableConcepts(request('/concepts', { method: 'POST', body: form }), result, onPhase)
+}
+
+// Concepts already being made for this piece, from before a reload.
+export function joinConcepts(job: string, result: BriefResult, onPhase?: (phase: string) => void): Promise<ConceptSet> {
+  return usableConcepts(Promise.resolve({ job }), result, onPhase)
+}
+
+async function usableConcepts(start: Promise<{ job: string }>, result: BriefResult, onPhase?: (phase: string) => void): Promise<ConceptSet> {
+  const set = conceptSet(await poll<ConceptsRecord>(start, onPhase), result)
   if (set.concepts.length === 0) throw new Error("None of the concepts came out usable. Make them again.")
   return set
 }
@@ -111,23 +120,38 @@ export type PieceSummary = {
   summary: string
   updated: string
   concepts: boolean
-  concept: { title: string; image: string | null; checkins: number } | null
+  concept: { title: string; image: string | null; recipe: boolean; checkins: number } | null
 }
 
 export async function listPieces(): Promise<PieceSummary[]> {
   return (await request<{ pieces: PieceSummary[] }>('/pieces')).pieces
 }
 
-// A piece as it was left: the brief, its latest concepts, and the chosen concept (its
-// place among the usable ones, as the screens count them) with its saved recipe.
-export type OpenedPiece = { brief: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe }
+// A piece as it was left: the brief, its latest concepts, the chosen concept (its place
+// among the usable ones, as the screens count them) with its saved recipe, and the job
+// making its next concepts, if one is running.
+export type OpenedPiece = { brief: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string }
 
 export async function openPiece(id: string): Promise<OpenedPiece> {
-  const saved = await request<{ brief: BriefResult; concepts?: ConceptsRecord; chosen?: number; recipe?: Recipe }>(`/pieces/${id}`)
-  if (!saved.concepts) return { brief: saved.brief }
+  const saved = await request<{ brief: BriefResult; concepts?: ConceptsRecord; chosen?: number; recipe?: Recipe | null; making: string | null }>(`/pieces/${id}`)
+  const making = saved.making ?? undefined
+  if (!saved.concepts) return { brief: saved.brief, making }
   const set = conceptSet(saved.concepts, saved.brief)
   const pick = set.concepts.findIndex(c => c.index === saved.chosen)
-  return pick < 0 ? { brief: saved.brief, set } : { brief: saved.brief, set, pick, recipe: saved.recipe }
+  return pick < 0 ? { brief: saved.brief, set, making } : { brief: saved.brief, set, pick, recipe: saved.recipe ?? undefined, making }
+}
+
+// Keep the concept (and mixing settings) picked to paint, and get the recipe already made
+// for them, if any. With no settings, the ones this concept last used.
+export async function chooseRecipe(result: BriefResult, set: ConceptSet, concept: Concept, settings?: MixSettings): Promise<Recipe | null> {
+  return (await request<{ recipe: Recipe | null }>(`/pieces/${result.id}/choice`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      run: set.run, concept: concept.index,
+      ...(settings && { without: settings.without, paste_in_mix: settings.pasteInMix }),
+    }),
+  })).recipe
 }
 
 // The paint plan for one concept: grams per band, Mixbox recipes from the tubes

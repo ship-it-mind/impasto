@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Frame, Images, LoaderCircle, X } from 'lucide-react'
 import { BriefDetails, QuestionForm } from '@/components/brief-details'
 import { DictateButton } from '@/components/dictate-button'
 import { PieceList } from '@/components/piece-list'
 import { Button } from '@/components/ui/button'
-import { answerQuestion, makeConcepts, readBrief, webImage, type ConceptSet } from '@/lib/api'
+import { answerQuestion, joinConcepts, makeConcepts, readBrief, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import { useObjectUrl } from '@/lib/use-object-url'
 import { cn } from '@/lib/utils'
@@ -36,15 +36,21 @@ function Thumbnail({ file, label, onRemove }: { file: File; label: string; onRem
 type BriefProps = {
   // A piece reopened at its brief: shown as read, ready to make concepts again.
   initial?: BriefResult
+  // The job still making this piece's concepts, from before a reload.
+  joining?: string
   openError?: string | null
+  // This piece already has concepts: showing them is free, making new ones isn't.
+  hasConcepts: boolean
+  onShowConcepts: () => void
   onOpen: (id: string) => void
+  onBrief: (brief: BriefResult) => void
   onConcepts: (set: ConceptSet, brief: BriefResult) => void
 }
 
 // One box takes the client's brief (typed or dictated), the wall photo and the style pictures;
 // the structured brief comes back below it, to check before making concepts. Under an
 // empty box, the pieces read before, to carry on with one.
-export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: BriefProps) {
+export function BriefScreen({ initial, joining, openError = null, hasConcepts, onShowConcepts, onOpen, onBrief, onConcepts }: BriefProps) {
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
   const [refs, setRefs] = useState<File[]>([])
@@ -52,11 +58,31 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
   const [dictating, setDictating] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
   const [result, setResult] = useState<BriefResult | null>(initial ?? null)
-  const [making, setMaking] = useState<string | null>(null)
+  const [making, setMaking] = useState<string | null>(joining ? 'Starting…' : null)
   const [error, setError] = useState<string | null>(openError)
   const box = useRef<HTMLTextAreaElement>(null)
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
+  // What's on screen was read from this, so reading it again would change nothing.
+  const lastRead = useRef<{ text: string; wall: File | null } | null>(null)
+  // Left this piece for another: a job finishing now mustn't pull the app back to it.
+  const left = useRef(false)
+  useEffect(() => {
+    left.current = false
+    return () => { left.current = true }
+  }, [])
+  const concepts = useRef(onConcepts)
+  useEffect(() => { concepts.current = onConcepts })
+
+  useEffect(() => {
+    if (!joining || !initial) return
+    let stop = false
+    joinConcepts(joining, initial, setMaking)
+      .then(set => { if (!stop) concepts.current(set, initial) })
+      .catch(e => { if (!stop) setError(e instanceof Error ? e.message : 'Something went wrong. Try again.') })
+      .finally(() => { if (!stop) setMaking(null) })
+    return () => { stop = true }
+  }, [joining, initial])
 
   const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.')
   const canRead = text.trim().length > 0 && !phase && !making && !dictating && converting === 0
@@ -86,10 +112,14 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
 
   const read = async () => {
     if (!canRead) return
+    if (result && lastRead.current?.text === text.trim() && lastRead.current.wall === wall) return
     setError(null)
     setResult(null)
     try {
-      setResult(await readBrief({ text, wall }, setPhase))
+      const read = await readBrief({ text, wall }, setPhase)
+      lastRead.current = { text: text.trim(), wall }
+      setResult(read)
+      onBrief(read)
     } catch (e) {
       setError(message(e))
     } finally {
@@ -100,7 +130,9 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
     if (!result) return
     setError(null)
     try {
-      setResult(await answerQuestion(result, a))
+      const answered = await answerQuestion(result, a)
+      setResult(answered)
+      onBrief(answered)
     } catch (e) {
       setError(message(e))
     }
@@ -110,9 +142,11 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
     setError(null)
     setMaking('Starting…')
     try {
-      onConcepts(await makeConcepts(result, { references: refs }, setMaking), result)
+      const set = await makeConcepts(result, { references: refs }, setMaking)
+      if (!left.current) onConcepts(set, result)
     } catch (e) {
       setError(message(e))
+    } finally {
       setMaking(null)
     }
   }
@@ -196,8 +230,9 @@ export function BriefScreen({ initial, openError = null, onOpen, onConcepts }: B
               <p className="mt-2 max-w-[65ch] text-pretty">{result.transcript}</p>
             </details>
             <div className="flex items-center gap-3">
-              <Button size="lg" onClick={make} disabled={!!making || !!result.brief.clarifying_question}>
-                {making ? <><LoaderCircle className="animate-spin" /> {making}</> : 'Make 3 concepts'}
+              {hasConcepts && !making && <Button size="lg" onClick={onShowConcepts}>See the concepts</Button>}
+              <Button size="lg" variant={hasConcepts ? 'ghost' : 'default'} onClick={make} disabled={!!making || !!result.brief.clarifying_question}>
+                {making ? <><LoaderCircle className="animate-spin" /> {making}</> : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">
                 Style: {refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}

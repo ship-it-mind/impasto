@@ -5,7 +5,8 @@ import { when } from '@/lib/checkin'
 function progress(p: PieceSummary): string {
   if (!p.concept) return p.concepts ? 'Concepts made' : 'Brief read'
   const checkins = p.concept.checkins
-  return `${p.concept.title} · ${checkins ? `${checkins} check-in${checkins > 1 ? 's' : ''}` : 'recipe made'}`
+  if (checkins) return `${p.concept.title} · ${checkins} check-in${checkins > 1 ? 's' : ''}`
+  return p.concept.recipe ? `${p.concept.title} · recipe made` : p.concept.title
 }
 
 // Pieces read before, latest first, to carry on with one.

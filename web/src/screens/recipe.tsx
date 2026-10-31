@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { ConceptPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
-import { makeRecipe, type ConceptSet } from '@/lib/api'
+import { chooseRecipe, makeRecipe, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Concept } from '@/lib/concepts'
 import { cm2, grams, parts, type MixSettings, type Recipe } from '@/lib/recipe'
@@ -95,18 +95,22 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     initialRecipe ? { without: initialRecipe.mixing.without, pasteInMix: initialRecipe.mixing.paste_in_mix } : { without: [], pasteInMix: false },
   )
   const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe ?? null)
-  const [phase, setPhase] = useState<string | null>(initialRecipe ? null : 'Measuring the bands…')
+  const [phase, setPhase] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const run = useCallback(async (s: MixSettings) => {
+  // A recipe made before, for this concept and these settings, comes back as it was. Only a new one costs a model call.
+  const run = useCallback(async (s?: MixSettings) => {
     setError(null)
-    setPhase('Measuring the bands…')
     try {
-      const shares = await bandShares(concept, seed, W, H)
-      const made = await makeRecipe(brief, set, concept, shares, s, setPhase)
+      let made = await chooseRecipe(brief, set, concept, s)
+      if (!made) {
+        setPhase('Measuring the bands…')
+        const shares = concept.layout?.shares ?? await bandShares(concept, seed, W, H)
+        made = await makeRecipe(brief, set, concept, shares, s ?? { without: [], pasteInMix: false }, setPhase)
+      }
       setRecipe(made)
       onRecipe(made)
-      setSettings(s)
+      setSettings({ without: made.mixing.without, pasteInMix: made.mixing.paste_in_mix })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
     } finally {
@@ -119,7 +123,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
   useEffect(() => {
     if (started.current) return
     started.current = true
-    run({ without: [], pasteInMix: false })
+    run()
   }, [run])
 
   // A relief preview, when there is no Muse painting, shows the mixes the recipe actually gives.
