@@ -168,6 +168,11 @@ def stroke_angle(image: np.ndarray, labels: np.ndarray, n: int, sigma: float) ->
     return np.mod(across + np.pi / 2, np.pi).astype(np.float32)
 
 
+def smoothed(image: np.ndarray) -> np.ndarray:
+    """The image with its knife texture and highlights smoothed away, its edges kept."""
+    return cv2.bilateralFilter(cv2.medianBlur(image, (round(SMOOTH * max(image.shape[:2])) | 1)), 9, 40, 9)
+
+
 def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int], ordered: bool = True) -> Layout:
     """The band layout of a painting of `colors` (the spec's bands, in order), at the canvas size.
 
@@ -175,8 +180,7 @@ def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int], 
     image = crop_to(painting, size)
     long_side = max(size)
     n = len(colors)
-    smooth = cv2.bilateralFilter(cv2.medianBlur(image, (round(SMOOTH * long_side) | 1)), 9, 40, 9)
-    lab = lab_image(smooth).reshape(-1, 3)
+    lab = lab_image(smoothed(image)).reshape(-1, 3)
 
     rng = np.random.default_rng(0)
     sample = lab[rng.choice(len(lab), min(KMEANS_SAMPLE, len(lab)), replace=False)]
