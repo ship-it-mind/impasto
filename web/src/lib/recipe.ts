@@ -42,5 +42,15 @@ export type PasteAdvice = {
 }
 
 export const parts = (n: number) => `${n} ${n === 1 ? 'part' : 'parts'}`
+
+// A band's tubes, most parts first.
+export const byParts = (tubes: RecipeTube[]) => [...tubes].sort((a, b) => b.parts - a.parts)
+
+// The recipe in one line: the colors by parts, then the paste, if it's in the mix.
+export function recipeLine(band: RecipeBand): string {
+  const colors = byParts(band.tubes).map(t => `${parts(t.parts)} ${t.name}`)
+  return [...colors, ...(band.paste_parts !== null ? [`${parts(band.paste_parts)} Modeling Paste`] : [])].join(' : ')
+}
+
 export const grams = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(2)} kg` : `${Math.round(g)} g`)
 export const cm2 = (a: number) => `${Math.round(a).toLocaleString('en-GB')} cm²`

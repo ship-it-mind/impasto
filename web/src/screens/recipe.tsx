@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { chooseRecipe, getPasteAdvice, getSupplies, makeRecipe, saveSupplies, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Concept } from '@/lib/concepts'
-import { cm2, grams, parts, type MixSettings, type PasteAdvice, type Recipe } from '@/lib/recipe'
+import { byParts, cm2, grams, parts, type MixSettings, type PasteAdvice, type Recipe } from '@/lib/recipe'
 import { DEFAULT_LIGHT, bandShares } from '@/lib/relief'
 import { shoppingList, type Have, type Supplies } from '@/lib/supplies'
 import { cn } from '@/lib/utils'
@@ -269,7 +269,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
                 </p>
               </div>
               <ul className="flex flex-wrap gap-2">
-                {b.tubes.map(t => (
+                {byParts(b.tubes).map(t => (
                   <li key={t.name} className="rounded-md bg-background px-2.5 py-1.5 shadow-[0_0_0_1px_rgb(0_0_0/0.06)] tabular-nums">
                     <span className="font-medium">{parts(t.parts)}</span> {t.name} <span className="text-muted-foreground">· {t.grams} g</span>
                   </li>

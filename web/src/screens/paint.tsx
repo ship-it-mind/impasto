@@ -6,7 +6,7 @@ import { makeGuide, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Concept } from '@/lib/concepts'
 import type { Guide, GuideStep } from '@/lib/guide'
-import { grams, type Recipe } from '@/lib/recipe'
+import { grams, recipeLine, type Recipe } from '@/lib/recipe'
 
 // What goes on the knife at this stage: the band's mix, or the paste each band gets.
 function StepMaterials({ step, recipe }: { step: GuideStep; recipe: Recipe }) {
@@ -16,7 +16,7 @@ function StepMaterials({ step, recipe }: { step: GuideStep; recipe: Recipe }) {
     return (
       <p className={`${pill} self-start`}>
         <span aria-hidden className="size-4 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1)]" style={{ background: band.mix_hex }} />
-        <span className="text-pretty">{band.card.recipe_line} <span className="text-muted-foreground">· {grams(band.paint_g)}{recipe.mixing.paste_in_mix ? ` + ${grams(band.paste_g)} paste` : ''}</span></span>
+        <span className="text-pretty">{recipeLine(band)} <span className="text-muted-foreground">· {grams(band.paint_g)}{recipe.mixing.paste_in_mix ? ` + ${grams(band.paste_g)} paste` : ''}</span></span>
       </p>
     )
   }
