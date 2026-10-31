@@ -32,9 +32,12 @@ from typing import Annotated, Callable, Iterator
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
+from starlette.responses import Response as StarletteResponse
+from starlette.types import Scope
 
 from impasto import auth
 from impasto import brief as briefs
@@ -50,6 +53,7 @@ from impasto import store
 from impasto import wall as walls
 from impasto.auth import CurrentUser
 from impasto.color import rgb_to_hex
+from impasto.meta import REPO_ROOT
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
 from impasto.recipe_cards import band_brief, write_cards
@@ -57,6 +61,7 @@ from impasto.tools import has_straight_edges, tools_for
 from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
+WEB_BUILD = REPO_ROOT / "web" / "dist"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_REFERENCES = 6
 # Wall photos and style pictures go to the models as base64 and load in the browser, so big ones are slow.
@@ -1055,3 +1060,17 @@ def ask(user: CurrentUser, body: Question) -> dict:
 
 
 app.include_router(api)
+
+
+class WebBuild(StaticFiles):
+    """The built web app. Files in assets/ have a hash in their name, so they never change; the rest must be checked, or a browser keeps an old page after a deploy."""
+
+    async def get_response(self, path: str, scope: Scope) -> StarletteResponse:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
+        return response
+
+
+# Deployed, the API serves the web app too. In development Vite does, and proxies /api here.
+if WEB_BUILD.is_dir():
+    app.mount("/", WebBuild(directory=WEB_BUILD, html=True), name="web")

@@ -69,8 +69,18 @@ Model calls cost money, so the app is invite-only. Everyone signs in with an ema
 
 - **Invite code.** Signing up takes the code in `IMPASTO_INVITE_CODE` in `.env`. With none set, nobody can sign up. Keep it out of the repo. A link like `https://your-host/?invite=CODE` opens sign-up with the code filled in.
 - **Existing pieces.** The first account to sign up gets every piece made before accounts existed, so create yours before sharing the code.
-- **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>`. Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
+- **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>` (the `Dockerfile` does). Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
 - **Not built.** There's no password reset or email verification, because the app doesn't send email.
+
+### Deploying
+
+The `Dockerfile` at the repo root builds the whole app as one service: the API serves the web build on port 8000, with Node and ffmpeg alongside it for the renderers and dictation. Any host that builds a Dockerfile works. The demo runs on Coolify.
+
+- **Keep `/data`.** The database, with every account and picture, is `/data/impasto.db`. Mount a persistent volume there, or a redeploy wipes it.
+- **Set `MODEL_API_KEY` and `IMPASTO_INVITE_CODE`** as environment variables on the host.
+- **One instance, one process.** Jobs and sign-in limits are in memory, and a restart ends any running job. The volume must be a local disk, because SQLite's WAL mode doesn't work over a network filesystem.
+- **Don't publish port 8000 on the host.** The container trusts forwarded headers from whoever connects, so only the reverse proxy should reach it. The proxy must set `X-Forwarded-Proto`, and must terminate HTTPS.
+- **Back up** with `sqlite3 /data/impasto.db ".backup /data/backup.db"`. A plain copy can miss recent writes.
 
 Tests use a throwaway database and no model keys:
 
