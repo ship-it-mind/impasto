@@ -11,7 +11,8 @@ import type { MixSettings, PasteAdvice, Recipe } from './recipe'
 import type { HaveMap, Supplies } from './supplies'
 
 export type BriefInput = { text: string; wall: File | null }
-export type StyleInput = { references: File[]; without?: string[] }
+// exact: a picture to paint as it is, in place of style pictures; corners: the painting's corners in it, in its own pixels.
+export type StyleInput = { references: File[]; without?: string[]; exact?: File; corners?: Point[] }
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { tubes: string[] }
 
@@ -85,11 +86,14 @@ export function answerQuestion(result: BriefResult, answer: string): Promise<Bri
 type ConceptsRecord = { run: string; canvas_px: [number, number]; concepts: (Concept & { warnings: string[]; index: number })[] }
 
 // Spark drafts 3 band specs, steered by the style pictures if any; each band gets its Mixbox mix.
+// An exact picture gives one concept instead, read straight off the picture.
 export function makeConcepts(result: BriefResult, style: StyleInput, onPhase?: (phase: string) => void): Promise<ConceptSet> {
   const form = new FormData()
   form.append('brief_id', result.id)
   style.references.forEach(file => form.append('references', file))
   style.without?.forEach(tube => form.append('without', tube))
+  if (style.exact) form.append('exact', style.exact)
+  style.corners?.forEach(c => form.append('corners', c.join(',')))
   return usableConcepts(request('/concepts', { method: 'POST', body: form }), result, onPhase)
 }
 

@@ -72,14 +72,14 @@ export function LitPainting({ concept, seed, width, height, light, gloss = 0.15,
   )
 }
 
-// A concept as the app shows it: Muse Image's painting, or the relief preview when Muse
-// has no usable painting of it. The painting is cropped to the canvas's exact shape.
+// A concept as the app shows it: Muse Image's painting or the user's exact picture, or the
+// relief preview when Muse has no usable painting of it. The painting is cropped to the canvas's exact shape.
 export function ConceptPainting({ concept, ...lit }: LitPaintingProps) {
   if (!concept.layout) return <LitPainting concept={concept} {...lit} />
   return (
     <img
       src={concept.layout.image}
-      alt={`${concept.title}, painted by Muse Image`}
+      alt={concept.exact ? `${concept.title}, the picture to paint` : `${concept.title}, painted by Muse Image`}
       draggable={false}
       className={cn('block w-full bg-muted object-cover', lit.className)}
       style={{ aspectRatio: `${lit.width} / ${lit.height}` }}

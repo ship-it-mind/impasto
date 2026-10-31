@@ -7,12 +7,13 @@ export type Band = {
   name: string; hex: string; width: number; relief: Relief
   mix: { hex: string; delta_e: number; tubes: Tube[] }
 }
-// Path A: Muse Image's painting of the concept and the band layout read off it (URLs).
+// Path A: Muse Image's painting of the concept, or the exact picture, and the band layout read off it (URLs).
 export type Layout = { image: string; map: string; shares: number[] }
-// index: the concept's place in its run on the server. layout_note: why Muse's layout isn't used.
+// index: the concept's place in its run on the server. layout_note: why Muse's layout isn't used, or how an exact
+// picture became this plan. exact: this is the user's own picture, to paint as it is.
 export type Concept = {
   title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number
-  layout?: Layout; layout_note?: string
+  layout?: Layout; layout_note?: string; exact?: boolean
 }
 
 export type Piece = { widthCm: number; heightCm: number; wallWidthCm: number | null }

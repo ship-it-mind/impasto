@@ -115,7 +115,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
       </div>
 
       <aside className="flex flex-col gap-8 lg:pt-2">
-        <ol className="flex flex-col" aria-label="Concepts">
+        {concepts.length > 1 && <ol className="flex flex-col" aria-label="Concepts">
           {concepts.map((c, i) => (
             <li key={c.title}>
               <button
@@ -135,7 +135,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
               </button>
             </li>
           ))}
-        </ol>
+        </ol>}
 
         <section className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground tabular-nums">{reliefSummary(concept)}</p>
@@ -161,7 +161,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
 
         {concept.layout_note && <p className="text-xs text-pretty text-muted-foreground">{concept.layout_note}</p>}
 
-        <Button size="lg" className="self-start" onClick={() => onChoose(pick)}>Paint this one</Button>
+        <Button size="lg" className="self-start" onClick={() => onChoose(pick)}>{concepts.length > 1 ? 'Paint this one' : 'Paint this'}</Button>
       </aside>
     </div>
   )
