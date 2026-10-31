@@ -60,7 +60,7 @@ cd backend && uv run uvicorn impasto.api:app --port 8000
 cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to :8000
 ```
 
-Each browser session may make 20 model calls; set `IMPASTO_MAX_MODEL_CALLS` to change that. Uploads and results land in `backend/output/api/` (git-ignored).
+Uploads and results land in `backend/output/api/` (git-ignored).
 
 ## Credits
 

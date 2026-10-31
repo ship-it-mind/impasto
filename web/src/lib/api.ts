@@ -13,12 +13,10 @@ export type StyleInput = { preset: string | null; references: File[]; without?: 
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { default: string; presets: Preset[]; tubes: string[] }
 
-// One session per page load: the server caps model calls per session.
-const SESSION = crypto.randomUUID()
 const POLL_MS = 700
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, { ...init, headers: { ...init.headers, 'X-Impasto-Session': SESSION } })
+  const response = await fetch(`/api${path}`, init)
   const body = await response.json().catch(() => null)
   if (!response.ok) {
     const detail = body?.detail

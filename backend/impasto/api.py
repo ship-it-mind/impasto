@@ -4,9 +4,7 @@
 
 Model calls take 5–30 s, so they run as background jobs: a POST returns a job
 id, and the web app polls GET /api/jobs/{id} for the phase and the result.
-Each browser session (the X-Impasto-Session header) may make at most
-IMPASTO_MAX_MODEL_CALLS model calls (default 20), so a stuck retry loop can't
-spend the hackathon credits. Everything lives in memory and in output/api/;
+Everything lives in memory and in output/api/;
 nothing is kept per user.
 """
 
@@ -16,9 +14,7 @@ import asyncio
 import json
 import logging
 import math
-import os
 import re
-import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
@@ -26,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -41,7 +37,6 @@ from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "api"
-MAX_MODEL_CALLS = int(os.environ.get("IMPASTO_MAX_MODEL_CALLS", "20"))
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_REFERENCES = 6
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
@@ -54,28 +49,7 @@ CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|layout)\.png$")
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
 pool = ThreadPoolExecutor(max_workers=4)
-lock = threading.Lock()
 jobs: dict[str, dict] = {}
-calls: dict[str, int] = {}
-
-Session = Annotated[str, Header(alias="X-Impasto-Session", min_length=8, max_length=64)]
-
-
-# --- Spend cap ---------------------------------------------------------------
-
-def spend(session: str, n: int) -> None:
-    """Count n model calls against the session, or refuse before any are made."""
-    with lock:
-        used = calls.get(session, 0)
-        if used + n > MAX_MODEL_CALLS:
-            raise HTTPException(429, f"This session has used its {MAX_MODEL_CALLS} model calls. Reload the page to start a new one.")
-        calls[session] = used + n
-
-
-@app.get("/api/session")
-def session_info(session: Session) -> dict:
-    used = calls.get(session, 0)
-    return {"model_calls_used": used, "model_calls_left": MAX_MODEL_CALLS - used}
 
 
 # --- Jobs --------------------------------------------------------------------
@@ -167,7 +141,6 @@ def brief_view(record: dict, brief_id: str) -> dict:
 
 @app.post("/api/brief")
 def new_brief(
-    session: Session,
     text: Annotated[str, Form(max_length=5000)] = "",
     audio: Annotated[UploadFile | None, File()] = None,
     wall: Annotated[UploadFile | None, File()] = None,
@@ -179,7 +152,6 @@ def new_brief(
     folder.mkdir(parents=True)
     audio_path = save(audio, folder, "voice-note", "audio") if audio else None
     wall_path = save(wall, folder, "wall", "image") if wall else None
-    spend(session, 2 if audio_path else 1)
 
     def work(phase: Callable[[str], None]) -> dict:
         transcript = text.strip()
@@ -200,7 +172,7 @@ class Answer(BaseModel):
 
 
 @app.post("/api/brief/{brief_id}/answer")
-def answer_brief(brief_id: str, body: Answer, session: Session) -> dict:
+def answer_brief(brief_id: str, body: Answer) -> dict:
     folder = brief_folder(brief_id)
     record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
     question = record["brief"]["clarifying_question"]
@@ -208,7 +180,6 @@ def answer_brief(brief_id: str, body: Answer, session: Session) -> dict:
         raise HTTPException(409, "This brief has no open question.")
     if not body.answer.strip():
         raise HTTPException(422, "Type the answer first.")
-    spend(session, 1)
     record["answers"].append({"question": question, "answer": body.answer.strip()[:500]})
     return start(lambda phase: read(record, folder, phase))
 
@@ -217,7 +188,6 @@ def answer_brief(brief_id: str, body: Answer, session: Session) -> dict:
 
 @app.post("/api/concepts")
 def new_concepts(
-    session: Session,
     brief_id: Annotated[str, Form()],
     preset: Annotated[str | None, Form()] = None,
     references: Annotated[list[UploadFile], File()] = [],  # noqa: B006 - FastAPI copies defaults
@@ -237,7 +207,6 @@ def new_concepts(
     run_folder = folder / f"concepts-{uuid.uuid4().hex[:8]}"
     run_folder.mkdir()
     refs = [save(upload, run_folder, f"reference-{i + 1}", "image") for i, upload in enumerate(references)]
-    spend(session, 1 + concepts.CONCEPTS)  # Spark drafts, Muse Image paints each
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Drafting 3 concepts…")
@@ -296,7 +265,7 @@ def unique_names(names: list[str]) -> list[str]:
 
 
 @app.post("/api/recipe")
-def new_recipe(body: RecipeRequest, session: Session) -> dict:
+def new_recipe(body: RecipeRequest) -> dict:
     folder = brief_folder(body.brief_id)
     run_folder = folder / body.run
     if not RUN_ID.match(body.run) or not (run_folder / "concepts.json").is_file():
@@ -314,7 +283,6 @@ def new_recipe(body: RecipeRequest, session: Session) -> dict:
         inventory = without(PLACEHOLDER_INVENTORY, body.without)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
-    spend(session, 1)
 
     def work(phase: Callable[[str], None]) -> dict:
         materials = Materials()
@@ -509,7 +477,6 @@ def checkin_view(record: dict, folder: Path, brief_id: str, run: str, concept: i
 
 @app.post("/api/checkins")
 def new_checkin(
-    session: Session,
     brief_id: Annotated[str, Form()],
     run: Annotated[str, Form()],
     concept: Annotated[int, Form()],
@@ -542,8 +509,6 @@ def new_checkin(
         spec["bands"] = [{**b, "mix": {**b["mix"], "hex": r["mix_hex"]}} for b, r in zip(spec["bands"], recipe["bands"])]
         inventory = without(PLACEHOLDER_INVENTORY, recipe["mixing"]["without"])
 
-    if corners_px is None:
-        spend(session, 1)  # SAM finds the corners
     # Muse's band layout when the concept has one, else the spec's drawn geometry at the preview's seed.
     plan_map = run_folder / spec["layout"]["map"] if "layout" in spec else None
     folder = checkin_folder(run_folder, concept) / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
