@@ -15,14 +15,17 @@ export type Presets = { default: string; presets: Preset[]; tubes: string[] }
 
 const POLL_MS = 700
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const response = await fetch(`/api${path}`, init)
-  const body = await response.json().catch(() => null)
   if (!response.ok) {
-    const detail = body?.detail
+    const detail = (await response.json().catch(() => null))?.detail
     throw new Error(typeof detail === 'string' ? detail : `The server said ${response.status}. Try again.`)
   }
-  return body as T
+  return response
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await send(path, init)).json() as Promise<T>
 }
 
 type Job<T> = { status: 'running' | 'done' | 'failed'; phase: string; result: T | null; error: string | null }
@@ -42,6 +45,15 @@ let presets: Promise<Presets> | null = null
 export function getPresets(): Promise<Presets> {
   presets ??= request<Presets>('/presets').catch(error => { presets = null; throw error })
   return presets
+}
+
+// Browsers can't show HEIC and the pipeline can't read it, so a HEIC photo becomes a JPEG as soon as it's picked.
+export async function webImage(file: File): Promise<File> {
+  if (!/\.hei[cf]$/i.test(file.name) && !/^image\/hei[cf]/.test(file.type)) return file
+  const form = new FormData()
+  form.append('photo', file)
+  const jpeg = await (await send('/images/heic', { method: 'POST', body: form })).blob()
+  return new File([jpeg], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })
 }
 
 // Voice Transcribe (if there is a voice note), then Spark reads the brief.

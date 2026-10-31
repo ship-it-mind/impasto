@@ -3,7 +3,7 @@ import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { CheckInTrends } from '@/components/checkin-trends'
 import { LitPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
-import { checkIn, listCheckIns, type ConceptSet } from '@/lib/api'
+import { checkIn, listCheckIns, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import { DONE, MIN_STARTED, percent, when, type BandProgress, type CheckIn, type Point } from '@/lib/checkin'
 import type { Concept } from '@/lib/concepts'
@@ -195,13 +195,21 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
     ...concept, bands: concept.bands.map((b, i) => ({ ...b, mix: { ...b.mix, hex: recipe.bands[i]?.mix_hex ?? b.mix.hex } })),
   }), [concept, recipe])
 
-  const choose = (file: File | undefined) => {
-    if (!file) return
-    setPhoto({ file, url: URL.createObjectURL(file) })
-    setTaps(NO_TAPS)
-    setTarget('white')
-    setShown(null)
+  const choose = async (picked: File | undefined) => {
+    if (!picked) return
     setError(null)
+    setPhase('Preparing the photo…')
+    try {
+      const file = await webImage(picked)
+      setPhoto({ file, url: URL.createObjectURL(file) })
+      setTaps(NO_TAPS)
+      setTarget('white')
+      setShown(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
+    } finally {
+      setPhase(null)
+    }
   }
 
   const tap = (p: Point) => {
@@ -299,7 +307,7 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
           <input
             ref={input}
             type="file"
-            accept="image/*"
+            accept="image/*,.heic,.heif"
             capture="environment"
             className="sr-only"
             tabIndex={-1}

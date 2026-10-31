@@ -11,6 +11,7 @@ nothing is kept per user.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import math
@@ -22,8 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
+from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 
 from impasto import brief as briefs
@@ -50,6 +53,8 @@ log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
 pool = ThreadPoolExecutor(max_workers=4)
 jobs: dict[str, dict] = {}
+
+register_heif_opener()
 
 
 # --- Jobs --------------------------------------------------------------------
@@ -80,18 +85,44 @@ def job_state(job_id: str) -> dict:
 
 # --- Uploads -----------------------------------------------------------------
 
-def save(upload: UploadFile, folder: Path, name: str, kind: str) -> Path:
-    suffix = Path(upload.filename or "").suffix.lower()
-    if kind == "image" and suffix not in IMAGE_SUFFIXES:
-        raise HTTPException(415, f"{upload.filename}: use a JPG, PNG or WebP photo.")
-    if kind == "audio" and not (upload.content_type or "").startswith(("audio/", "video/")):
-        raise HTTPException(415, f"{upload.filename}: that doesn't look like a voice note.")
+def read_upload(upload: UploadFile) -> bytes:
     data = upload.file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, f"{upload.filename} is over 25 MB.")
+    return data
+
+
+def save(upload: UploadFile, folder: Path, name: str, kind: str) -> Path:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if kind == "image" and suffix not in IMAGE_SUFFIXES:
+        raise HTTPException(415, f"{upload.filename}: use a JPG, PNG, WebP or HEIC photo.")
+    if kind == "audio" and not (upload.content_type or "").startswith(("audio/", "video/")):
+        raise HTTPException(415, f"{upload.filename}: that doesn't look like a voice note.")
     path = folder / f"{name}{suffix or '.bin'}"
-    path.write_bytes(data)
+    path.write_bytes(read_upload(upload))
     return path
+
+
+def heic_to_jpeg(data: bytes) -> bytes:
+    """A HEIC photo as an upright sRGB JPEG. iPhones shoot in Display P3, and the color work reads pixels as sRGB."""
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
+    profile = image.info.get("icc_profile")
+    if profile:
+        image = ImageCms.profileToProfile(
+            image.convert("RGB"), ImageCms.ImageCmsProfile(io.BytesIO(profile)), ImageCms.createProfile("sRGB"), outputMode="RGB",
+        )
+    out = io.BytesIO()
+    image.convert("RGB").save(out, "JPEG", quality=95)
+    return out.getvalue()
+
+
+@app.post("/api/images/heic")
+def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
+    """Browsers can't show HEIC, so the web app swaps one for this JPEG as soon as it's picked."""
+    try:
+        return Response(heic_to_jpeg(read_upload(photo)), media_type="image/jpeg")
+    except (UnidentifiedImageError, ValueError, OSError) as error:
+        raise HTTPException(415, f"{photo.filename}: couldn't read this HEIC photo.") from error
 
 
 def brief_folder(brief_id: str) -> Path:
