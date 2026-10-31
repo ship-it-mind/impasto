@@ -18,10 +18,22 @@ export type StyleInput = { references: File[]; without?: string[]; exact?: File;
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { tubes: string[] }
 
+export type Account = { id: string; email: string }
+
 const POLL_MS = 700
+
+let signedOutListener: (() => void) | null = null
+
+// Told when the server stops recognizing this browser's session. Returns how to stop listening.
+export function whenSignedOut(listener: () => void): () => void {
+  signedOutListener = listener
+  return () => { signedOutListener = null }
+}
 
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const response = await fetch(`/api${path}`, init)
+  // A 401 from signing in only means the password was wrong.
+  if (response.status === 401 && !path.startsWith('/auth/')) signedOutListener?.()
   if (!response.ok) {
     const detail = (await response.json().catch(() => null))?.detail
     throw new Error(typeof detail === 'string' ? detail : `The server said ${response.status}. Try again.`)
@@ -44,6 +56,27 @@ async function poll<T>(start: Promise<{ job: string }>, onPhase?: (phase: string
     onPhase?.(state.phase)
     await new Promise(r => setTimeout(r, POLL_MS))
   }
+}
+
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+}
+
+// Who's signed in on this browser, if anyone.
+export async function currentAccount(): Promise<Account | null> {
+  return (await request<{ user: Account | null }>('/auth/me')).user
+}
+
+export async function signIn(email: string, password: string): Promise<Account> {
+  return (await postJson<{ user: Account }>('/auth/signin', { email, password })).user
+}
+
+export async function signUp(email: string, password: string, invite: string): Promise<Account> {
+  return (await postJson<{ user: Account }>('/auth/signup', { email, password, invite })).user
+}
+
+export async function signOut(): Promise<void> {
+  await send('/auth/signout', { method: 'POST' })
 }
 
 let presets: Promise<Presets> | null = null

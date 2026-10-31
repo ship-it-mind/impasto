@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppHeader, type Step } from '@/components/app-header'
-import { editConcept, getPresets, openPiece, type ConceptSet } from '@/lib/api'
+import { editConcept, getPresets, openPiece, type Account, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Recipe } from '@/lib/recipe'
 import { CheckInsScreen } from '@/screens/checkins'
@@ -38,7 +38,7 @@ function Kept({ active, children }: { active: boolean; children: ReactNode }) {
   return seen ? <div className={active ? 'contents' : 'hidden'}>{children}</div> : null
 }
 
-export default function App() {
+export default function App({ account, onSignOut }: { account: Account; onSignOut: () => void }) {
   const [piece, setPiece] = useState<Piece>({})
   const [step, setStep] = useState<Step>('Brief')
   // Goes up when another piece opens, which starts every screen afresh.
@@ -93,7 +93,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-[oklch(0.985_0.004_80)] text-sm">
-      <AppHeader step={step} reachable={reachable(piece)} onStep={s => go(s, piece)} onHome={() => { setSession(s => s + 1); go('Brief', {}) }} />
+      <AppHeader step={step} reachable={reachable(piece)} email={account.email} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={() => { setSession(s => s + 1); go('Brief', {}) }} />
       {opening && <p className="px-6 py-10 text-center text-muted-foreground lg:px-10">Opening the piece…</p>}
       {!opening && (
         <Kept key={`brief-${session}`} active={step === 'Brief'}>
