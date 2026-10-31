@@ -59,7 +59,11 @@ def advise(bands: list[dict], dropped: list[str], materials: Materials | None = 
         reason = (
             f"Tinted paste is {paste_share:.0%} paste, so {named([name for name, _ in off])} can't reach "
             f"{'its' if len(off) == 1 else 'their'} color: the closest mix lands up to ΔE {max(de for _, de in off):.0f} off. "
-            f"With the paste underneath, every band stays within ΔE {under_max:.1f}."
+            + (
+                f"With the paste underneath, every band stays within ΔE {under_max:.1f}."
+                if under_max <= MAX_OFF_DE else
+                f"The paste underneath gets closer, but these tubes still land up to ΔE {under_max:.0f} off."
+            )
         )
     else:
         recommended = "tinted"
