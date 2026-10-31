@@ -37,7 +37,7 @@ Write:
   - tips: 0-2 tips specific to this stage, such as how to handle the edge with a band already down.
 
 The painting: "{title}". {idea}
-Canvas: {width} × {height} cm. The bands run: {flow}.
+Canvas: {width} × {height} cm. Composition: {composition}.
 Modeling paste: {method}
 {places}
 Stages:
@@ -101,8 +101,13 @@ def stages(bands: list[dict], paste_in_mix: bool) -> list[dict]:
     return steps
 
 
+def composition(concept: dict) -> str:
+    """How the painting is arranged: in Spark's words, or by its flow on pictures and older concepts."""
+    return concept.get("composition", concept["flow"]).rstrip(".")
+
+
 def places(concept: dict) -> str:
-    """Where each band sits, for a painting whose bands follow no order (impasto.exact)."""
+    """Where each band sits, for concepts that say so; older ones have only their flow."""
     if not all("where" in band for band in concept["bands"]):
         return ""
     return "Where each band sits:\n" + "\n".join(f"- {band['name']}: {band['where']}" for band in concept["bands"]) + "\n"
@@ -137,7 +142,7 @@ def write(concept: dict, recipe: dict, width_cm: float, height_cm: float) -> dic
     bands, paste_in_mix = recipe["bands"], recipe["mixing"]["paste_in_mix"]
     planned = stages(bands, paste_in_mix)
     prompt = PROMPT.format(
-        title=concept["title"], idea=concept["idea"], width=f"{width_cm:g}", height=f"{height_cm:g}", flow=concept["flow"], method=paste_method(paste_in_mix),
+        title=concept["title"], idea=concept["idea"], width=f"{width_cm:g}", height=f"{height_cm:g}", composition=composition(concept), method=paste_method(paste_in_mix),
         places=places(concept),
         stages=json.dumps([stage_brief(stage, bands) for stage in planned], indent=2, ensure_ascii=False),
     )

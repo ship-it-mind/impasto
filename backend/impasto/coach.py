@@ -12,7 +12,7 @@ import base64
 import json
 import mimetypes
 
-from impasto.guide import MODEL, paste_method, places
+from impasto.guide import MODEL, composition, paste_method, places
 from impasto.meta import client
 
 REVIEW_PROMPT = """You are looking over a palette-knife / impasto painter's shoulder at one step of one painting.
@@ -84,7 +84,7 @@ def plan_text(concept: dict, recipe: dict, guide: dict, width_cm: float, height_
     bands = recipe["bands"]
     lines = [
         f'"{concept["title"]}": {concept["idea"]}',
-        f"Canvas: {width_cm:g} × {height_cm:g} cm. The bands run: {concept['flow']}.",
+        f"Canvas: {width_cm:g} × {height_cm:g} cm. Composition: {composition(concept)}.",
         f"Modeling paste: {paste_method(recipe['mixing']['paste_in_mix'])}",
         f"Tubes on hand: {', '.join(recipe['mixing']['tubes'])}.",
         "Bands:",
