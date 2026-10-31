@@ -197,8 +197,8 @@ def describe_drift(planned: tuple[float, float, float], measured: tuple[float, f
     return " and ".join(words)
 
 
-def suggest_fix(measured_hex: str, planned_hex: str, inventory: dict) -> str | None:
-    """One or two tubes, and how much of each, that bring the measured mix closest back to the plan.
+def best_fix(measured_hex: str, planned_hex: str, inventory: dict) -> tuple[str, float] | None:
+    """One or two tubes, and how much of each, that bring the measured mix closest back to the plan, and the ΔE it lands at.
 
     A second tube is only named when it helps by more than MIN_GAIN_DE, as in the recipes.
     """
@@ -230,7 +230,12 @@ def suggest_fix(measured_hex: str, planned_hex: str, inventory: dict) -> str | N
         f"{round(share / unit)} part{'s' if round(share / unit) > 1 else ''} {tubes[i][0]}"
         for i, share in sorted(adds, key=lambda a: -a[1])
     ]
-    return f"mix in about {' and '.join(amounts)} to {round((1 - total) / unit)} parts of it"
+    return f"mix in about {' and '.join(amounts)} to {round((1 - total) / unit)} parts of it", after
+
+
+def suggest_fix(measured_hex: str, planned_hex: str, inventory: dict) -> str | None:
+    fix = best_fix(measured_hex, planned_hex, inventory)
+    return fix[0] if fix else None
 
 
 def measure(
