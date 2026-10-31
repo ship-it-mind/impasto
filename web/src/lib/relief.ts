@@ -19,10 +19,11 @@ export function paint(concept: Concept, seed: number, W: number, H: number, stag
   if (!p) {
     p = new Promise(resolve => {
       const worker = new Worker(new URL('./relief.worker.ts', import.meta.url), { type: 'module' })
-      worker.onmessage = (e: MessageEvent<{ C: Float32Array; Hm: Float32Array; shares: number[] }>) => {
+      worker.onmessage = (e: MessageEvent<{ C: Float32Array; Hm: Float32Array; band: Int16Array | null; shares: number[] }>) => {
         const surface = new Surface(W, H)
         surface.C.set(e.data.C)
         surface.Hm.set(e.data.Hm)
+        surface.band = e.data.band
         worker.terminate()
         resolve({ surface, shares: e.data.shares })
       }
