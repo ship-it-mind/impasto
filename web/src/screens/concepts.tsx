@@ -3,9 +3,11 @@ import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
 import { WallMockup } from '@/components/wall-mockup'
+import { getMockup, saveMockup } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { offBands, reliefSummary, type Concept, type Piece } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
+import type { Mockup } from '@/lib/wall'
 
 // Placeholder room, in cm, until the client's wall photo is in (OUR-139).
 const SOFA = { w: 220, h: 82 }
@@ -21,10 +23,45 @@ type ConceptsProps = {
   initialPick?: number
   // The client's wall photo, when the brief came with one: the concepts hang on it.
   photo?: { briefId: string; url: string }
+  // This screen is the one showing, rather than kept hidden.
+  active: boolean
+}
+
+const SHADOW = 'shadow-[0_2px_3px_rgb(0_0_0/0.25),0_14px_28px_-10px_rgb(0_0_0/0.4)]'
+
+// The concept on the client's wall photo, where the Brief left it. Here it only moves: its size is settled on the Brief.
+function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }: {
+  photo: { briefId: string; url: string }; concept: Concept; seed: number; canvasPx: [number, number]; piece: Piece; light: number; active: boolean
+}) {
+  const [mockup, setMockup] = useState<Mockup | null | undefined>(undefined)
+  // The Brief can move it too, so look again on coming back.
+  useEffect(() => {
+    if (!active) return
+    let stop = false
+    getMockup(photo.briefId).then(m => { if (!stop) setMockup(m) }).catch(() => { if (!stop) setMockup(m => m ?? null) })
+    return () => { stop = true }
+  }, [photo.briefId, active])
+  if (mockup === undefined) return null
+  return (
+    <WallMockup
+      wall={photo.url}
+      mockup={mockup}
+      size={{ w: piece.widthCm, h: piece.heightCm }}
+      wallWidthCm={piece.wallWidthCm}
+      onChange={setMockup}
+      onCommit={async m => { await saveMockup(photo.briefId, m) }}
+      art={{
+        node: <ConceptPainting concept={concept} seed={seed} width={canvasPx[0]} height={canvasPx[1]} light={light} className={SHADOW} />,
+        px: canvasPx,
+        title: concept.title,
+      }}
+      note={`${piece.widthCm} × ${piece.heightCm} cm. Drag the canvas to where it hangs.`}
+    />
+  )
 }
 
 // The concepts hung on the client's wall at true scale, picked from an editorial index.
-export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo }: ConceptsProps) {
+export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo, active }: ConceptsProps) {
   const [pick, setPick] = useState(initialPick)
   const [onPhoto, setOnPhoto] = useState(!!photo)
   const [light, setLight] = useState(DEFAULT_LIGHT)
@@ -65,7 +102,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
           </div>
         )}
         {photo && onPhoto ? (
-          <WallMockup briefId={photo.briefId} wall={photo.url} concept={concept} seed={pick + 1} canvasPx={[W, H]} piece={piece} light={light} />
+          <ConceptOnWall photo={photo} concept={concept} seed={pick + 1} canvasPx={[W, H]} piece={piece} light={light} active={active} />
         ) : (
           <figure className="flex flex-col gap-3">
             <div

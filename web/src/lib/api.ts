@@ -9,6 +9,7 @@ import type { BriefResult } from './brief'
 import type { Guide } from './guide'
 import type { MixSettings, PasteAdvice, Recipe } from './recipe'
 import type { HaveMap, Supplies } from './supplies'
+import type { Mockup } from './wall'
 
 export type BriefInput = { text: string; wall: File | null }
 // exact: a picture to paint as it is, in place of style pictures; corners: the painting's corners in it, in its own pixels.
@@ -229,9 +230,7 @@ export async function listCheckIns(result: BriefResult, set: ConceptSet, concept
   return (await request<{ checkins: CheckIn[] }>(`/checkins?${query}`)).checkins
 }
 
-// How the piece hangs on the client's wall photo: a measured line, its length, and the canvas's center (photo pixels).
-export type Mockup = { line: [Point, Point]; length_cm: number; center: Point }
-
+// How the piece hangs on the client's wall photo.
 export async function getMockup(briefId: string): Promise<Mockup | null> {
   return (await request<{ mockup: Mockup | null }>(`/pieces/${briefId}/mockup`)).mockup
 }

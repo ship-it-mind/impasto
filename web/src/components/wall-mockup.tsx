@@ -1,123 +1,192 @@
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
-import { Download, Ruler } from 'lucide-react'
-import { ConceptPainting } from '@/components/lit-painting'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { Download, Ruler, SquareDashedMousePointer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getMockup, saveMockup, type Mockup } from '@/lib/api'
 import type { Point } from '@/lib/checkin'
-import type { Concept, Piece } from '@/lib/concepts'
+import { drawOnQuad, isConvex, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
 import { cn } from '@/lib/utils'
 
+const CORNERS = ['Top-left', 'Top-right', 'Bottom-right', 'Bottom-left']
+// Arrow keys nudge a corner by this share of the photo's width.
+const NUDGE = 0.005
+
 type WallMockupProps = {
-  briefId: string
   wall: string
-  concept: Concept
-  seed: number
-  canvasPx: [number, number]
-  piece: Piece
-  light: number
+  mockup: Mockup | null
+  // The piece's size, to draw at when the scale is set. Without one, the scale sets a first guess.
+  size: SizeCm | null
+  wallWidthCm?: number | null
+  // Live while dragging.
+  onChange: (mockup: Mockup) => void
+  // Once it's settled: a drag let go, corners marked or a scale set. A rejection shows as an error.
+  onCommit: (mockup: Mockup) => void | Promise<void>
+  // The corners can be moved or marked, which changes the size.
+  onResize?: (size: SizeCm) => void
+  // The painting to draw on the wall, and its size in px. Without it, an outline.
+  art?: { node: ReactNode; px: [number, number]; title: string }
+  note?: ReactNode
 }
 
-const SHADOW = 'shadow-[0_2px_3px_rgb(0_0_0/0.25),0_14px_28px_-10px_rgb(0_0_0/0.4)]'
-
-// The concept hung on the client's own wall photo at true size. Scale comes from a
-// line she marks on something she knows the length of (taken as seen straight on);
-// she drags the canvas to where it will hang. Both are kept with the piece.
-export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], piece, light }: WallMockupProps) {
+// The wall photo with the piece on it at true size. The scale comes from a line marked on something of known
+// length, or Spark's estimate; the piece is dragged to where it hangs, and its corners can be moved or marked.
+export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note }: WallMockupProps) {
   const img = useRef<HTMLImageElement>(null)
   const painting = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState<Point | null>(null)
-  const [mockup, setMockup] = useState<Mockup | null>(null)
-  const [loaded, setLoaded] = useState(false)
-  const [measuring, setMeasuring] = useState(false)
+  const [photo, setPhoto] = useState<Point | null>(null)
+  const [shownWidth, setShownWidth] = useState(0)
+  const [measuring, setMeasuring] = useState(!mockup)
   const [line, setLine] = useState<Point[]>([])
   const [length, setLength] = useState('')
+  const [marks, setMarks] = useState<Point[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const drag = useRef<{ dx: number; dy: number } | null>(null)
+  const drag = useRef<{ corner: number } | { dx: number; dy: number } | null>(null)
+  const latest = useRef(mockup)
+  useEffect(() => { latest.current = mockup }, [mockup])
 
-  useEffect(() => {
-    getMockup(briefId)
-      .then(m => { setMockup(m); setMeasuring(!m) })
-      .catch(() => setMeasuring(true))
-      .finally(() => setLoaded(true))
-  }, [briefId])
+  // The photo's size on screen: the painting is drawn in these pixels. It is 0 while the screen is hidden.
+  useLayoutEffect(() => {
+    const el = img.current
+    if (!el) return
+    const seen = new ResizeObserver(() => setShownWidth(el.getBoundingClientRect().width))
+    seen.observe(el)
+    return () => seen.disconnect()
+  }, [])
+
+  const commit = (next: Mockup) => {
+    setError(null)
+    Promise.resolve(onCommit(next)).catch((e: unknown) => setError(e instanceof Error ? e.message : "Couldn't save that."))
+  }
+  const update = (next: Mockup) => {
+    latest.current = next
+    onChange(next)
+  }
 
   // Photo pixels under a pointer.
   const toPhoto = (e: PointerEvent): Point => {
     const r = img.current!.getBoundingClientRect()
-    return [((e.clientX - r.left) / r.width) * size![0], ((e.clientY - r.top) / r.height) * size![1]]
+    return [((e.clientX - r.left) / r.width) * photo![0], ((e.clientY - r.top) / r.height) * photo![1]]
   }
-  const pct = ([x, y]: Point) => ({ left: `${(x / size![0]) * 100}%`, top: `${(y / size![1]) * 100}%` })
+  const pct = ([x, y]: Point) => ({ left: `${(x / photo![0]) * 100}%`, top: `${(y / photo![1]) * 100}%` })
 
   const tap = (e: PointerEvent<HTMLImageElement>) => {
-    if (!measuring || !size) return
-    setLine(l => (l.length >= 2 ? [toPhoto(e)] : [...l, toPhoto(e)]))
-  }
-
-  const setScale = async (e: FormEvent) => {
-    e.preventDefault()
-    if (line.length < 2 || !size) return
-    const cm = Number(length)
-    if (!(cm > 0)) { setError('Type the length in cm.'); return }
-    try {
-      const next = await saveMockup(briefId, {
-        line: [line[0], line[1]], length_cm: cm, center: mockup?.center ?? [size[0] / 2, size[1] * 0.4],
-      })
-      setMockup(next)
-      setMeasuring(false)
-      setLine([])
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the scale.")
+    if (!photo) return
+    const p = toPhoto(e)
+    if (marks) {
+      const next = [...marks, p]
+      if (next.length < 4) { setMarks(next); return }
+      setMarks(null)
+      const corners = orderQuad(next)
+      if (!mockup || !isConvex(corners)) { setError("Those 4 points don't make a shape the painting can sit in. Mark them again."); return }
+      const marked = { ...mockup, corners }
+      update(marked)
+      onResize?.(quadCm(marked))
+      commit(marked)
+    } else if (measuring) {
+      setLine(l => (l.length >= 2 ? [p] : [...l, p]))
     }
   }
 
-  // Dragging the canvas keeps the grab point under the pointer; it is saved on release.
-  const grab = (e: PointerEvent<HTMLDivElement>) => {
-    if (!mockup || measuring) return
+  // A new scale keeps the piece's size in cm, so its corners move.
+  const setScale = (e: FormEvent) => {
+    e.preventDefault()
+    if (line.length < 2 || !photo) return
+    const cm = Number(length)
+    if (!(cm > 0 && cm <= 5000)) { setError('Type the length in cm.'); return }
+    const scale = { line: [line[0], line[1]] as [Point, Point], length_cm: cm }
+    const px = pxPerCm(scale)
+    // No size yet: a first guess at a third of the photo's width, in 4:3.
+    const width = size ? size.w * px : photo[0] / 3, height = size ? size.h * px : (photo[0] / 3) * 0.75
+    const next: Mockup = {
+      ...scale,
+      corners: mockup ? resizeQuad(mockup.corners, width, height) : rectangle([photo[0] / 2, photo[1] * 0.4], width, height),
+    }
+    update(next)
+    if (!size) onResize?.(quadCm(next))
+    commit(next)
+    setMeasuring(false)
+    setLine([])
+  }
+
+  // Dragging keeps the grab point under the pointer; it is saved on release.
+  const grab = (e: PointerEvent<Element>) => {
+    if (!mockup || measuring || marks) return
     const [x, y] = toPhoto(e)
-    drag.current = { dx: mockup.center[0] - x, dy: mockup.center[1] - y }
+    const [cx, cy] = mockup.corners[0]
+    drag.current = { dx: cx - x, dy: cy - y }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
-  const move = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current || !mockup) return
+  const grabCorner = (e: PointerEvent<Element>, corner: number) => {
+    e.stopPropagation()
+    drag.current = { corner }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const move = (e: PointerEvent<Element>) => {
+    const held = drag.current, at = latest.current
+    if (!held || !at) return
     const [x, y] = toPhoto(e)
-    setMockup({ ...mockup, center: [x + drag.current.dx, y + drag.current.dy] })
+    if ('corner' in held) {
+      const corners = at.corners.map((c, i) => (i === held.corner ? [x, y] : c)) as Quad
+      if (!isConvex(corners)) return
+      const next = { ...at, corners }
+      update(next)
+      onResize?.(quadCm(next))
+    } else {
+      update({ ...at, corners: moveQuad(at.corners, x + held.dx - at.corners[0][0], y + held.dy - at.corners[0][1]) })
+    }
   }
   const drop = () => {
-    if (!drag.current || !mockup) return
+    if (!drag.current || !latest.current) return
     drag.current = null
-    saveMockup(briefId, mockup).catch(() => setError("Couldn't save where it hangs."))
+    commit(latest.current)
+  }
+  const nudge = (e: KeyboardEvent, corner: number) => {
+    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]
+    if (!step || !mockup || !photo) return
+    e.preventDefault()
+    const by = photo[0] * NUDGE
+    const corners = mockup.corners.map((c, i) => (i === corner ? [c[0] + step[0] * by, c[1] + step[1] * by] : c)) as Quad
+    if (!isConvex(corners)) return
+    const next = { ...mockup, corners }
+    update(next)
+    onResize?.(quadCm(next))
+    commit(next)
   }
 
   // The photo with the painting drawn on it, at the photo's full size.
   const download = () => {
-    const photo = img.current, art = painting.current?.querySelector<HTMLCanvasElement | HTMLImageElement>('canvas, img')
-    if (!photo || !art || !mockup || !size) return
+    const picture = img.current, source = painting.current?.querySelector<HTMLCanvasElement | HTMLImageElement>('canvas, img')
+    if (!picture || !source || !mockup || !photo || !art) return
     const out = document.createElement('canvas')
-    out.width = size[0]
-    out.height = size[1]
+    out.width = photo[0]
+    out.height = photo[1]
     const ctx = out.getContext('2d')!
-    ctx.drawImage(photo, 0, 0)
-    const w = piece.widthCm * pxPerCm(mockup), h = piece.heightCm * pxPerCm(mockup)
+    ctx.drawImage(picture, 0, 0)
+    const { across, down } = quadSides(mockup.corners)
+    ctx.save()
     ctx.shadowColor = 'rgb(0 0 0 / 0.35)'
-    ctx.shadowBlur = h * 0.06
-    ctx.shadowOffsetY = h * 0.025
+    ctx.shadowBlur = down * 0.06
+    ctx.shadowOffsetY = down * 0.025
+    ctx.beginPath()
+    mockup.corners.forEach(([x, y]) => ctx.lineTo(x, y))
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
     // Cropped to the canvas's shape, as it shows on screen.
-    const [artW, artH] = art instanceof HTMLImageElement ? [art.naturalWidth, art.naturalHeight] : [art.width, art.height]
-    const cropW = Math.min(artW, artH * (w / h)), cropH = Math.min(artH, artW * (h / w))
-    ctx.drawImage(art, (artW - cropW) / 2, (artH - cropH) / 2, cropW, cropH, mockup.center[0] - w / 2, mockup.center[1] - h / 2, w, h)
+    const [artW, artH] = source instanceof HTMLImageElement ? [source.naturalWidth, source.naturalHeight] : [source.width, source.height]
+    const cropW = Math.min(artW, artH * (across / down)), cropH = Math.min(artH, artW * (down / across))
+    drawOnQuad(ctx, source, { x: (artW - cropW) / 2, y: (artH - cropH) / 2, w: cropW, h: cropH }, mockup.corners)
     out.toBlob(blob => {
       if (!blob) return
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `${concept.title} on the wall.png`
+      a.download = `${art.title} on the wall.png`
       a.click()
       URL.revokeObjectURL(a.href)
     }, 'image/png')
   }
 
-  const placed = mockup && size && !measuring
-  const scale = mockup && size ? pxPerCm(mockup) / size[0] : 0  // canvas cm → share of the photo's width
+  const placed = mockup && photo && !measuring && !marks
+  const shown = photo && shownWidth ? shownWidth / photo[0] : 0
+  const onScreen = (q: Quad) => q.map(([x, y]) => [x * shown, y * shown]) as Quad
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,25 +196,58 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
           src={wall}
           alt="The client's wall"
           draggable={false}
-          onLoad={e => setSize([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
+          onLoad={e => setPhoto([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
           onPointerDown={tap}
-          className={cn('block max-h-[calc(100dvh-9rem)] max-w-full select-none', measuring && 'cursor-crosshair')}
+          className={cn('block max-h-[calc(100dvh-9rem)] max-w-full select-none', (measuring || marks) && 'cursor-crosshair')}
         />
-        {placed && (
+        {placed && art && shown > 0 && (
           <div
             ref={painting}
             onPointerDown={grab}
             onPointerMove={move}
             onPointerUp={drop}
             onPointerCancel={drop}
-            className="absolute -translate-1/2 cursor-grab touch-none select-none active:cursor-grabbing"
-            style={{ ...pct(mockup.center), width: `${piece.widthCm * scale * 100}%` }}
+            className="absolute top-0 left-0 origin-top-left cursor-grab touch-none select-none active:cursor-grabbing"
+            style={{ width: art.px[0], height: art.px[1], transform: quadTransform(onScreen(mockup.corners), art.px[0], art.px[1]) }}
           >
-            <ConceptPainting concept={concept} seed={seed} width={W} height={H} light={light} className={SHADOW} />
+            {art.node}
           </div>
         )}
-        {measuring && size && line.length > 0 && (
-          <svg aria-hidden className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${size[0]} ${size[1]}`} preserveAspectRatio="none">
+        {placed && !art && (
+          <svg aria-hidden className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${photo[0]} ${photo[1]}`} preserveAspectRatio="none">
+            <polygon
+              points={mockup.corners.map(p => p.join(',')).join(' ')}
+              onPointerDown={grab}
+              onPointerMove={move}
+              onPointerUp={drop}
+              onPointerCancel={drop}
+              className="pointer-events-auto cursor-grab touch-none fill-sky-400/25 stroke-sky-400 active:cursor-grabbing"
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        )}
+        {placed && onResize && mockup.corners.map((corner, i) => (
+          <button
+            key={CORNERS[i]}
+            type="button"
+            aria-label={`${CORNERS[i]} corner of the painting. Arrow keys move it.`}
+            onPointerDown={e => grabCorner(e, i)}
+            onPointerMove={move}
+            onPointerUp={drop}
+            onPointerCancel={drop}
+            onKeyDown={e => nudge(e, i)}
+            className="absolute flex size-11 -translate-1/2 cursor-grab touch-none items-center justify-center rounded-full outline-none active:cursor-grabbing"
+            style={pct(corner)}
+          >
+            <span className="size-3.5 rounded-full bg-sky-500 shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_1px_4px_rgb(0_0_0/0.5)] [button:focus-visible>&]:shadow-[0_0_0_3px_var(--foreground)]" />
+          </button>
+        ))}
+        {photo && marks?.map((p, i) => (
+          <span key={i} className="pointer-events-none absolute size-3.5 -translate-1/2 rounded-full bg-sky-500 shadow-[0_0_0_2px_rgb(255_255_255/0.9)]" style={pct(p)} />
+        ))}
+        {measuring && photo && line.length > 0 && (
+          <svg aria-hidden className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${photo[0]} ${photo[1]}`} preserveAspectRatio="none">
             {line.length === 2 && (
               <line x1={line[0][0]} y1={line[0][1]} x2={line[1][0]} y2={line[1][1]} className="stroke-sky-400" strokeWidth={3} vectorEffect="non-scaling-stroke" />
             )}
@@ -154,7 +256,7 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
         )}
       </div>
 
-      {loaded && measuring && (
+      {measuring && (
         <form onSubmit={setScale} className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5 text-foreground"><Ruler className="size-3.5" aria-hidden /> Set the scale:</span>
           {line.length < 2 ? (
@@ -170,36 +272,40 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
                   autoFocus
                   value={length}
                   onChange={e => setLength(e.target.value)}
-                  placeholder={piece.wallWidthCm ? String(piece.wallWidthCm) : '200'}
+                  placeholder={wallWidthCm ? String(wallWidthCm) : '200'}
                   className="h-8 w-20 rounded-md bg-background px-2 text-base text-foreground shadow-[0_0_0_1px_rgb(0_0_0/0.12)] tabular-nums md:text-sm"
                 />
                 cm long
               </label>
-              <Button type="submit" size="sm">Hang it</Button>
-              {piece.wallWidthCm && !length && <span>The brief says the wall is {piece.wallWidthCm} cm wide.</span>}
+              <Button type="submit" size="sm">Set it</Button>
+              {wallWidthCm && !length && <span>The brief says the wall is {wallWidthCm} cm wide.</span>}
             </>
           )}
           {mockup && <Button type="button" variant="ghost" size="sm" onClick={() => { setMeasuring(false); setLine([]) }}>Cancel</Button>}
-          {error && <span role="alert" className="basis-full text-destructive">{error}</span>}
         </form>
+      )}
+      {marks && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
+          <span>Tap where the painting's 4 corners should go. {marks.length} of 4.</span>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setMarks(null)}>Cancel</Button>
+        </div>
       )}
       {placed && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>
-            {piece.widthCm} × {piece.heightCm} cm at true scale, from a {mockup.length_cm} cm line. Drag the canvas to where it hangs.
+          <span className="min-w-0 flex-1 basis-60 text-pretty">
+            {note}{' '}
+            {mockup.estimated
+              ? `The scale is an estimate from the photo, about ${mockup.length_cm} cm across. Set it for a true fit.`
+              : `Scale from a ${mockup.length_cm} cm line.`}
           </span>
-          <span className="flex gap-1">
-            <Button variant="ghost" size="sm" onClick={() => setMeasuring(true)}><Ruler /> Re-measure</Button>
-            <Button variant="ghost" size="sm" onClick={download}><Download /> Save image</Button>
+          <span className="flex flex-wrap gap-1">
+            {onResize && <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); setMarks([]) }}><SquareDashedMousePointer /> Mark the corners</Button>}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setMeasuring(true)}><Ruler /> {mockup.estimated ? 'Set the scale' : 'Re-measure'}</Button>
+            {art && <Button type="button" variant="ghost" size="sm" onClick={download}><Download /> Save image</Button>}
           </span>
-          {error && <span role="alert" className="basis-full text-destructive">{error}</span>}
         </div>
       )}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </div>
   )
-}
-
-function pxPerCm(m: Mockup): number {
-  const [[x1, y1], [x2, y2]] = m.line
-  return Math.hypot(x2 - x1, y2 - y1) / m.length_cm
 }

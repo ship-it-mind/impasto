@@ -38,6 +38,7 @@ from impasto import exact as exact_pictures
 from impasto import guide as guides
 from impasto import method
 from impasto import store
+from impasto import wall as walls
 from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
@@ -639,16 +640,23 @@ def wall_photo(brief_id: str) -> Response:
     return stored_image(brief_id, name)
 
 
+PhotoPoint = tuple[float, float]
+
+
 class Mockup(BaseModel):
-    """How the piece hangs on the wall photo: a measured line (photo pixels and its length) and the canvas's center."""
-    line: tuple[tuple[float, float], tuple[float, float]]
+    """How the piece hangs on the wall photo: a line of known length for the scale, and the painting's corners (all photo pixels).
+
+    estimated: the scale is Spark's guess from the photo, not a line the painter measured."""
+    line: tuple[PhotoPoint, PhotoPoint]
     length_cm: float
-    center: tuple[float, float]
+    corners: tuple[PhotoPoint, PhotoPoint, PhotoPoint, PhotoPoint]
+    estimated: bool = False
 
 
 @app.get("/api/pieces/{brief_id}/mockup")
 def get_mockup(brief_id: str) -> dict:
-    return {"mockup": piece_or_404(brief_id)["mockup"]}
+    saved = piece_or_404(brief_id)
+    return {"mockup": walls.with_corners(saved["mockup"], saved["record"]["brief"]["piece"])}
 
 
 @app.put("/api/pieces/{brief_id}/mockup")
