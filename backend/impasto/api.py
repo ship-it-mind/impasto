@@ -42,6 +42,9 @@ from impasto.volume import Materials, estimate
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "api"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_REFERENCES = 6
+# Wall photos and style pictures go to the models as base64 and load in the browser, so big ones are slow.
+MAX_PHOTO_SIDE = 2048
+MAX_PHOTO_BYTES = 3 * 1024 * 1024
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
@@ -92,33 +95,46 @@ def read_upload(upload: UploadFile) -> bytes:
     return data
 
 
-def save_image(upload: UploadFile, folder: Path, name: str) -> Path:
+def to_jpeg(image: Image.Image, max_side: int | None = None) -> bytes:
+    """An upright sRGB JPEG. iPhones shoot in Display P3, and the color work reads pixels as sRGB."""
+    image = ImageOps.exif_transpose(image)
+    if max_side:
+        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+    profile = image.info.get("icc_profile")
+    rgb = image.convert("RGB")
+    if profile:
+        try:
+            rgb = ImageCms.profileToProfile(rgb, ImageCms.ImageCmsProfile(io.BytesIO(profile)), ImageCms.createProfile("sRGB"), outputMode="RGB")
+        except ImageCms.PyCMSError:
+            log.warning("Skipped a color profile that can't be applied to RGB")
+    out = io.BytesIO()
+    rgb.save(out, "JPEG", quality=90 if max_side else 95)
+    return out.getvalue()
+
+
+def save_image(upload: UploadFile, folder: Path, name: str, shrink: bool = False) -> Path:
+    """Save a picture. With shrink, a big one is stored smaller; check-in photos stay as taken, since taps are in their pixels."""
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in IMAGE_SUFFIXES:
         raise HTTPException(415, f"{upload.filename}: use a JPG, PNG, WebP or HEIC photo.")
+    data = read_upload(upload)
+    if shrink:
+        try:
+            image = Image.open(io.BytesIO(data))
+            if max(image.size) > MAX_PHOTO_SIDE or len(data) > MAX_PHOTO_BYTES:
+                data, suffix = to_jpeg(image, MAX_PHOTO_SIDE), ".jpg"
+        except (UnidentifiedImageError, ValueError, OSError, Image.DecompressionBombError) as error:
+            raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
     path = folder / f"{name}{suffix}"
-    path.write_bytes(read_upload(upload))
+    path.write_bytes(data)
     return path
-
-
-def heic_to_jpeg(data: bytes) -> bytes:
-    """A HEIC photo as an upright sRGB JPEG. iPhones shoot in Display P3, and the color work reads pixels as sRGB."""
-    image = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
-    profile = image.info.get("icc_profile")
-    if profile:
-        image = ImageCms.profileToProfile(
-            image.convert("RGB"), ImageCms.ImageCmsProfile(io.BytesIO(profile)), ImageCms.createProfile("sRGB"), outputMode="RGB",
-        )
-    out = io.BytesIO()
-    image.convert("RGB").save(out, "JPEG", quality=95)
-    return out.getvalue()
 
 
 @app.post("/api/images/heic")
 def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
     """Browsers can't show HEIC, so the web app swaps one for this JPEG as soon as it's picked."""
     try:
-        return Response(heic_to_jpeg(read_upload(photo)), media_type="image/jpeg")
+        return Response(to_jpeg(Image.open(io.BytesIO(read_upload(photo)))), media_type="image/jpeg")
     except (UnidentifiedImageError, ValueError, OSError) as error:
         raise HTTPException(415, f"{photo.filename}: couldn't read this HEIC photo.") from error
 
@@ -196,7 +212,7 @@ def new_brief(
     brief_id = uuid.uuid4().hex
     folder = OUTPUT_ROOT / brief_id
     folder.mkdir(parents=True)
-    wall_path = save_image(wall, folder, "wall") if wall else None
+    wall_path = save_image(wall, folder, "wall", shrink=True) if wall else None
     record = {"source": "web", "transcript": text.strip(), "wall_photo": str(wall_path) if wall_path else None, "answers": []}
     return start(lambda phase: read(record, folder, phase))
 
@@ -237,7 +253,7 @@ def new_concepts(
         raise HTTPException(422, str(error)) from error
     run_folder = folder / f"concepts-{uuid.uuid4().hex[:8]}"
     run_folder.mkdir()
-    refs = [save_image(upload, run_folder, f"reference-{i + 1}") for i, upload in enumerate(references)]
+    refs = [save_image(upload, run_folder, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references)]
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Drafting 3 concepts…")
