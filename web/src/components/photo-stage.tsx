@@ -1,4 +1,5 @@
 import { useRef, useState, type PointerEvent } from 'react'
+import { Button } from '@/components/ui/button'
 import type { Point } from '@/lib/checkin'
 import { cn } from '@/lib/utils'
 
@@ -10,8 +11,30 @@ export const NO_TAPS: Taps = { white: null, corners: [], ground: null }
 
 const MARK = { white: 'bg-white', corners: 'bg-sky-500', ground: 'bg-amber-500' }
 
+// One step of marking a photo: what to tap, whether it's done, and a way to redo it.
+export function TapStep({ label, hint, done, active, optional, onPick, onClear }: {
+  label: string; hint: string; done: boolean; active: boolean; optional?: boolean; onPick: () => void; onClear: () => void
+}) {
+  return (
+    <li className={cn('flex items-start gap-3 rounded-md p-2.5', active && 'bg-background shadow-[0_0_0_1px_rgb(0_0_0/0.08)]')}>
+      <button type="button" onClick={onPick} className="flex min-w-0 flex-1 flex-col items-start text-left">
+        <span className="font-medium">
+          {label}{optional && <span className="font-normal text-muted-foreground"> · optional</span>}
+        </span>
+        <span className="text-pretty text-muted-foreground">{hint}</span>
+      </button>
+      {done
+        ? <Button variant="ghost" size="sm" className="-my-1 text-muted-foreground" onClick={onClear}>Redo</Button>
+        : active && <span className="text-xs whitespace-nowrap text-muted-foreground">Tap the photo</span>}
+    </li>
+  )
+}
+
+// A point marked in its own color, such as a paint tapped in a bowl.
+export type Dot = { point: Point; color: string; label: string }
+
 // The photo, with a marker on each tapped point. Taps are kept in the photo's own pixels.
-export function PhotoStage({ url, alt, taps, target, onTap }: { url: string; alt: string; taps: Taps; target: Target | null; onTap: (p: Point) => void }) {
+export function PhotoStage({ url, alt, taps, dots = [], target, onTap }: { url: string; alt: string; taps: Taps; dots?: Dot[]; target: Target | 'paint' | null; onTap: (p: Point) => void }) {
   const img = useRef<HTMLImageElement>(null)
   const [size, setSize] = useState<Point | null>(null)
   const tap = (e: PointerEvent<HTMLImageElement>) => {
@@ -42,6 +65,14 @@ export function PhotoStage({ url, alt, taps, target, onTap }: { url: string; alt
           title={label}
           className={cn('pointer-events-none absolute size-3.5 -translate-1/2 rounded-full shadow-[0_0_0_2px_rgb(0_0_0/0.6),0_0_0_4px_rgb(255_255_255/0.7)]', MARK[kind])}
           style={{ left: `${(x / size[0]) * 100}%`, top: `${(y / size[1]) * 100}%` }}
+        />
+      ))}
+      {size && dots.map(({ point: [x, y], color, label }) => (
+        <span
+          key={label}
+          title={label}
+          className="pointer-events-none absolute size-3.5 -translate-1/2 rounded-full shadow-[0_0_0_2px_rgb(0_0_0/0.6),0_0_0_4px_rgb(255_255_255/0.7)]"
+          style={{ left: `${(x / size[0]) * 100}%`, top: `${(y / size[1]) * 100}%`, background: color }}
         />
       ))}
       {size && taps.corners.length > 2 && (

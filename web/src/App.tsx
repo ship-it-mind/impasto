@@ -168,6 +168,7 @@ export default function App() {
             concept={concept}
             seed={pick + 1}
             recipe={recipe}
+            active={step === 'Check-ins'}
             onBack={() => go('Paint', piece)}
           />
         </Kept>

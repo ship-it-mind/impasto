@@ -57,7 +57,7 @@ export function DictateButton({ onText, onBusy }: { onText: (text: string) => vo
       setSeconds(0)
       setState('listening')
     } catch {
-      setError('The microphone is blocked. Allow it in the browser, or type the brief instead.')
+      setError('The microphone is blocked. Allow it in the browser, or type instead.')
     }
   }
 

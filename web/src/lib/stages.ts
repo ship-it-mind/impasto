@@ -96,3 +96,12 @@ export async function drawStage(canvas: HTMLCanvasElement, concept: Concept, see
   compose(source, view, image.data)
   ctx.putImageData(image, 0, 0)
 }
+
+// The same picture as a file, to send with a photo of that stage.
+export async function stageJpeg(concept: Concept, seed: number, W: number, H: number, view: StageView): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  await drawStage(canvas, concept, seed, W, H, view)
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error("Couldn't draw how this step should look."))), 'image/jpeg', 0.85)
+  })
+}

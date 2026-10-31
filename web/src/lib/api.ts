@@ -4,6 +4,7 @@
 // passing the server's phase ("Reading the brief…") to `onPhase`.
 
 import type { CheckIn, CheckInInput, Point } from './checkin'
+import type { Asked, Checks, MixCheck, StepCheck } from './checks'
 import type { Area, Concept, Piece } from './concepts'
 import type { BriefResult } from './brief'
 import type { Guide } from './guide'
@@ -239,6 +240,46 @@ export function checkIn(
 export async function listCheckIns(result: BriefResult, set: ConceptSet, concept: Concept): Promise<CheckIn[]> {
   const query = new URLSearchParams({ brief_id: result.id, run: set.run, concept: String(concept.index) })
   return (await request<{ checkins: CheckIn[] }>(`/checkins?${query}`)).checkins
+}
+
+// Step and mix checks on this concept, oldest first, and the chat.
+export function listChecks(result: BriefResult, set: ConceptSet, concept: Concept): Promise<Checks> {
+  const query = new URLSearchParams({ brief_id: result.id, run: set.run, concept: String(concept.index) })
+  return request(`/checks?${query}`)
+}
+
+function checkForm(result: BriefResult, set: ConceptSet, concept: Concept, photo: File): FormData {
+  const form = new FormData()
+  form.append('brief_id', result.id)
+  form.append('run', set.run)
+  form.append('concept', String(concept.index))
+  form.append('photo', photo)
+  return form
+}
+
+// Spark's look at a photo of one guide step. expected: how the canvas should look after it, as the guide draws it.
+export function checkStep(result: BriefResult, set: ConceptSet, concept: Concept, step: string, photo: File, expected: Blob, onPhase?: (phase: string) => void): Promise<StepCheck> {
+  const form = checkForm(result, set, concept, photo)
+  form.append('step', step)
+  form.append('expected', expected, 'expected.jpg')
+  return poll(request('/step-checks', { method: 'POST', body: form }), onPhase)
+}
+
+// The paint in the bowl, measured against the recipe: white paper and one tap per color, in the photo's own pixels.
+export function checkMixes(result: BriefResult, set: ConceptSet, concept: Concept, photo: File, white: Point, samples: { band: number; point: Point }[], onPhase?: (phase: string) => void): Promise<MixCheck> {
+  const form = checkForm(result, set, concept, photo)
+  form.append('white', white.join(','))
+  form.append('samples', JSON.stringify(samples))
+  return poll(request('/mix-checks', { method: 'POST', body: form }), onPhase)
+}
+
+// A question for Spark about this painting. section: what the painter has open as they ask.
+export function askQuestion(result: BriefResult, set: ConceptSet, concept: Concept, question: string, section: string | null, onPhase?: (phase: string) => void): Promise<Asked> {
+  return poll(request('/questions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brief_id: result.id, run: set.run, concept: concept.index, question, section }),
+  }), onPhase)
 }
 
 // How the piece hangs on the client's wall photo.

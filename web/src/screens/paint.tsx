@@ -9,7 +9,7 @@ import type { Guide, GuideStep } from '@/lib/guide'
 import { grams, recipeLine, type Recipe } from '@/lib/recipe'
 
 // What goes on the knife at this stage: the band's mix, or the paste each band gets.
-function StepMaterials({ step, recipe }: { step: GuideStep; recipe: Recipe }) {
+export function StepMaterials({ step, recipe }: { step: GuideStep; recipe: Recipe }) {
   const pill = 'flex items-center gap-2 rounded-md bg-background px-2.5 py-1.5 shadow-[0_0_0_1px_rgb(0_0_0/0.06)] tabular-nums'
   if (step.band !== null) {
     const band = recipe.bands[step.band]
@@ -148,8 +148,8 @@ export function PaintScreen({ brief, set, concept, seed, recipe, active, onBack,
           </ol>
 
           <div className="flex flex-col items-start gap-3 border-t pt-8">
-            <p className="max-w-[60ch] text-pretty text-muted-foreground">Take a photo at the end of each session, and the check-ins will measure it against this plan.</p>
-            <Button onClick={onCheckIns}>Check in on progress <ArrowRight /></Button>
+            <p className="max-w-[60ch] text-pretty text-muted-foreground">Check any step as you go, check a mix in the bowl, or ask a question. Use only the ones you want help with.</p>
+            <Button onClick={onCheckIns}>Go to check-ins <ArrowRight /></Button>
           </div>
         </>
       )}
