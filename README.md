@@ -60,7 +60,7 @@ cd backend && uv run uvicorn impasto.api:app --port 8000
 cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to :8000
 ```
 
-Uploads and results land in `backend/output/api/` (git-ignored).
+Pieces, with their pictures, are kept in `backend/output/impasto.db`, a SQLite file (git-ignored). On first start it imports any older pieces from `backend/output/api/`.
 
 ## Credits
 

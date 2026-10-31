@@ -4,7 +4,7 @@
 
 Model calls take 5–30 s, so they run as background jobs: a POST returns a job
 id, and the web app polls GET /api/jobs/{id} for the phase and the result.
-Everything lives in memory and in output/api/; nothing is kept per user.
+Pieces live in SQLite (impasto.store); jobs only in memory. Nothing is kept per user.
 """
 
 from __future__ import annotations
@@ -14,17 +14,19 @@ import io
 import json
 import logging
 import math
+import mimetypes
 import re
 import tempfile
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Iterator
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
@@ -32,6 +34,7 @@ from pydantic import BaseModel
 from impasto import brief as briefs
 from impasto import checkin as checkins
 from impasto import concepts
+from impasto import store
 from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
@@ -39,7 +42,6 @@ from impasto.recipe_cards import band_brief, write_cards
 from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
-OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "api"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_REFERENCES = 6
 # Wall photos and style pictures go to the models as base64 and load in the browser, so big ones are slow.
@@ -50,21 +52,32 @@ BRIEF_ID = re.compile(r"^[0-9a-f]{32}$")
 RUN_ID = re.compile(r"^concepts-[0-9a-f]{8}$")
 CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
 CHECKIN_IMAGES = {"progress.png", "rectified.png"}
+# A stored picture never changes, so the browser needn't fetch it again.
+CACHE_FOREVER = {"Cache-Control": "public, max-age=31536000, immutable"}
 CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|layout)\.png$")
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
 pool = ThreadPoolExecutor(max_workers=4)
 jobs: dict[str, dict] = {}
+# What's being worked on right now, so asking again joins the job instead of paying for a second one.
+running: dict[str, str] = {}
+running_lock = threading.Lock()
 
 register_heif_opener()
+store.init()
 
 
 # --- Jobs --------------------------------------------------------------------
 
-def start(work: Callable[[Callable[[str], None]], dict]) -> dict:
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "running", "phase": "Starting…", "result": None, "error": None}
+def start(work: Callable[[Callable[[str], None]], dict], key: str | None = None) -> dict:
+    with running_lock:
+        if key in running:
+            return {"job": running[key]}
+        job_id = uuid.uuid4().hex
+        jobs[job_id] = {"status": "running", "phase": "Starting…", "result": None, "error": None}
+        if key:
+            running[key] = job_id
 
     def run() -> None:
         job = jobs[job_id]
@@ -74,8 +87,18 @@ def start(work: Callable[[Callable[[str], None]], dict]) -> dict:
         except Exception as error:  # noqa: BLE001 - the web app gets a message, the log gets the trace
             log.exception("Job %s failed", job_id)
             job["status"], job["error"] = "failed", str(error)[:300]
+        finally:
+            with running_lock:
+                running.pop(key, None)
 
     pool.submit(run)
+    return {"job": job_id}
+
+
+def finished(result: dict) -> dict:
+    """A job that's already done, for an answer that's already stored."""
+    job_id = uuid.uuid4().hex
+    jobs[job_id] = {"status": "done", "phase": "Done", "result": result, "error": None}
     return {"job": job_id}
 
 
@@ -112,8 +135,8 @@ def to_jpeg(image: Image.Image, max_side: int | None = None) -> bytes:
     return out.getvalue()
 
 
-def save_image(upload: UploadFile, folder: Path, name: str, shrink: bool = False) -> Path:
-    """Save a picture. With shrink, a big one is stored smaller; check-in photos stay as taken, since taps are in their pixels."""
+def read_image(upload: UploadFile, name: str, shrink: bool = False) -> tuple[str, bytes]:
+    """A picture's stored name and bytes. With shrink, a big one is kept smaller; check-in photos stay as taken, since taps are in their pixels."""
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in IMAGE_SUFFIXES:
         raise HTTPException(415, f"{upload.filename}: use a JPG, PNG, WebP or HEIC photo.")
@@ -125,9 +148,23 @@ def save_image(upload: UploadFile, folder: Path, name: str, shrink: bool = False
                 data, suffix = to_jpeg(image, MAX_PHOTO_SIDE), ".jpg"
         except (UnidentifiedImageError, ValueError, OSError, Image.DecompressionBombError) as error:
             raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
-    path = folder / f"{name}{suffix}"
-    path.write_bytes(data)
-    return path
+    return f"{name}{suffix}", data
+
+
+@contextmanager
+def scratch(images: dict[str, bytes]) -> Iterator[Path]:
+    """The pipeline modules work on files, so a job gets a throwaway folder; what it keeps goes in the database."""
+    with tempfile.TemporaryDirectory() as folder:
+        for name, data in images.items():
+            (Path(folder) / name).write_bytes(data)
+        yield Path(folder)
+
+
+def stored_image(owner: str, name: str) -> Response:
+    data = store.image(owner, name)
+    if data is None:
+        raise HTTPException(404, "No such image.")
+    return Response(data, media_type=mimetypes.guess_type(name)[0], headers=CACHE_FOREVER)
 
 
 @app.post("/api/images/heic")
@@ -139,15 +176,19 @@ def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
         raise HTTPException(415, f"{photo.filename}: couldn't read this HEIC photo.") from error
 
 
-def brief_folder(brief_id: str) -> Path:
-    folder = OUTPUT_ROOT / brief_id
-    if not BRIEF_ID.match(brief_id) or not (folder / "brief.json").is_file():
+def piece_or_404(brief_id: str) -> dict:
+    piece = store.piece(brief_id) if BRIEF_ID.match(brief_id) else None
+    if piece is None:
         raise HTTPException(404, "No such brief. Read the brief again.")
-    return folder
+    return piece
 
 
-def write(path: Path, record: dict) -> None:
-    path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+def run_or_404(brief_id: str, run: str) -> dict:
+    piece_or_404(brief_id)
+    drafted = store.run(brief_id, run) if RUN_ID.match(run) else None
+    if drafted is None:
+        raise HTTPException(404, "No such set of concepts. Make them again.")
+    return drafted
 
 
 # --- Presets and tubes -------------------------------------------------------
@@ -167,13 +208,13 @@ def presets() -> dict:
 
 # --- Brief -------------------------------------------------------------------
 
-def read(record: dict, folder: Path, phase: Callable[[str], None]) -> dict:
-    wall = Path(record["wall_photo"]) if record["wall_photo"] else None
+def read(brief_id: str, record: dict, wall: dict[str, bytes], phase: Callable[[str], None]) -> dict:
     phase("Reading the brief and the wall photo…" if wall else "Reading the brief…")
-    record["brief"] = briefs.structure(record["transcript"], wall, record["answers"])
+    with scratch(wall) as folder:
+        record["brief"] = briefs.structure(record["transcript"], folder / record["wall_photo"] if wall else None, record["answers"])
     record["warnings"] = briefs.warnings(record["brief"])
-    write(folder / "brief.json", record)
-    return brief_view(record, folder.name)
+    store.save_piece(brief_id, record, wall)
+    return brief_view(record, brief_id)
 
 
 def brief_view(record: dict, brief_id: str) -> dict:
@@ -210,11 +251,9 @@ def new_brief(
     if not text.strip():
         raise HTTPException(422, "Type or dictate the client's brief first.")
     brief_id = uuid.uuid4().hex
-    folder = OUTPUT_ROOT / brief_id
-    folder.mkdir(parents=True)
-    wall_path = save_image(wall, folder, "wall", shrink=True) if wall else None
-    record = {"source": "web", "transcript": text.strip(), "wall_photo": str(wall_path) if wall_path else None, "answers": []}
-    return start(lambda phase: read(record, folder, phase))
+    photo = read_image(wall, "wall", shrink=True) if wall else None
+    record = {"source": "web", "transcript": text.strip(), "wall_photo": photo[0] if photo else None, "answers": []}
+    return start(lambda phase: read(brief_id, record, dict([photo]) if photo else {}, phase))
 
 
 class Answer(BaseModel):
@@ -223,15 +262,16 @@ class Answer(BaseModel):
 
 @app.post("/api/brief/{brief_id}/answer")
 def answer_brief(brief_id: str, body: Answer) -> dict:
-    folder = brief_folder(brief_id)
-    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
+    record = piece_or_404(brief_id)["record"]
     question = record["brief"]["clarifying_question"]
     if not question:
         raise HTTPException(409, "This brief has no open question.")
     if not body.answer.strip():
         raise HTTPException(422, "Type the answer first.")
     record["answers"].append({"question": question, "answer": body.answer.strip()[:500]})
-    return start(lambda phase: read(record, folder, phase))
+    name = record["wall_photo"]
+    wall = {name: store.image(brief_id, name)} if name else {}
+    return start(lambda phase: read(brief_id, record, wall, phase), key=f"brief:{brief_id}")
 
 
 # --- Concepts ----------------------------------------------------------------
@@ -243,33 +283,42 @@ def new_concepts(
     without_tubes: Annotated[list[str], Form(alias="without")] = [],  # noqa: B006
     paste_in_mix: Annotated[bool, Form()] = False,
 ) -> dict:
-    folder = brief_folder(brief_id)
-    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
+    record = piece_or_404(brief_id)["record"]
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
     try:
         without(PLACEHOLDER_INVENTORY, without_tubes)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
-    run_folder = folder / f"concepts-{uuid.uuid4().hex[:8]}"
-    run_folder.mkdir()
-    refs = [save_image(upload, run_folder, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references)]
+    run = f"concepts-{uuid.uuid4().hex[:8]}"
+    refs = dict(read_image(upload, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references))
 
     def work(phase: Callable[[str], None]) -> dict:
-        phase("Drafting 3 concepts…")
-        drafted = concepts.draft(record["brief"], None, refs)  # no pictures: the default preset
-        phase("Mixing each band from the tubes on hand…")
-        concepts.mix(drafted, without_tubes, paste_in_mix)
-        phase("Painting each concept with Muse Image…")
-        concepts.paint(drafted, run_folder, refs)
-        write(run_folder / "concepts.json", drafted)
-        return {
-            "run": run_folder.name,
-            **{key: drafted[key] for key in ("style", "canvas_px", "mixing")},
-            "concepts": [concept_view(c, brief_id, run_folder.name) for c in drafted["concepts"]],
-        }
+        with scratch(refs) as folder:
+            paths = [folder / name for name in refs]
+            phase("Drafting 3 concepts…")
+            drafted = concepts.draft(record["brief"], None, paths)  # no pictures: the default preset
+            drafted["style"]["references"] = list(refs)
+            phase("Mixing each band from the tubes on hand…")
+            concepts.mix(drafted, without_tubes, paste_in_mix)
+            phase("Painting each concept with Muse Image…")
+            concepts.paint(drafted, folder, paths)
+            store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
+        return run_view(drafted, brief_id, run)
 
-    return start(work)
+    return start(work, key=concepts_key(brief_id))
+
+
+def concepts_key(brief_id: str) -> str:
+    return f"concepts:{brief_id}"
+
+
+def run_view(drafted: dict, brief_id: str, run: str) -> dict:
+    return {
+        "run": run,
+        **{key: drafted[key] for key in ("style", "canvas_px", "mixing")},
+        "concepts": [concept_view(c, brief_id, run) for c in drafted["concepts"]],
+    }
 
 
 def concept_view(concept: dict, brief_id: str, run: str) -> dict:
@@ -282,11 +331,11 @@ def concept_view(concept: dict, brief_id: str, run: str) -> dict:
 
 
 @app.get("/api/concepts/{brief_id}/{run}/{name}")
-def concept_file(brief_id: str, run: str, name: str) -> FileResponse:
-    path = run_folder_for(brief_id, run) / name
-    if not CONCEPT_FILE.match(name) or not path.is_file():
+def concept_file(brief_id: str, run: str, name: str) -> Response:
+    run_or_404(brief_id, run)
+    if not CONCEPT_FILE.match(name):
         raise HTTPException(404, "No such image.")
-    return FileResponse(path, media_type="image/png")
+    return stored_image(run, name)
 
 
 # --- Recipe ------------------------------------------------------------------
@@ -301,6 +350,30 @@ class RecipeRequest(BaseModel):
     paste_in_mix: bool = False
 
 
+class Choice(BaseModel):
+    """A concept picked to paint, and the mixing settings picked for it; without settings, the ones it last used."""
+    run: str
+    concept: int
+    without: list[str] | None = None
+    paste_in_mix: bool = False
+
+
+def known_concept(drafted: dict, concept: int) -> dict:
+    if not 0 <= concept < len(drafted["concepts"]):
+        raise HTTPException(422, "No such concept.")
+    return drafted["concepts"][concept]
+
+
+@app.put("/api/pieces/{brief_id}/choice")
+def choose(brief_id: str, body: Choice) -> dict:
+    """Keep the choice, and hand back the recipe already made for it, if any: then no model needs asking."""
+    known_concept(run_or_404(brief_id, body.run), body.concept)
+    store.choose(brief_id, body.concept)
+    if body.without is None:
+        return {"recipe": store.latest_recipe(body.run, body.concept)}
+    return {"recipe": store.recipe(body.run, body.concept, body.without, body.paste_in_mix)}
+
+
 def unique_names(names: list[str]) -> list[str]:
     """Spark's cards are matched by band name, so repeated names get a number."""
     seen: dict[str, int] = {}
@@ -313,15 +386,11 @@ def unique_names(names: list[str]) -> list[str]:
 
 @app.post("/api/recipe")
 def new_recipe(body: RecipeRequest) -> dict:
-    folder = brief_folder(body.brief_id)
-    run_folder = folder / body.run
-    if not RUN_ID.match(body.run) or not (run_folder / "concepts.json").is_file():
-        raise HTTPException(404, "No such set of concepts. Make them again.")
-    drafted = json.loads((run_folder / "concepts.json").read_text(encoding="utf-8"))
-    if not 0 <= body.concept < len(drafted["concepts"]):
-        raise HTTPException(422, "No such concept.")
-    concept = drafted["concepts"][body.concept]
-    piece = json.loads((folder / "brief.json").read_text(encoding="utf-8"))["brief"]["piece"]
+    drafted = run_or_404(body.brief_id, body.run)
+    concept = known_concept(drafted, body.concept)
+    if made := store.recipe(body.run, body.concept, body.without, body.paste_in_mix):
+        return finished(made)
+    piece = piece_or_404(body.brief_id)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     if len(body.shares) != len(concept["bands"]) or min(body.shares) < 0 or abs(sum(body.shares) - 1) > 0.02:
@@ -396,78 +465,58 @@ def new_recipe(body: RecipeRequest) -> dict:
                           "calibrated": est.calibrated},
             "mixing": {"tubes": mixer.names, "without": body.without, "paste_in_mix": body.paste_in_mix},
         }
-        write(run_folder / f"recipe-{body.concept + 1}.json", result)
+        store.save_recipe(body.brief_id, body.run, body.concept, body.without, body.paste_in_mix, result)
         return result
 
-    return start(work)
+    return start(work, key=f"recipe:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
 
 
 # --- Pieces ------------------------------------------------------------------
-
-def latest_run(folder: Path) -> tuple[Path | None, int | None]:
-    """The run to reopen a piece at: the latest one with a recipe, and its chosen concept; else the latest run."""
-    runs = sorted((r for r in folder.glob("concepts-*") if (r / "concepts.json").is_file()), key=lambda r: r.stat().st_mtime)
-    for run in reversed(runs):
-        recipes = sorted(run.glob("recipe-*.json"), key=lambda r: r.stat().st_mtime)
-        if recipes:
-            return run, int(recipes[-1].stem.split("-")[1]) - 1
-    return (runs[-1] if runs else None), None
-
 
 @app.get("/api/pieces")
 def list_pieces() -> dict:
     """Every piece read so far, latest first: enough to pick one to reopen."""
     pieces = []
-    for path in OUTPUT_ROOT.glob("*/brief.json"):
-        folder = path.parent
-        if not BRIEF_ID.match(folder.name):
-            continue
-        record = json.loads(path.read_text(encoding="utf-8"))
-        run, chosen = latest_run(folder)
+    for piece in store.pieces():
+        run, chosen = piece["run"], piece["chosen"]
         concept = None
         if run is not None and chosen is not None:
-            drafted = json.loads((run / "concepts.json").read_text(encoding="utf-8"))
-            view = concept_view(drafted["concepts"][chosen], folder.name, run.name)
+            view = concept_view(store.run(piece["id"], run)["concepts"][chosen], piece["id"], run)
             concept = {"title": view["title"], "image": view.get("layout", {}).get("image"),
-                       "checkins": len(list(checkin_folder(run, chosen).glob("*/checkin.json")))}
-        updated = max([folder.stat().st_mtime] + [p.stat().st_mtime for p in folder.rglob("*.json")])
+                       "recipe": store.latest_recipe(run, chosen) is not None,
+                       "checkins": store.checkin_count(run, chosen)}
         pieces.append({
-            "id": folder.name,
-            "summary": record["brief"]["summary"],
-            "updated": datetime.fromtimestamp(updated, timezone.utc).isoformat(timespec="seconds"),
+            "id": piece["id"],
+            "summary": piece["record"]["brief"]["summary"],
+            "updated": datetime.fromtimestamp(piece["updated_at"], timezone.utc).isoformat(timespec="seconds"),
             "concepts": run is not None,
             "concept": concept,
         })
-    return {"pieces": sorted(pieces, key=lambda p: p["updated"], reverse=True)}
+    return {"pieces": pieces}
 
 
 @app.get("/api/pieces/{brief_id}")
 def open_piece(brief_id: str) -> dict:
-    """A piece as the app left it: the brief, its latest concepts, and the chosen concept with its recipe."""
-    folder = brief_folder(brief_id)
-    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
-    piece = {"brief": brief_view(record, brief_id)}
-    run, chosen = latest_run(folder)
+    """A piece as the app left it: the brief, its latest concepts, the chosen concept with its recipe, and any concepts still being made."""
+    saved = piece_or_404(brief_id)
+    piece = {"brief": brief_view(saved["record"], brief_id)}
+    run, chosen = saved["run"], saved["chosen"]
     if run is not None:
-        drafted = json.loads((run / "concepts.json").read_text(encoding="utf-8"))
-        piece["concepts"] = {
-            "run": run.name, **{key: drafted[key] for key in ("style", "canvas_px", "mixing")},
-            "concepts": [concept_view(c, brief_id, run.name) for c in drafted["concepts"]],
-        }
+        piece["concepts"] = run_view(store.run(brief_id, run), brief_id, run)
         if chosen is not None:
             piece["chosen"] = chosen
-            piece["recipe"] = json.loads((run / f"recipe-{chosen + 1}.json").read_text(encoding="utf-8"))
+            piece["recipe"] = store.latest_recipe(run, chosen)
+    with running_lock:
+        piece["making"] = running.get(concepts_key(brief_id))
     return piece
 
 
 @app.get("/api/pieces/{brief_id}/wall")
-def wall_photo(brief_id: str) -> FileResponse:
-    folder = brief_folder(brief_id)
-    record = json.loads((folder / "brief.json").read_text(encoding="utf-8"))
-    path = Path(record["wall_photo"]) if record.get("wall_photo") else None
-    if path is None or path.parent != folder or not path.is_file():
+def wall_photo(brief_id: str) -> Response:
+    name = piece_or_404(brief_id)["record"].get("wall_photo")
+    if not name:
         raise HTTPException(404, "This piece has no wall photo.")
-    return FileResponse(path)
+    return stored_image(brief_id, name)
 
 
 class Mockup(BaseModel):
@@ -479,30 +528,19 @@ class Mockup(BaseModel):
 
 @app.get("/api/pieces/{brief_id}/mockup")
 def get_mockup(brief_id: str) -> dict:
-    path = brief_folder(brief_id) / "mockup.json"
-    return {"mockup": json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None}
+    return {"mockup": piece_or_404(brief_id)["mockup"]}
 
 
 @app.put("/api/pieces/{brief_id}/mockup")
 def save_mockup(brief_id: str, body: Mockup) -> dict:
     if not 1 <= body.length_cm <= 5000:
         raise HTTPException(422, "Give the length in cm, between 1 and 5000.")
-    write(brief_folder(brief_id) / "mockup.json", body.model_dump())
+    piece_or_404(brief_id)
+    store.save_mockup(brief_id, body.model_dump())
     return {"mockup": body.model_dump()}
 
 
 # --- Check-ins ---------------------------------------------------------------
-
-def run_folder_for(brief_id: str, run: str) -> Path:
-    run_folder = brief_folder(brief_id) / run
-    if not RUN_ID.match(run) or not (run_folder / "concepts.json").is_file():
-        raise HTTPException(404, "No such set of concepts. Make them again.")
-    return run_folder
-
-
-def checkin_folder(run_folder: Path, concept: int) -> Path:
-    return run_folder / "checkins" / f"concept-{concept + 1}"
-
 
 def point(value: str, what: str) -> tuple[float, float]:
     try:
@@ -512,11 +550,11 @@ def point(value: str, what: str) -> tuple[float, float]:
     return x, y
 
 
-def checkin_view(record: dict, folder: Path, brief_id: str, run: str, concept: int) -> dict:
+def checkin_view(record: dict, checkin_id: str, brief_id: str, run: str, concept: int) -> dict:
     """A stored check-in as the web app shows it: no server paths, image URLs instead."""
-    base = f"/api/checkins/{brief_id}/{run}/{concept}/{folder.name}"
+    base = f"/api/checkins/{brief_id}/{run}/{concept}/{checkin_id}"
     return {
-        "id": folder.name,
+        "id": checkin_id,
         **{key: record[key] for key in ("taken_at", "coverage", "bands", "summary", "warnings")},
         "images": {"progress": f"{base}/progress.png", "rectified": f"{base}/rectified.png"},
     }
@@ -534,11 +572,9 @@ def new_checkin(
     corners: Annotated[list[str], Form()] = [],  # noqa: B006 - FastAPI copies defaults
     ground: Annotated[str | None, Form()] = None,
 ) -> dict:
-    run_folder = run_folder_for(brief_id, run)
-    drafted = json.loads((run_folder / "concepts.json").read_text(encoding="utf-8"))
-    if not 0 <= concept < len(drafted["concepts"]):
-        raise HTTPException(422, "No such concept.")
-    piece = json.loads((run_folder.parent / "brief.json").read_text(encoding="utf-8"))["brief"]["piece"]
+    drafted = run_or_404(brief_id, run)
+    known_concept(drafted, concept)
+    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     if corners and len(corners) != 4:
@@ -550,26 +586,32 @@ def new_checkin(
     # Plan against the mixes and tubes of the latest recipe, if she made one.
     spec = dict(drafted["concepts"][concept])
     inventory = PLACEHOLDER_INVENTORY
-    recipe_path = run_folder / f"recipe-{concept + 1}.json"
-    if recipe_path.is_file():
-        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+    recipe = store.latest_recipe(run, concept)
+    if recipe:
         spec["bands"] = [{**b, "mix": {**b["mix"], "hex": r["mix_hex"]}} for b, r in zip(spec["bands"], recipe["bands"])]
         inventory = without(PLACEHOLDER_INVENTORY, recipe["mixing"]["without"])
 
+    photo_name, photo_data = read_image(photo, "photo")
+    images = {photo_name: photo_data}
     # Muse's band layout when the concept has one, else the spec's drawn geometry at the preview's seed.
-    plan_map = run_folder / spec["layout"]["map"] if "layout" in spec else None
-    folder = checkin_folder(run_folder, concept) / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
-    folder.mkdir(parents=True)
-    photo_path = save_image(photo, folder, "photo")
-    write(folder / "plan-concept.json", spec)
+    map_name = spec["layout"]["map"] if "layout" in spec else None
+    if map_name:
+        images[map_name] = store.image(run, map_name)
+    checkin_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Finding the canvas…" if corners_px is None else "Straightening the photo…")
-        result = asyncio.run(checkins.check_in(
-            photo_path, folder / "plan-concept.json", (piece["width_cm"], piece["height_cm"]), white_px, folder,
-            corners=corners_px, ground=ground_px, inventory=inventory, seed=seed, plan_map=plan_map,
-        ))
-        return checkin_view(asdict(result), folder, brief_id, run, concept)
+        with scratch(images) as folder:
+            plan, out = folder / "plan-concept.json", folder / "out"
+            plan.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+            result = asdict(asyncio.run(checkins.check_in(
+                folder / photo_name, plan, (piece["width_cm"], piece["height_cm"]), white_px, out,
+                corners=corners_px, ground=ground_px, inventory=inventory, seed=seed, plan_map=folder / map_name if map_name else None,
+            )))
+            del result["photo"], result["concept"]  # paths in the throwaway folder
+            kept = {name: (out / name).read_bytes() for name in CHECKIN_IMAGES}
+        store.save_checkin(brief_id, checkin_id, run, concept, result, {photo_name: photo_data, **kept})
+        return checkin_view(result, checkin_id, brief_id, run, concept)
 
     return start(work)
 
@@ -577,18 +619,13 @@ def new_checkin(
 @app.get("/api/checkins")
 def list_checkins(brief_id: str, run: str, concept: int) -> dict:
     """Every check-in on one concept, oldest first: for the history and the drift over time."""
-    folder = checkin_folder(run_folder_for(brief_id, run), concept)
-    records = []
-    for path in sorted(folder.glob("*/checkin.json")):
-        records.append(checkin_view(json.loads(path.read_text(encoding="utf-8")), path.parent, brief_id, run, concept))
-    return {"checkins": records}
+    run_or_404(brief_id, run)
+    return {"checkins": [checkin_view(record, checkin_id, brief_id, run, concept) for checkin_id, record in store.checkins(run, concept)]}
 
 
 @app.get("/api/checkins/{brief_id}/{run}/{concept}/{checkin_id}/{image}")
-def checkin_image(brief_id: str, run: str, concept: int, checkin_id: str, image: str) -> FileResponse:
+def checkin_image(brief_id: str, run: str, concept: int, checkin_id: str, image: str) -> Response:
+    run_or_404(brief_id, run)
     if image not in CHECKIN_IMAGES or not CHECKIN_ID.match(checkin_id):
         raise HTTPException(404, "No such image.")
-    path = checkin_folder(run_folder_for(brief_id, run), concept) / checkin_id / image
-    if not path.is_file():
-        raise HTTPException(404, "No such image.")
-    return FileResponse(path, media_type="image/png")
+    return stored_image(checkin_id, image)
