@@ -39,7 +39,7 @@ Write:
 The painting: "{title}". {idea}
 Canvas: {width} × {height} cm. The bands run: {flow}.
 Modeling paste: {method}
-
+{places}
 Stages:
 {stages}
 """
@@ -101,6 +101,13 @@ def stages(bands: list[dict], paste_in_mix: bool) -> list[dict]:
     return steps
 
 
+def places(concept: dict) -> str:
+    """Where each band sits, for a painting whose bands follow no order (impasto.exact)."""
+    if not all("where" in band for band in concept["bands"]):
+        return ""
+    return "Where each band sits:\n" + "\n".join(f"- {band['name']}: {band['where']}" for band in concept["bands"]) + "\n"
+
+
 def stage_brief(stage: dict, bands: list[dict]) -> dict:
     brief: dict = {"id": stage["id"], "title": stage["title"]}
     if stage["id"].startswith("paste-"):
@@ -128,6 +135,7 @@ def write(concept: dict, recipe: dict, width_cm: float, height_cm: float) -> dic
     )
     prompt = PROMPT.format(
         title=concept["title"], idea=concept["idea"], width=f"{width_cm:g}", height=f"{height_cm:g}", flow=concept["flow"], method=method,
+        places=places(concept),
         stages=json.dumps([stage_brief(stage, bands) for stage in planned], indent=2, ensure_ascii=False),
     )
     response = client().chat.completions.create(

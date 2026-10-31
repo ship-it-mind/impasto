@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from impasto import brief as briefs
 from impasto import checkin as checkins
 from impasto import concepts
+from impasto import exact as exact_pictures
 from impasto import guide as guides
 from impasto import method
 from impasto import store
@@ -57,7 +58,7 @@ CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
 CHECKIN_IMAGES = {"progress.png", "rectified.png"}
 # A stored picture never changes, so the browser needn't fetch it again.
 CACHE_FOREVER = {"Cache-Control": "public, max-age=31536000, immutable"}
-CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|layout)\.png$")
+CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|layout)\.png$")
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -285,15 +286,23 @@ def new_concepts(
     references: Annotated[list[UploadFile], File()] = [],  # noqa: B006 - FastAPI copies defaults
     without_tubes: Annotated[list[str], Form(alias="without")] = [],  # noqa: B006
     paste_in_mix: Annotated[bool, Form()] = False,
+    exact: Annotated[UploadFile | None, File()] = None,
+    corners: Annotated[list[str], Form()] = [],  # noqa: B006
 ) -> dict:
     record = piece_or_404(brief_id)["record"]
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
+    if exact and references:
+        raise HTTPException(422, "Give an exact picture or style pictures, not both.")
+    if corners and (not exact or len(corners) != 4):
+        raise HTTPException(422, "Tap all 4 corners of the painting in the exact picture, or none to use all of it.")
     try:
         without(PLACEHOLDER_INVENTORY, without_tubes)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     run = f"concepts-{uuid.uuid4().hex[:8]}"
+    if exact:
+        return start(exact_work(brief_id, run, record, exact_picture(exact), [point(c, "corner") for c in corners], without_tubes, paste_in_mix), key=concepts_key(brief_id))
     refs = dict(read_image(upload, f"reference-{i + 1}", shrink=True) for i, upload in enumerate(references))
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -310,6 +319,32 @@ def new_concepts(
         return run_view(drafted, brief_id, run)
 
     return start(work, key=concepts_key(brief_id))
+
+
+def exact_picture(upload: UploadFile) -> bytes:
+    """An upright sRGB JPEG, so the colors read off it are the ones seen and tapped corners land where they were tapped."""
+    _, data = read_image(upload, "exact")
+    try:
+        return to_jpeg(Image.open(io.BytesIO(data)))
+    except (UnidentifiedImageError, ValueError, OSError, Image.DecompressionBombError) as error:
+        raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
+
+
+def exact_work(
+    brief_id: str, run: str, record: dict, picture: bytes, corners: list[tuple[float, float]], without_tubes: list[str], paste_in_mix: bool,
+) -> Callable[[Callable[[str], None]], dict]:
+    """The one concept an exact picture gives: no drafting and no painting, so one Spark call and no Muse Image."""
+
+    def work(phase: Callable[[str], None]) -> dict:
+        with scratch({"exact.jpg": picture}) as folder:
+            phase("Reading the colors off the picture…")
+            drafted = exact_pictures.draft(record["brief"], folder / "exact.jpg", folder, corners or None)
+            phase("Mixing each color from the tubes on hand…")
+            concepts.mix(drafted, without_tubes, paste_in_mix)
+            store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
+        return run_view(drafted, brief_id, run)
+
+    return work
 
 
 def concepts_key(brief_id: str) -> str:
