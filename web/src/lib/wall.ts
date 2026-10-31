@@ -32,6 +32,13 @@ export function moveQuad(q: Quad, dx: number, dy: number): Quad {
   return q.map(([x, y]) => [x + dx, y + dy]) as Quad
 }
 
+// The quad moved just enough for its center to be on the photo, so it can't be lost off the edge.
+export function keepOnPhoto(q: Quad, [width, height]: Point): Quad {
+  const x = q.reduce((sum, p) => sum + p[0], 0) / 4, y = q.reduce((sum, p) => sum + p[1], 0) / 4
+  const dx = Math.min(width, Math.max(0, x)) - x, dy = Math.min(height, Math.max(0, y)) - y
+  return dx || dy ? moveQuad(q, dx, dy) : q
+}
+
 // The same quad at a new width and height, around its center. Its slant stays, so it still sits on the wall.
 export function resizeQuad(q: Quad, width: number, height: number): Quad {
   const [tl, tr, br, bl] = q

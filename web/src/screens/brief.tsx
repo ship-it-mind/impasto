@@ -132,7 +132,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const briefId = result?.id
   const hasWall = !!result?.wall
   const opened = useRef(result)
-  opened.current = result
+  useEffect(() => { opened.current = result })
   useEffect(() => {
     const read = opened.current
     if (!briefId || !read) return

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Keyb
 import { Download, Ruler, SquareDashedMousePointer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Point } from '@/lib/checkin'
-import { drawOnQuad, isConvex, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
+import { drawOnQuad, isConvex, keepOnPhoto, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
 import { cn } from '@/lib/utils'
 
 const CORNERS = ['Top-left', 'Top-right', 'Bottom-right', 'Bottom-left']
@@ -130,7 +130,7 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
       update(next)
       onResize?.(quadCm(next))
     } else {
-      update({ ...at, corners: moveQuad(at.corners, x + held.dx - at.corners[0][0], y + held.dy - at.corners[0][1]) })
+      update({ ...at, corners: keepOnPhoto(moveQuad(at.corners, x + held.dx - at.corners[0][0], y + held.dy - at.corners[0][1]), photo!) })
     }
   }
   const drop = () => {
@@ -196,7 +196,16 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
           src={wall}
           alt="The client's wall"
           draggable={false}
-          onLoad={e => setPhoto([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
+          onLoad={e => {
+            const size: Point = [e.currentTarget.naturalWidth, e.currentTarget.naturalHeight]
+            setPhoto(size)
+            // Saved off the photo, as older mockups can be: bring it back where it can be seen and dragged.
+            const at = latest.current
+            if (at) {
+              const corners = keepOnPhoto(at.corners, size)
+              if (corners !== at.corners) update({ ...at, corners })
+            }
+          }}
           onPointerDown={tap}
           className={cn('block max-h-[calc(100dvh-9rem)] max-w-full select-none', (measuring || marks) && 'cursor-crosshair')}
         />
