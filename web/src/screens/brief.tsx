@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Crop, Frame, Images, LoaderCircle, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Frame, Images, LoaderCircle, TriangleAlert, X } from 'lucide-react'
 import { BriefDetails } from '@/components/brief-details'
 import { DictateButton } from '@/components/dictate-button'
 import { NO_TAPS, PhotoStage } from '@/components/photo-stage'
@@ -89,8 +89,8 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
   const [refs, setRefs] = useState<File[]>([])
-  const [exact, setExact] = useState<File | null>(null)
-  const [corners, setCorners] = useState<Point[]>([])
+  // Corners tapped on a picture to paint, and which picture they're on.
+  const [marked, setMarked] = useState<{ file: File; corners: Point[] } | null>(null)
   const [converting, setConverting] = useState(0)
   const [dictating, setDictating] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
@@ -105,7 +105,6 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const box = useRef<HTMLTextAreaElement>(null)
   const wallInput = useRef<HTMLInputElement>(null)
   const refsInput = useRef<HTMLInputElement>(null)
-  const exactInput = useRef<HTMLInputElement>(null)
   // What's on screen was read from this, so reading it again would change nothing.
   const lastRead = useRef<{ text: string; wall: File | null } | null>(null)
   // Left this piece for another: a job finishing now mustn't pull the app back to it.
@@ -151,6 +150,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
     return () => { stop = true }
   }, [briefId, hasWall])
 
+  // A picture is painted as it is only when the brief asks for that. It's the first one added; any others aren't used.
+  const asIs = !!result?.brief.paint_as_is
+  const exact = asIs ? refs[0] ?? null : null
+  const corners = exact && marked?.file === exact ? marked.corners : []
+
   // The size the concepts on show were made for, if any: changing it means making new ones.
   const madeSize = hasConcepts && result?.brief.piece.width_cm && result.brief.piece.height_cm
     ? { w: result.brief.piece.width_cm, h: result.brief.piece.height_cm } : null
@@ -160,7 +164,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   // The exact picture has to fit the canvas, or a big part of it is cut off. Style pictures only steer the look, so they get a warning.
   const exactRatio = exact && corners.length === 4 ? cornersRatio(corners) : exact ? ratios.get(exact) : undefined
   const exactOff = exactRatio && settledSize ? shapeOff(exactRatio, settledSize) : null
-  const refsOff = settledSize ? refs.filter(r => { const ratio = ratios.get(r); return ratio && shapeOff(ratio, settledSize) }).length : 0
+  const refsOff = settledSize && !exact ? refs.filter(r => { const ratio = ratios.get(r); return ratio && shapeOff(ratio, settledSize) }).length : 0
 
   // Typing a size draws the piece at it.
   const typed = (next: SizeText) => {
@@ -249,12 +253,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
         onSubmit={e => { e.preventDefault(); read() }}
         className="flex flex-col gap-2 rounded-2xl bg-background p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_2px_6px_rgb(0_0_0/0.04),0_12px_32px_-12px_rgb(0_0_0/0.12)]"
       >
-        {(wall || exact || refs.length > 0 || converting > 0) && (
+        {(wall || refs.length > 0 || converting > 0) && (
           <div className="flex flex-wrap gap-2">
             {wall && <Thumbnail file={wall} label="Wall" onRemove={() => setWall(null)} />}
-            {exact && <Thumbnail file={exact} label="Exact" onRemove={() => { setExact(null); setCorners([]) }} />}
             {refs.map((r, i) => (
-              <Thumbnail key={r.name + i} file={r} label="Style" onRemove={() => setRefs(refs.filter((_, j) => j !== i))} />
+              <Thumbnail key={r.name + i} file={r} label={exact ? (i === 0 ? 'To paint' : 'Not used') : 'Style'} onRemove={() => setRefs(refs.filter((_, j) => j !== i))} />
             ))}
             {Array.from({ length: converting }, (_, i) => (
               <div key={i} role="status" aria-label="Preparing the photo" className="flex size-20 items-center justify-center rounded-lg bg-muted">
@@ -269,15 +272,14 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); read() } }}
-          placeholder={exact ? 'Give the canvas size, and anything else the client said…' : "Paste the client's message, or dictate it…"}
+          placeholder="Paste the client's message, or dictate it…"
           rows={3}
           className="field-sizing-content max-h-60 min-h-20 resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground"
         />
         <div className="flex flex-wrap items-center gap-1">
           <DictateButton onText={dictated} onBusy={setDictating} />
           <Button type="button" variant="ghost" onClick={() => wallInput.current?.click()}><Frame /> Wall photo</Button>
-          {!exact && <Button type="button" variant="ghost" onClick={() => refsInput.current?.click()}><Images /> Style pictures</Button>}
-          <Button type="button" variant="ghost" onClick={() => exactInput.current?.click()}><Crop /> Exact picture</Button>
+          <Button type="button" variant="ghost" onClick={() => refsInput.current?.click()}><Images /> Pictures</Button>
           <Button type="submit" size="icon-lg" aria-label="Read the brief" disabled={!canRead} className="ml-auto rounded-full">
             {phase ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
           </Button>
@@ -296,18 +298,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             hidden
             onChange={e => { pick([...(e.target.files ?? [])], images => setRefs(r => [...r, ...images].slice(0, MAX_REFERENCES))); e.target.value = '' }}
           />
-          <input
-            ref={exactInput}
-            type="file"
-            accept={IMAGE_TYPES}
-            hidden
-            onChange={e => { const f = e.target.files?.[0]; if (f) pick([f], ([image]) => { setExact(image); setCorners([]); setRefs([]) }); e.target.value = '' }}
-          />
         </div>
       </form>
       {!result && !phase && (
         <p className="-mt-4 text-center text-xs text-muted-foreground">
-          {exact ? 'Enter to read it.' : 'Enter to read it. Add style pictures to steer the look, or an exact picture to paint it as it is.'}
+          Enter to read it. Add pictures to steer the look, or say to paint one exactly as it is.
         </p>
       )}
 
@@ -339,7 +334,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
               <summary className="cursor-pointer">Transcript</summary>
               <p className="mt-2 max-w-[65ch] text-pretty">{result.transcript}</p>
             </details>
-            {exact && <ExactPicture file={exact} corners={corners} disabled={!!making} onCorners={setCorners} />}
+            {exact && <ExactPicture file={exact} corners={corners} disabled={!!making} onCorners={next => setMarked({ file: exact, corners: next })} />}
             {exactOff && settledSize && (
               <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-pretty text-amber-950">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -354,12 +349,14 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             )}
             <div className="flex items-center gap-3">
               {hasConcepts && !making && <Button size="lg" variant={sizeChanged ? 'ghost' : 'default'} onClick={onShowConcepts}>See the concepts</Button>}
-              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || !!exactOff || (corners.length > 0 && corners.length < 4)}>
-                {making ? <><LoaderCircle className="animate-spin" /> {making}</> : exact ? 'Plan this picture' : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
+              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || (asIs && !exact) || !!exactOff || (corners.length > 0 && corners.length < 4)}>
+                {making ? <><LoaderCircle className="animate-spin" /> {making}</> : asIs ? 'Plan this picture' : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">
                 {!settledSize
                   ? 'Give the width and height first'
+                  : asIs && !exact
+                    ? 'The brief asks to paint a picture as it is. Add it with Pictures above.'
                   : sizeChanged && madeSize
                     ? `The concepts on show are for ${madeSize.w} × ${madeSize.h} cm. New ones are needed at this size.`
                     : exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}

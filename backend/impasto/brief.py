@@ -35,6 +35,9 @@ Rules:
 - palette.colors: every color the client wants, with an approximate hex for that color as a
   painter would mix it (muted if the client wants muted). palette.avoid: colors they ruled out.
 - style: what they said about texture, shapes or a past piece they liked, in short phrases.
+- paint_as_is: true only if they explicitly ask for a picture to be painted as it is, as an exact copy or match
+  ("paint this exactly", "copy this picture", "exactly like the photo"). Otherwise false, also when a picture is
+  only inspiration or a style to follow ("something like this", "in this style").
 - budget and deadline: as the client said them, e.g. "around 15,000 pounds", "mid-December".
 - summary: one sentence a painter could read at a glance.
 - clarifying_question: {question_rule}
@@ -95,6 +98,7 @@ BRIEF_PROPERTIES = {
         "avoid": {"type": "array", "items": {"type": "string"}},
     }),
     "style": {"type": "array", "items": {"type": "string"}},
+    "paint_as_is": {"type": "boolean"},
     "room": strict_object({
         "name": NULLABLE_STRING,
         "placement": NULLABLE_STRING,

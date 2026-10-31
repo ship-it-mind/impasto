@@ -11,6 +11,8 @@ export type Brief = {
   }
   mood: string[]
   style: string[]
+  // They asked for a picture to be painted exactly as it is. Briefs read before this was asked for don't have it.
+  paint_as_is?: boolean
   room: {
     name: string | null; placement: string | null; wall_width_cm: number | null
     wall_color_hex: string | null; lighting: string | null; notes: string | null
