@@ -41,6 +41,12 @@ class WhiteBalance:
     gains: tuple[float, float, float]
 
 
+# No white to correct against: gains that leave a photo's colors as the camera saw them, once
+# the readings scale TARGET_WHITE back up to 255.
+_target = float((((TARGET_WHITE / 255.0) + 0.055) / 1.055) ** 2.4)
+AS_SEEN = WhiteBalance(point_px=(0.0, 0.0), measured_rgb=(255, 255, 255), gains=(_target, _target, _target))
+
+
 @dataclass
 class Rectification:
     canvas_cm: tuple[float, float]
@@ -94,7 +100,7 @@ async def detect_corners(photo: Path, size: tuple[int, int]) -> np.ndarray:
     result = await segment(photo, "painting")
     masks = masks_by_object(result, size)
     if not masks:
-        raise ValueError("SAM found no painting in the photo; give --corners instead.")
+        raise ValueError("Couldn't find the canvas in the photo. Tap its 4 corners.")
     return quad_from_mask(np.logical_or.reduce(list(masks.values())))
 
 
