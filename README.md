@@ -5,8 +5,9 @@ A studio co-pilot for palette-knife / impasto artists, built for the Meta Global
 ## What it does
 
 1. **Brief → concepts** — the client's request, typed or dictated, is structured into a brief, then turned into three concept compositions and a wall mockup at true scale.
-2. **Concept → recipe** — the chosen concept is segmented into color bands; each band's area becomes grams of paint and paste, with mixing ratios from the artist's own tubes.
-3. **Progress check-ins** — a mid-way photo of the canvas reports coverage, color drift against the plan, and paste shortfalls.
+2. **Concept → recipe** — the chosen concept is segmented into color bands; each band's area becomes grams of paint and paste, with mixing ratios from common acrylic tubes. The app recommends tinted paste or paste underneath for this painting, from what each can actually mix, and lists the colors, paste and tools needed; ticking what you already have updates what's left to buy.
+3. **How to paint it** — each stage in order, in Muse Spark's words, with a picture of how the canvas should look after it, cut from the concept along its band map.
+4. **Progress check-ins** — a mid-way photo of the canvas reports coverage, color drift against the plan, and paste shortfalls.
 
 ## Built during the hackathon
 
@@ -26,7 +27,7 @@ We tested each model on a photo of one of the artist's finished pieces before de
 
 | Model | Job in the app |
 |---|---|
-| Muse Spark | Reads band structure from a painting, turns the client's request into a structured brief, writes mixing recipes |
+| Muse Spark | Reads band structure from a painting, turns the client's request into a structured brief, writes mixing recipes and the step-by-step painting guide |
 | SAM 3.1 | One mask per color band from the artist's points, for area per band; finds the canvas corners in check-in photos |
 | Muse Image | Paints each concept from Spark's band spec, steered by the user's reference photos when given; its painting is what the app shows for the concept, and the band layout read off it drives the recipe's band areas and the check-ins |
 | Muse Voice Transcribe | Turns dictation into text in the brief box, to check and edit before the brief is read |
