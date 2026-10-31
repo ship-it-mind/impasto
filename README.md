@@ -63,6 +63,22 @@ cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to 
 
 Pieces, with their pictures, are kept in `backend/output/impasto.db`, a SQLite file (git-ignored). On first start it imports any older pieces from `backend/output/api/`.
 
+### Accounts and the private demo
+
+Model calls cost money, so the app is invite-only. Everyone signs in with an email and password, and each account only sees its own pieces.
+
+- **Invite code.** Signing up takes the code in `IMPASTO_INVITE_CODE` in `.env`. With none set, nobody can sign up. Keep it out of the repo. A link like `https://your-host/?invite=CODE` opens sign-up with the code filled in.
+- **Spending caps.** Each job spends credits, about one per model call; a set of concepts is 5 (three Muse Images), a repaint is 2, and a mix check is free because no model is involved. When an account reaches `IMPASTO_ACCOUNT_CREDITS` (default 100), or the whole demo reaches `IMPASTO_TOTAL_CREDITS` (default 500), new jobs are refused. Restarting doesn't refill them, and a job that fails still counts.
+- **Existing pieces.** The first account to sign up gets every piece made before accounts existed, so create yours before sharing the code.
+- **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>`. Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
+- **Not built.** There's no password reset or email verification, because the app doesn't send email.
+
+Tests use a throwaway database and no model keys:
+
+```sh
+cd backend && uv run pytest
+```
+
 ## Credits
 
 - Paint mixing is predicted with [Mixbox](https://github.com/scrtwpns/mixbox) by Šárka Sochorová and Ondřej Jamriška (Secret Weapons), licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) for non-commercial use.
