@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { CheckInTrends } from '@/components/checkin-trends'
 import { ConceptPainting, LitPainting } from '@/components/lit-painting'
+import { NO_TAPS, PhotoStage, type Target, type Taps } from '@/components/photo-stage'
 import { Button } from '@/components/ui/button'
 import { checkIn, listCheckIns, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
@@ -10,62 +11,6 @@ import type { Concept } from '@/lib/concepts'
 import type { Recipe } from '@/lib/recipe'
 import { DEFAULT_LIGHT } from '@/lib/relief'
 import { cn } from '@/lib/utils'
-
-// What the next tap on the photo marks.
-type Target = 'white' | 'corners' | 'ground'
-
-type Taps = { white: Point | null; corners: Point[]; ground: Point | null }
-const NO_TAPS: Taps = { white: null, corners: [], ground: null }
-
-const MARK = { white: 'bg-white', corners: 'bg-sky-500', ground: 'bg-amber-500' }
-
-// The photo, with a marker on each tapped point. Taps are kept in the photo's own pixels.
-function PhotoStage({ url, taps, target, onTap }: { url: string; taps: Taps; target: Target | null; onTap: (p: Point) => void }) {
-  const img = useRef<HTMLImageElement>(null)
-  const [size, setSize] = useState<Point | null>(null)
-  const tap = (e: PointerEvent<HTMLImageElement>) => {
-    const el = img.current
-    if (!el || !target) return
-    const r = el.getBoundingClientRect()
-    onTap([Math.round(((e.clientX - r.left) / r.width) * el.naturalWidth), Math.round(((e.clientY - r.top) / r.height) * el.naturalHeight)])
-  }
-  const marks: [Point, Target, string][] = [
-    ...(taps.white ? [[taps.white, 'white', 'White paper'] as [Point, Target, string]] : []),
-    ...taps.corners.map((c, i) => [c, 'corners', `Corner ${i + 1}`] as [Point, Target, string]),
-    ...(taps.ground ? [[taps.ground, 'ground', 'Bare canvas'] as [Point, Target, string]] : []),
-  ]
-  return (
-    <div className="relative overflow-hidden rounded-lg bg-[oklch(0.25_0.005_80)]">
-      <img
-        ref={img}
-        src={url}
-        alt="The canvas photo"
-        onLoad={e => setSize([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
-        onPointerDown={tap}
-        draggable={false}
-        className={cn('mx-auto block max-h-[calc(100dvh-10rem)] w-auto max-w-full select-none', target && 'cursor-crosshair')}
-      />
-      {size && marks.map(([[x, y], kind, label]) => (
-        <span
-          key={label}
-          title={label}
-          className={cn('pointer-events-none absolute size-3.5 -translate-1/2 rounded-full shadow-[0_0_0_2px_rgb(0_0_0/0.6),0_0_0_4px_rgb(255_255_255/0.7)]', MARK[kind])}
-          style={{ left: `${(x / size[0]) * 100}%`, top: `${(y / size[1]) * 100}%` }}
-        />
-      ))}
-      {size && taps.corners.length > 2 && (
-        <svg aria-hidden className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${size[0]} ${size[1]}`} preserveAspectRatio="none">
-          <polygon
-            points={taps.corners.map(p => p.join(',')).join(' ')}
-            className="fill-sky-400/10 stroke-sky-400"
-            strokeWidth={2}
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      )}
-    </div>
-  )
-}
 
 // One step of marking the photo: what to tap, whether it's done, and a way to redo it.
 function TapStep({ label, hint, done, active, optional, onPick, onClear }: {
@@ -331,7 +276,7 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
 
         {photo && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">
-            <PhotoStage url={photo.url} taps={taps} target={phase ? null : target} onTap={tap} />
+            <PhotoStage url={photo.url} alt="The canvas photo" taps={taps} target={phase ? null : target} onTap={tap} />
             <div className="flex flex-col gap-4">
               <ol className="-mx-2.5 flex flex-col gap-1">
                 <TapStep
