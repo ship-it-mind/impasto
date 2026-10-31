@@ -124,17 +124,20 @@ def stage_brief(stage: dict, bands: list[dict]) -> dict:
     return brief
 
 
-def write(concept: dict, recipe: dict, width_cm: float, height_cm: float) -> dict:
-    """The guide for one recipe: Spark's words on the computed stages."""
-    bands, paste_in_mix = recipe["bands"], recipe["mixing"]["paste_in_mix"]
-    planned = stages(bands, paste_in_mix)
-    method = (
+def paste_method(paste_in_mix: bool) -> str:
+    return (
         "tinted: mixed into each band's color, so color and relief go on together, wet."
         if paste_in_mix else
         "underneath: the relief is built in white paste first, left to dry, then painted over in color."
     )
+
+
+def write(concept: dict, recipe: dict, width_cm: float, height_cm: float) -> dict:
+    """The guide for one recipe: Spark's words on the computed stages."""
+    bands, paste_in_mix = recipe["bands"], recipe["mixing"]["paste_in_mix"]
+    planned = stages(bands, paste_in_mix)
     prompt = PROMPT.format(
-        title=concept["title"], idea=concept["idea"], width=f"{width_cm:g}", height=f"{height_cm:g}", flow=concept["flow"], method=method,
+        title=concept["title"], idea=concept["idea"], width=f"{width_cm:g}", height=f"{height_cm:g}", flow=concept["flow"], method=paste_method(paste_in_mix),
         places=places(concept),
         stages=json.dumps([stage_brief(stage, bands) for stage in planned], indent=2, ensure_ascii=False),
     )

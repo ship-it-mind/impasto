@@ -65,6 +65,20 @@ CREATE TABLE IF NOT EXISTS checkins (
     record TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS checkins_by_concept ON checkins (run, concept, id);
+CREATE TABLE IF NOT EXISTS checks (  -- a photo of one guide step, or of mixes in the bowl
+    id TEXT PRIMARY KEY,
+    run TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    concept INTEGER NOT NULL,
+    kind TEXT NOT NULL,  -- step or mix
+    record TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS checks_by_concept ON checks (run, concept, id);
+CREATE TABLE IF NOT EXISTS questions (  -- the check-ins chat
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    concept INTEGER NOT NULL,
+    record TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS images (
     owner TEXT NOT NULL,  -- the piece, run or check-in id
     name TEXT NOT NULL,
@@ -286,6 +300,38 @@ def checkins(run_id: str, concept: int) -> list[tuple[str, dict]]:
 def checkin_count(run_id: str, concept: int) -> int:
     with connect() as db:
         return db.execute("SELECT count(*) FROM checkins WHERE run = ? AND concept = ?", (run_id, concept)).fetchone()[0]
+
+
+def save_check(piece_id: str, check_id: str, run_id: str, concept: int, kind: str, record: dict, images: dict[str, bytes]) -> None:
+    with connect() as db:
+        db.execute(
+            "INSERT INTO checks (id, run, concept, kind, record) VALUES (?, ?, ?, ?, ?)",
+            (check_id, run_id, concept, kind, dumps(record)),
+        )
+        put_images(db, check_id, images)
+        touch(db, piece_id)
+
+
+def checks(run_id: str, concept: int, kind: str) -> list[tuple[str, dict]]:
+    """Every check of this kind on one concept as (id, record), oldest first: ids start with the time."""
+    with connect() as db:
+        rows = db.execute(
+            "SELECT id, record FROM checks WHERE run = ? AND concept = ? AND kind = ? ORDER BY id", (run_id, concept, kind),
+        ).fetchall()
+    return [(row["id"], json.loads(row["record"])) for row in rows]
+
+
+def save_question(piece_id: str, run_id: str, concept: int, record: dict) -> None:
+    with connect() as db:
+        db.execute("INSERT INTO questions (run, concept, record) VALUES (?, ?, ?)", (run_id, concept, dumps(record)))
+        touch(db, piece_id)
+
+
+def questions(run_id: str, concept: int) -> list[dict]:
+    """The chat on one concept, oldest first."""
+    with connect() as db:
+        rows = db.execute("SELECT record FROM questions WHERE run = ? AND concept = ? ORDER BY id", (run_id, concept)).fetchall()
+    return [json.loads(row["record"]) for row in rows]
 
 
 # --- The old folders ---------------------------------------------------------

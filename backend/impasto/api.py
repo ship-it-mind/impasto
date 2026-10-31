@@ -35,11 +35,13 @@ from pydantic import BaseModel
 
 from impasto import brief as briefs
 from impasto import checkin as checkins
+from impasto import coach
 from impasto import concepts
 from impasto import edits
 from impasto import exact as exact_pictures
 from impasto import guide as guides
 from impasto import method
+from impasto import mix_check
 from impasto import store
 from impasto import wall as walls
 from impasto.color import rgb_to_hex
@@ -65,6 +67,8 @@ CHECKIN_IMAGES = {"progress.png", "rectified.png"}
 CACHE_FOREVER = {"Cache-Control": "public, max-age=31536000, immutable"}
 CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|edit|layout)\.png$")
 MAX_EDIT_CHARS = 1000
+MAX_QUESTION_CHARS = 1000
+CHECK_IMAGES = {"photo.jpg"}
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -838,3 +842,204 @@ def checkin_image(brief_id: str, run: str, concept: int, checkin_id: str, image:
     if image not in CHECKIN_IMAGES or not CHECKIN_ID.match(checkin_id):
         raise HTTPException(404, "No such image.")
     return stored_image(checkin_id, image)
+
+
+# --- Step and mix checks, and the chat ----------------------------------------
+
+def new_check_id() -> str:
+    return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:4]}"
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def upright_jpeg(upload: UploadFile, max_side: int | None = None) -> bytes:
+    """A photo for the checks: upright and sRGB, as the browser shows it, so taps land on the same pixels."""
+    read_image(upload, "photo")  # only for its checks on the file's type
+    upload.file.seek(0)
+    try:
+        return to_jpeg(Image.open(io.BytesIO(read_upload(upload))), max_side)
+    except (UnidentifiedImageError, ValueError, OSError, Image.DecompressionBombError) as error:
+        raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
+
+
+def painting_plan(brief_id: str, run: str, concept: int) -> tuple[dict, dict, dict, str]:
+    """The concept, its latest recipe and guide, and the plan in words for Spark."""
+    source = known_concept(run_or_404(brief_id, run), concept)
+    recipe = store.latest_recipe(run, concept)
+    if recipe is None:
+        raise HTTPException(409, "Make the recipes first.")
+    guide = store.guide(run, concept, recipe["mixing"]["without"], recipe["mixing"]["paste_in_mix"])
+    if guide is None:
+        raise HTTPException(409, "The steps aren't written yet. Try again in a moment.")
+    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
+    return source, recipe, guide, coach.plan_text(source, recipe, guide, piece["width_cm"], piece["height_cm"])
+
+
+def check_view(record: dict, check_id: str, brief_id: str, run: str, concept: int) -> dict:
+    return {"id": check_id, **record, "photo": f"/api/checks/{brief_id}/{run}/{concept}/{check_id}/photo.jpg"}
+
+
+def drying_note(steps: list[dict], step_id: str, run: str, concept: int) -> str:
+    """How long the paste has had, for the first step after one that has to dry. Goes by when its check was taken."""
+    index = next(i for i, step in enumerate(steps) if step["id"] == step_id)
+    previous = steps[index - 1] if index else None
+    if not previous or not previous["wait"]:
+        return ""
+    taken = [record["taken_at"] for _, record in store.checks(run, concept, "step") if record["step"] == previous["id"]]
+    if not taken:
+        return ""
+    hours = (datetime.now(timezone.utc) - datetime.fromisoformat(taken[-1])).total_seconds() / 3600
+    return (
+        f"The step before this one needs {previous['wait']} to dry. Its last photo was taken about {hours:.0f} hours ago: "
+        "if the photo shows paint going on over paste that can't be dry yet, say so."
+    )
+
+
+@app.post("/api/step-checks")
+def new_step_check(
+    brief_id: Annotated[str, Form()],
+    run: Annotated[str, Form()],
+    concept: Annotated[int, Form()],
+    step: Annotated[str, Form()],
+    photo: Annotated[UploadFile, File()],
+    # How the canvas should look after this step, as the guide draws it.
+    expected: Annotated[UploadFile, File()],
+) -> dict:
+    """Spark's look at a photo of one step of the guide. Only colors measured against white paper are trusted, so nothing here measures."""
+    _, recipe, guide, plan = painting_plan(brief_id, run, concept)
+    stage = next((s for s in guide["steps"] if s["id"] == step), None)
+    if stage is None:
+        raise HTTPException(422, "This painting has no such step.")
+    photo_data = upright_jpeg(photo, MAX_PHOTO_SIDE)
+    expected_data = upright_jpeg(expected, MAX_PHOTO_SIDE)
+    note = drying_note(guide["steps"], step, run, concept)
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Spark is looking at the photo…")
+        made = coach.review(stage, plan, ("photo.jpg", photo_data), ("expected.jpg", expected_data), note)
+        check_id = new_check_id()
+        record = {"step": step, "taken_at": now_iso(), "paste_in_mix": recipe["mixing"]["paste_in_mix"], "review": made}
+        store.save_check(brief_id, check_id, run, concept, "step", record, {"photo.jpg": photo_data})
+        return check_view(record, check_id, brief_id, run, concept)
+
+    return start(work)
+
+
+class MixSample(BaseModel):
+    band: int
+    point: PhotoPoint
+
+
+@app.post("/api/mix-checks")
+def new_mix_check(
+    brief_id: Annotated[str, Form()],
+    run: Annotated[str, Form()],
+    concept: Annotated[int, Form()],
+    photo: Annotated[UploadFile, File()],
+    white: Annotated[str, Form()],
+    # JSON: the colors tapped in the photo, each with the band it's meant to be.
+    samples: Annotated[str, Form()],
+) -> dict:
+    """The paint in the bowl against the recipe: measured, with what to do if it's off."""
+    known_concept(run_or_404(brief_id, run), concept)
+    recipe = store.latest_recipe(run, concept)
+    if recipe is None:
+        raise HTTPException(409, "Make the recipes first.")
+    try:
+        tapped = [MixSample(**sample) for sample in json.loads(samples)]
+    except (ValueError, TypeError) as error:
+        raise HTTPException(422, "Tap the paint again.") from error
+    if not tapped:
+        raise HTTPException(422, "Tap at least one color.")
+    if any(not 0 <= sample.band < len(recipe["bands"]) for sample in tapped):
+        raise HTTPException(422, "This painting has no such color.")
+    white_px = point(white, "white paper")
+    photo_data = upright_jpeg(photo)
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Reading the color…")
+        image = cv2.imdecode(np.frombuffer(photo_data, np.uint8), cv2.IMREAD_COLOR)
+        found = mix_check.check(image, white_px, [{"band": s.band, "point": s.point} for s in tapped], recipe)
+        check_id = new_check_id()
+        record = {"taken_at": now_iso(), "paste_in_mix": recipe["mixing"]["paste_in_mix"], **found}
+        store.save_check(brief_id, check_id, run, concept, "mix", record, {"photo.jpg": photo_data})
+        return check_view(record, check_id, brief_id, run, concept)
+
+    return start(work)
+
+
+@app.get("/api/checks")
+def list_checks(brief_id: str, run: str, concept: int) -> dict:
+    """Everything on the check-ins screen besides the whole-canvas check-ins: step and mix checks, oldest first, and the chat."""
+    run_or_404(brief_id, run)
+
+    def views(kind: str) -> list[dict]:
+        return [check_view(record, check_id, brief_id, run, concept) for check_id, record in store.checks(run, concept, kind)]
+
+    return {"steps": views("step"), "mixes": views("mix"), "questions": store.questions(run, concept)}
+
+
+@app.get("/api/checks/{brief_id}/{run}/{concept}/{check_id}/{image}")
+def check_image(brief_id: str, run: str, concept: int, check_id: str, image: str) -> Response:
+    run_or_404(brief_id, run)
+    if image not in CHECK_IMAGES or not CHECKIN_ID.match(check_id):
+        raise HTTPException(404, "No such image.")
+    return stored_image(check_id, image)
+
+
+def section_context(section: str | None, steps: list[dict], run: str, concept: int) -> tuple[str, tuple[str, bytes] | None]:
+    """What the painter has open as they ask, and the latest photo from it."""
+    if section == "mix":
+        checks = store.checks(run, concept, "mix")
+        return "They have the Color mixes check open.", (("photo.jpg", store.image(checks[-1][0], "photo.jpg")) if checks else None)
+    if section == "canvas":
+        checks = store.checkins(run, concept)
+        return "They have the Whole canvas check open.", (("rectified.png", store.image(checks[-1][0], "rectified.png")) if checks else None)
+    stage = next((s for s in steps if s["id"] == section), None)
+    if stage is None:
+        return "", None
+    checks = [(check_id, record) for check_id, record in store.checks(run, concept, "step") if record["step"] == section]
+    return (
+        f"They have this step open, so a question with no other subject is about it: {stage['title']}."
+        + (" The picture is their latest photo of it." if checks else ""),
+        ("photo.jpg", store.image(checks[-1][0], "photo.jpg")) if checks else None,
+    )
+
+
+class Question(BaseModel):
+    brief_id: str
+    run: str
+    concept: int
+    question: str
+    # The section open as they ask: a guide step's id, mix, canvas, or none.
+    section: str | None = None
+
+
+@app.post("/api/questions")
+def ask(body: Question) -> dict:
+    """Spark answers a question about the painting. One at a time per painting: asking again joins it."""
+    question = body.question.strip()
+    if not question:
+        raise HTTPException(422, "Ask something first.")
+    if len(question) > MAX_QUESTION_CHARS:
+        raise HTTPException(422, f"Keep it under {MAX_QUESTION_CHARS} characters.")
+    _, recipe, guide, plan = painting_plan(body.brief_id, body.run, body.concept)
+    method = recipe["mixing"]["paste_in_mix"]
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Spark is thinking…")
+        found = coach.findings(
+            guide["steps"],
+            [record for _, record in store.checks(body.run, body.concept, "step") if record["paste_in_mix"] == method],
+            [record for _, record in store.checks(body.run, body.concept, "mix") if record["paste_in_mix"] == method],
+            [record for _, record in store.checkins(body.run, body.concept)],
+        )
+        section, photo = section_context(body.section, guide["steps"], body.run, body.concept)
+        said = coach.answer(plan, found, section, store.questions(body.run, body.concept), question, photo)
+        record = {"question": question, "answer": said, "asked_at": now_iso(), "section": body.section}
+        store.save_question(body.brief_id, body.run, body.concept, record)
+        return record
+
+    return start(work, key=f"question:{body.run}:{body.concept}")
