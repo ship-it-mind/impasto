@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
-import { AreaPicker, ConceptChat } from '@/components/concept-chat'
+import { ConceptChat, SegmentPicker } from '@/components/concept-chat'
 import { WallMockup } from '@/components/wall-mockup'
 import { getMockup, saveMockup, type ConceptChange } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { offBands, reliefSummary, versionsOf, type Area, type Concept, type Piece } from '@/lib/concepts'
+import { offBands, reliefSummary, versionsOf, type Concept, type Piece, type Segment } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
 import type { Mockup } from '@/lib/wall'
 
@@ -68,7 +68,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   const [pick, setPick] = useState(initialPick)
   const [onPhoto, setOnPhoto] = useState(!!photo)
   const [light, setLight] = useState(DEFAULT_LIGHT)
-  const [area, setArea] = useState<Area | null>(null)
+  const [segments, setSegments] = useState<Segment[]>([])
   const [selecting, setSelecting] = useState(false)
   const [editing, setEditing] = useState(false)
   const drag = useLightDrag(light, setLight)
@@ -79,14 +79,14 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   const originals = concepts.filter(c => !c.edit)
   const versions = versionsOf(concepts, concept)
 
-  // A selection belongs to the picture it was drawn on.
+  // A selection belongs to the picture it was made on.
   const show = (position: number) => {
     setPick(position)
-    setArea(null)
+    setSegments([])
     setSelecting(false)
   }
   const send = async (message: string, onPhase: (phase: string) => void) => {
-    await onEdit(concept, { message, area }, onPhase)
+    await onEdit(concept, { message, segments }, onPhase)
     show(concepts.length)  // the new version goes at the end
   }
 
@@ -104,7 +104,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   return (
     <div className="grid flex-1 gap-8 px-6 pb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:px-10">
       <div className="flex flex-col gap-3">
-        {selecting && <p className="text-xs text-muted-foreground">Drag over the part of the painting to change.</p>}
+        {selecting && <p className="text-xs text-muted-foreground">Tap a segment of the painting to select it, and more to add them. Tap one again to let it go.</p>}
         {photo && !selecting && (
           <div role="radiogroup" aria-label="Wall" className="flex gap-1 self-start rounded-lg bg-muted p-0.5 text-xs">
             {[{ v: true, l: "Client's wall" }, { v: false, l: 'Sketch' }].map(o => (
@@ -121,10 +121,10 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
             ))}
           </div>
         )}
-        {selecting ? (
-          <AreaPicker ratio={W / H} area={area} onArea={setArea}>
+        {selecting && concept.layout ? (
+          <SegmentPicker key={concept.layout.map} ratio={W / H} map={concept.layout.map} segments={segments} onSegments={setSegments}>
             <ConceptPainting concept={concept} seed={pick + 1} width={W} height={H} light={light} />
-          </AreaPicker>
+          </SegmentPicker>
         ) : photo && onPhoto ? (
           <ConceptOnWall photo={photo} concept={concept} seed={pick + 1} canvasPx={[W, H]} piece={piece} light={light} active={active} />
         ) : (
@@ -233,10 +233,10 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
             versions={versions}
             current={concept}
             onShow={v => { if (!editing) show(concepts.indexOf(v)) }}
-            area={area}
+            segments={segments}
             selecting={selecting}
             onSelecting={setSelecting}
-            onClearArea={() => setArea(null)}
+            onClearSegments={() => setSegments([])}
             onSend={send}
             onBusy={setEditing}
           />

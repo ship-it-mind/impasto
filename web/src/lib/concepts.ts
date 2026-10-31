@@ -15,11 +15,12 @@ export type Concept = {
   title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number
   layout?: Layout; layout_note?: string; exact?: boolean
   // This concept is a change the painter asked for in the chat: from which concept, and what they asked.
-  edit?: { from: number; message: string; area: Area | null }
+  // segments: the parts it was about; area: the same, on versions made when a part was dragged as a box.
+  edit?: { from: number; message: string; segments?: Segment[] | null; area?: number[] | null }
 }
 
-// A part of the canvas as shares of it: left, top, right, bottom.
-export type Area = [number, number, number, number]
+// A segment of the painting, by a point on it: x and y as shares of the canvas.
+export type Segment = [number, number]
 
 // The concept an edit started from, or the concept itself if it isn't one.
 function originalOf(concepts: Concept[], concept: Concept): Concept {

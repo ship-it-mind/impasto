@@ -5,7 +5,7 @@
 
 import type { CheckIn, CheckInInput, Point } from './checkin'
 import type { Asked, Checks, MixCheck, StepCheck } from './checks'
-import type { Area, Concept, Piece } from './concepts'
+import type { Concept, Piece, Segment } from './concepts'
 import type { BriefResult } from './brief'
 import type { Guide } from './guide'
 import type { MixSettings, PasteAdvice, Recipe } from './recipe'
@@ -122,7 +122,7 @@ function conceptSet(record: ConceptsRecord, result: BriefResult): ConceptSet {
 }
 
 // A change the painter asked for: Muse Image repaints the concept, and it comes back as a new version in the run.
-export type ConceptChange = { message: string; area: Area | null }
+export type ConceptChange = { message: string; segments: Segment[] }
 
 export async function editConcept(result: BriefResult, set: ConceptSet, concept: Concept, change: ConceptChange, onPhase?: (phase: string) => void): Promise<Concept> {
   const edited = await poll<{ concept: Concept; index: number }>(request(`/concepts/${result.id}/${set.run}/${concept.index}/edit`, {

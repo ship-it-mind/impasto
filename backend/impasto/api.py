@@ -418,9 +418,9 @@ def concept_file(brief_id: str, run: str, name: str) -> Response:
 
 
 class EditRequest(BaseModel):
-    """What the painter asks to change. area: the part it's about, as shares of the canvas (left, top, right, bottom)."""
+    """What the painter asks to change. segments: the parts it's about, each by a point on it, as shares of the canvas (x, y)."""
     message: str
-    area: tuple[float, float, float, float] | None = None
+    segments: list[tuple[float, float]] = []
 
 
 @app.post("/api/concepts/{brief_id}/{run}/{concept}/edit")
@@ -435,11 +435,11 @@ def edit_concept(brief_id: str, run: str, concept: int, body: EditRequest) -> di
         raise HTTPException(422, f"Keep it under {MAX_EDIT_CHARS} characters.")
     if "layout" not in source:
         raise HTTPException(409, "This concept has only a drawn preview, so there's no painting to change. Pick another, or make new ones.")
-    if body.area:
-        left, top, right, bottom = body.area
-        if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
-            raise HTTPException(422, "Select the area again.")
+    if not all(0 <= x <= 1 and 0 <= y <= 1 for x, y in body.segments):
+        raise HTTPException(422, "Select the segments again.")
     painting = cv2.imdecode(np.frombuffer(store.image(run, source["layout"]["image"]), np.uint8), cv2.IMREAD_COLOR)
+    # Red is the band: impasto.layout writes the map that way, and OpenCV reads BGR.
+    bands = cv2.imdecode(np.frombuffer(store.image(run, source["layout"]["map"]), np.uint8), cv2.IMREAD_COLOR)[..., 2] if body.segments else None
     size = tuple(drafted["canvas_px"])
     mixing = drafted["mixing"]
 
@@ -448,7 +448,7 @@ def edit_concept(brief_id: str, run: str, concept: int, body: EditRequest) -> di
         number = len(store.run(brief_id, run)["concepts"]) + 1
         with scratch({}) as folder:
             phase("Muse Image is repainting it…")
-            edited = edits.edit(source, concept, painting, size, message, body.area, number, folder)
+            edited = edits.edit(source, concept, painting, size, message, body.segments, bands, number, folder)
             phase("Mixing each color from the tubes on hand…")
             concepts.mix({"concepts": [edited]}, mixing["without"], mixing["paste_in_mix"])
             index = store.add_concept(brief_id, run, edited, {path.name: path.read_bytes() for path in folder.iterdir()})

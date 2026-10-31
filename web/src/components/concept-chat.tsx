@@ -1,49 +1,56 @@
-import { useRef, useState, type PointerEvent, type ReactNode } from 'react'
-import { ArrowUp, LoaderCircle, SquareDashedMousePointer, X } from 'lucide-react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { ArrowUp, LoaderCircle, MousePointerClick, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Area, Concept } from '@/lib/concepts'
+import { loadLayout } from '@/lib/band-map'
+import type { Concept, Segment } from '@/lib/concepts'
+import { drawSegments, findSegments, labelAt, type SegmentMap } from '@/lib/segments'
 import { cn } from '@/lib/utils'
 
-// A drag smaller than this share of the canvas is a slip, not a selection.
-const MIN_AREA = 0.02
+// The painting, large, to tap segments on: small on the wall, they would be hard to hit. map: its band map.
+export function SegmentPicker({ ratio, map, segments, onSegments, children }: { ratio: number; map: string; segments: Segment[]; onSegments: (segments: Segment[]) => void; children: ReactNode }) {
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const [found, setFound] = useState<SegmentMap | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [hovered, setHovered] = useState<number | null>(null)
 
-// The painting, large, to drag an area on: small on the wall, it would be hard to hit.
-export function AreaPicker({ ratio, area, onArea, children }: { ratio: number; area: Area | null; onArea: (area: Area | null) => void; children: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null)
-  const start = useRef<[number, number] | null>(null)
-  const [dragged, setDragged] = useState<Area | null>(null)
-  const shown = dragged ?? area
+  useEffect(() => {
+    let stop = false
+    loadLayout(map).then(layout => { if (!stop) setFound(findSegments(layout)) }).catch(() => { if (!stop) setFailed(true) })
+    return () => { stop = true }
+  }, [map])
 
-  const at = (e: PointerEvent): [number, number] => {
-    const r = box.current!.getBoundingClientRect()
-    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]
+  useEffect(() => {
+    const ctx = canvas.current?.getContext('2d')
+    if (ctx && found) drawSegments(ctx, found, new Set(segments.map(s => labelAt(found, s))), hovered)
+  }, [found, segments, hovered])
+
+  // Where a pointer is, as shares of the canvas, at the middle of the map's pixel so it finds the same one on the server.
+  const pointAt = (e: MouseEvent, { w, h }: SegmentMap): Segment => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = Math.min(w - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * w)))
+    const y = Math.min(h - 1, Math.max(0, Math.floor(((e.clientY - r.top) / r.height) * h)))
+    return [(x + 0.5) / w, (y + 0.5) / h]
   }
-  const between = (a: [number, number], b: [number, number]): Area => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]
+  const toggle = (e: MouseEvent) => {
+    if (!found) return
+    const point = pointAt(e, found), label = labelAt(found, point)
+    const others = segments.filter(s => labelAt(found, s) !== label)
+    onSegments(others.length < segments.length ? others : [...segments, point])
+  }
 
   return (
-    <div
-      ref={box}
-      onPointerDown={e => { start.current = at(e); setDragged(null); e.currentTarget.setPointerCapture(e.pointerId) }}
-      onPointerMove={e => { if (start.current) setDragged(between(start.current, at(e))) }}
-      onPointerUp={e => {
-        if (!start.current) return
-        const next = between(start.current, at(e))
-        start.current = null
-        setDragged(null)
-        onArea(next[2] - next[0] > MIN_AREA && next[3] - next[1] > MIN_AREA ? next : null)
-      }}
-      onPointerCancel={() => { start.current = null; setDragged(null) }}
-      className="relative mx-auto w-full cursor-crosshair touch-none overflow-hidden rounded-xl select-none"
-      style={{ maxWidth: `calc((100dvh - 12rem) * ${ratio})` }}
-    >
-      <div className="pointer-events-none">{children}</div>
-      {shown && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute rounded-sm border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/0.6),0_0_0_100vmax_rgb(0_0_0/0.35)]"
-          style={{ left: `${shown[0] * 100}%`, top: `${shown[1] * 100}%`, width: `${(shown[2] - shown[0]) * 100}%`, height: `${(shown[3] - shown[1]) * 100}%` }}
-        />
-      )}
+    <div className="flex flex-col gap-2">
+      {failed && <p role="alert" className="text-xs text-destructive">Couldn't read this painting's segments. Try again.</p>}
+      <div
+        onClick={toggle}
+        onPointerMove={e => { if (found && e.pointerType === 'mouse') setHovered(labelAt(found, pointAt(e, found))) }}
+        onPointerLeave={() => setHovered(null)}
+        className={cn('relative mx-auto w-full overflow-hidden rounded-xl select-none', found && 'cursor-pointer')}
+        style={{ maxWidth: `calc((100dvh - 12rem) * ${ratio})` }}
+      >
+        <div className="pointer-events-none">{children}</div>
+        {found && <canvas ref={canvas} aria-hidden width={found.w} height={found.h} className="pointer-events-none absolute inset-0 size-full" />}
+      </div>
     </div>
   )
 }
@@ -53,20 +60,20 @@ type ConceptChatProps = {
   versions: Concept[]
   current: Concept
   onShow: (version: Concept) => void
-  area: Area | null
+  segments: Segment[]
   selecting: boolean
   onSelecting: (selecting: boolean) => void
-  onClearArea: () => void
+  onClearSegments: () => void
   // Rejects with what went wrong. onPhase says what it's doing.
   onSend: (message: string, onPhase: (phase: string) => void) => Promise<void>
   onBusy: (busy: boolean) => void
 }
 
-// A chat to change the painting, about all of it or a selected area. Each answer is a new
+// A chat to change the painting, about all of it or selected segments. Each answer is a new
 // version of the painting, and any earlier one can be gone back to.
-export function ConceptChat({ versions, current, onShow, area, selecting, onSelecting, onClearArea, onSend, onBusy }: ConceptChatProps) {
+export function ConceptChat({ versions, current, onShow, segments, selecting, onSelecting, onClearSegments, onSend, onBusy }: ConceptChatProps) {
   const [text, setText] = useState('')
-  const [pending, setPending] = useState<{ message: string; onArea: boolean } | null>(null)
+  const [pending, setPending] = useState<{ message: string; onPart: boolean } | null>(null)
   const [phase, setPhase] = useState('Starting…')
   const [error, setError] = useState<string | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -76,7 +83,7 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
     if (!canSend) return
     const message = text.trim()
     setError(null)
-    setPending({ message, onArea: !!area })
+    setPending({ message, onPart: segments.length > 0 })
     setPhase('Starting…')
     setText('')
     onBusy(true)
@@ -96,7 +103,7 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-medium">Change something</h2>
         {versions.length === 1 && !pending && (
-          <p className="text-xs text-pretty text-muted-foreground">Say what to change in the painting, or select an area first to comment on just that part.</p>
+          <p className="text-xs text-pretty text-muted-foreground">Say what to change in the painting, or select a segment first to change just that part.</p>
         )}
       </div>
 
@@ -104,7 +111,7 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
         <ol className="flex flex-col gap-2" aria-live="polite">
           {versions.map((version, i) => (
             <li key={version.index} className="flex flex-col gap-2">
-              {version.edit && <Asked message={version.edit.message} onArea={!!version.edit.area} />}
+              {version.edit && <Asked message={version.edit.message} onPart={!!version.edit.segments?.length || !!version.edit.area} />}
               <button
                 type="button"
                 aria-pressed={version === current}
@@ -122,7 +129,7 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
           ))}
           {pending && (
             <li className="flex flex-col gap-2">
-              <Asked message={pending.message} onArea={pending.onArea} />
+              <Asked message={pending.message} onPart={pending.onPart} />
               <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" aria-hidden />{phase}</p>
             </li>
           )}
@@ -135,19 +142,19 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
         onSubmit={e => { e.preventDefault(); send() }}
         className="flex flex-col gap-1 rounded-xl bg-background p-2 shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_3px_rgb(0_0_0/0.05)]"
       >
-        {area && (
-          <span className="flex items-center gap-1 self-start rounded-md bg-muted py-0.5 pr-0.5 pl-2 text-xs">
-            Selected area
-            <Button type="button" variant="ghost" size="icon-xs" aria-label="Clear the selected area" onClick={onClearArea}><X /></Button>
+        {segments.length > 0 && (
+          <span className="flex items-center gap-1 self-start rounded-md bg-muted py-0.5 pr-0.5 pl-2 text-xs tabular-nums">
+            {segments.length === 1 ? '1 segment selected' : `${segments.length} segments selected`}
+            <Button type="button" variant="ghost" size="icon-xs" aria-label="Clear the selected segments" onClick={onClearSegments}><X /></Button>
           </span>
         )}
         <textarea
           ref={box}
-          aria-label={area ? 'What to change in the selected area' : 'What to change in the painting'}
+          aria-label={segments.length ? 'What to change in the selected segments' : 'What to change in the painting'}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder={area ? 'What should change here?' : 'What should change?'}
+          placeholder={segments.length ? 'What should change here?' : 'What should change?'}
           rows={2}
           maxLength={1000}
           className="field-sizing-content max-h-40 min-h-12 resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground md:text-sm"
@@ -160,7 +167,7 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
             aria-pressed={selecting}
             onClick={() => { onSelecting(!selecting); box.current?.focus() }}
           >
-            <SquareDashedMousePointer /> {selecting ? 'Done selecting' : area ? 'Change the area' : 'Select an area'}
+            <MousePointerClick /> {selecting ? 'Done selecting' : segments.length ? 'Change the selection' : 'Select a segment'}
           </Button>
           <Button type="submit" size="icon-sm" aria-label="Send" disabled={!canSend} className="rounded-full">
             {pending ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
@@ -171,10 +178,10 @@ export function ConceptChat({ versions, current, onShow, area, selecting, onSele
   )
 }
 
-function Asked({ message, onArea }: { message: string; onArea: boolean }) {
+function Asked({ message, onPart }: { message: string; onPart: boolean }) {
   return (
     <p className="max-w-[90%] self-end rounded-lg bg-muted px-3 py-2 text-pretty">
-      {onArea && <span className="mb-0.5 block text-xs text-muted-foreground">On the selected area</span>}
+      {onPart && <span className="mb-0.5 block text-xs text-muted-foreground">On the selected part</span>}
       {message}
     </p>
   )
