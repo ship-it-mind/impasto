@@ -7,7 +7,7 @@ A studio co-pilot for palette-knife / impasto artists, built for the Meta Global
 1. **Brief → concepts** — the client's request, typed or dictated, is structured into a brief, then turned into three concept compositions and a wall mockup at true scale. With a wall photo, Muse Spark recommends a size and where it hangs; the painter can type another size or move the painting's four corners on the photo. To paint an existing picture as it is, attach it as the exact picture instead: its colors and shapes are measured off it, with its corners marked if the photo shows more than the painting, and no image is generated. A picture whose shape is too far from the canvas is refused, with a message to upload another or change the size. On the Concepts screen, the painting hangs on the wall in the size chosen, and a chat changes it: Muse Image repaints all of it, or only an area selected on it, and each answer is a version to keep or go back from. "Let's start painting" takes the version on show through the same steps below.
 2. **Concept → recipe** — the chosen concept is segmented into color bands; each band's area becomes grams of paint and paste, with mixing ratios from common acrylic tubes. The app recommends tinted paste or paste underneath for this painting, from what each can actually mix, and lists the colors, paste and tools needed; ticking what you already have updates what's left to buy.
 3. **How to paint it** — each stage in order, in Muse Spark's words, with a picture of how the canvas should look after it, cut from the concept along its band map.
-4. **Progress check-ins** — a mid-way photo of the canvas reports coverage, color drift against the plan, and paste shortfalls.
+4. **Check-ins** — optional sections that follow the steps of How to paint it, so they change with the paste method: tinted paste, or paste, drying, then paint. A photo of a step gets Muse Spark's look at it against how that step should look, and warns if paste hasn't had long enough to dry. A photo of the paint in the bowl, with white paper beside it, is measured against the recipe, and if it's off says which tube to add and how much. A photo of the whole canvas reports coverage and color drift against the plan. A chat beside them answers questions about the painting from its plan and what the check-ins found.
 
 ## Built during the hackathon
 
@@ -27,7 +27,7 @@ We tested each model on a photo of one of the artist's finished pieces before de
 
 | Model | Job in the app |
 |---|---|
-| Muse Spark | Reads band structure from a painting, names the colors measured off an exact picture, turns the client's request into a structured brief, writes mixing recipes and the step-by-step painting guide |
+| Muse Spark | Reads band structure from a painting, names the colors measured off an exact picture, turns the client's request into a structured brief, writes mixing recipes and the step-by-step painting guide, looks over photos of each step, and answers the painter's questions in the check-ins chat |
 | SAM 3.1 | One mask per color band from the artist's points, for area per band; finds the canvas corners in check-in photos |
 | Muse Image | Paints each concept from Spark's band spec, steered by the user's reference photos when given; its painting is what the app shows for the concept, and the band layout read off it drives the recipe's band areas and the check-ins |
 | Muse Voice Transcribe | Turns dictation into text in the brief box, to check and edit before the brief is read |
