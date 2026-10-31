@@ -5,13 +5,13 @@
 
 import type { CheckIn, CheckInInput, Point } from './checkin'
 import type { Concept, Piece } from './concepts'
-import type { BriefResult, Preset } from './brief'
+import type { BriefResult } from './brief'
 import type { MixSettings, Recipe } from './recipe'
 
 export type BriefInput = { text: string; wall: File | null }
 export type StyleInput = { references: File[]; without?: string[] }
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
-export type Presets = { default: string; presets: Preset[]; tubes: string[] }
+export type Presets = { tubes: string[] }
 
 const POLL_MS = 700
 
