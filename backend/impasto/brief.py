@@ -23,9 +23,8 @@ from impasto.voice import transcribe
 MODEL = "muse-spark-1.3"
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "brief"
 
-PROMPT = """You are the studio assistant of a palette-knife / impasto painter who paints
-abstract pieces made of flowing color bands. A client has described the piece they want.
-Turn it into a structured brief for the painter.
+PROMPT = """You are the studio assistant of a palette-knife / impasto painter. A client has
+described the piece they want. Turn it into a structured brief for the painter.
 
 Rules:
 - Record only what the client said{photo_rule}. Do not invent sizes, colors, budgets or dates.
@@ -34,7 +33,7 @@ Rules:
   "two meters eighty" is 280 cm. Width is the horizontal side.
 - palette.colors: every color the client wants, with an approximate hex for that color as a
   painter would mix it (muted if the client wants muted). palette.avoid: colors they ruled out.
-- style: what they said about texture, shapes or a past piece they liked, in short phrases.
+- style: what they said about texture, shapes, composition or a past piece they liked, in short phrases.
 - paint_as_is: true only if they explicitly ask for a picture to be painted as it is, as an exact copy or match
   ("paint this exactly", "copy this picture", "exactly like the photo"). Otherwise false, also when a picture is
   only inspiration or a style to follow ("something like this", "in this style").
