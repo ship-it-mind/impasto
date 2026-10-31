@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { CheckInTrends } from '@/components/checkin-trends'
-import { LitPainting } from '@/components/lit-painting'
+import { ConceptPainting, LitPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
 import { checkIn, listCheckIns, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
@@ -148,10 +148,19 @@ function Result({ checkin, plan }: { checkin: CheckIn; plan: Plan }) {
           </figcaption>
         </figure>
         <figure className="flex flex-col gap-2">
-          <LitPainting concept={plan.concept} seed={plan.seed} width={plan.size[0]} height={plan.size[1]} light={DEFAULT_LIGHT} stage={stage} className="rounded-sm" />
-          <figcaption className="text-xs text-pretty text-muted-foreground">
-            The plan at the same stage: {percent(checkin.coverage)} painted, bands in the order you're painting them.
-          </figcaption>
+          {plan.concept.layout ? (
+            <>
+              <ConceptPainting concept={plan.concept} seed={plan.seed} width={plan.size[0]} height={plan.size[1]} light={DEFAULT_LIGHT} className="rounded-sm" />
+              <figcaption className="text-xs text-pretty text-muted-foreground">The plan when it's finished, painted by Muse Image.</figcaption>
+            </>
+          ) : (
+            <>
+              <LitPainting concept={plan.concept} seed={plan.seed} width={plan.size[0]} height={plan.size[1]} light={DEFAULT_LIGHT} stage={stage} className="rounded-sm" />
+              <figcaption className="text-xs text-pretty text-muted-foreground">
+                The plan at the same stage: {percent(checkin.coverage)} painted, bands in the order you're painting them.
+              </figcaption>
+            </>
+          )}
         </figure>
       </div>
       <ul aria-label="Bands">
@@ -253,7 +262,7 @@ export function CheckInsScreen({ brief, set, concept, seed, recipe, onBack }: Ch
           <Button variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground" onClick={onBack}>
             <ArrowLeft /> Recipe
           </Button>
-          <LitPainting
+          <ConceptPainting
             concept={planned}
             seed={seed}
             width={W}

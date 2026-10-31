@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
-import { LitPainting } from '@/components/lit-painting'
+import { ConceptPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
 import { makeRecipe, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
@@ -122,7 +122,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     run({ without: [], pasteInMix: false })
   }, [run])
 
-  // Paint the preview in the mixes the recipe actually gives.
+  // A relief preview, when there is no Muse painting, shows the mixes the recipe actually gives.
   const mixed = useMemo<Concept>(() => recipe
     ? { ...concept, bands: concept.bands.map((b, i) => ({ ...b, mix: { ...b.mix, hex: recipe.bands[i]?.mix_hex ?? b.mix.hex } })) }
     : concept, [concept, recipe])
@@ -136,7 +136,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
           <Button variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground" onClick={onBack}>
             <ArrowLeft /> Concepts
           </Button>
-          <LitPainting
+          <ConceptPainting
             concept={mixed}
             seed={seed}
             width={W}

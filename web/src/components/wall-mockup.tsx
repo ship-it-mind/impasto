@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { Download, Ruler } from 'lucide-react'
-import { LitPainting } from '@/components/lit-painting'
+import { ConceptPainting } from '@/components/lit-painting'
 import { Button } from '@/components/ui/button'
 import { getMockup, saveMockup, type Mockup } from '@/lib/api'
 import type { Point } from '@/lib/checkin'
@@ -89,10 +89,10 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
     saveMockup(briefId, mockup).catch(() => setError("Couldn't save where it hangs."))
   }
 
-  // The photo with the lit canvas drawn on it, at the photo's full size.
+  // The photo with the painting drawn on it, at the photo's full size.
   const download = () => {
-    const photo = img.current, lit = painting.current?.querySelector('canvas')
-    if (!photo || !lit || !mockup || !size) return
+    const photo = img.current, art = painting.current?.querySelector<HTMLCanvasElement | HTMLImageElement>('canvas, img')
+    if (!photo || !art || !mockup || !size) return
     const out = document.createElement('canvas')
     out.width = size[0]
     out.height = size[1]
@@ -102,7 +102,10 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
     ctx.shadowColor = 'rgb(0 0 0 / 0.35)'
     ctx.shadowBlur = h * 0.06
     ctx.shadowOffsetY = h * 0.025
-    ctx.drawImage(lit, mockup.center[0] - w / 2, mockup.center[1] - h / 2, w, h)
+    // Cropped to the canvas's shape, as it shows on screen.
+    const [artW, artH] = art instanceof HTMLImageElement ? [art.naturalWidth, art.naturalHeight] : [art.width, art.height]
+    const cropW = Math.min(artW, artH * (w / h)), cropH = Math.min(artH, artW * (h / w))
+    ctx.drawImage(art, (artW - cropW) / 2, (artH - cropH) / 2, cropW, cropH, mockup.center[0] - w / 2, mockup.center[1] - h / 2, w, h)
     out.toBlob(blob => {
       if (!blob) return
       const a = document.createElement('a')
@@ -138,7 +141,7 @@ export function WallMockup({ briefId, wall, concept, seed, canvasPx: [W, H], pie
             className="absolute -translate-1/2 cursor-grab touch-none select-none active:cursor-grabbing"
             style={{ ...pct(mockup.center), width: `${piece.widthCm * scale * 100}%` }}
           >
-            <LitPainting concept={concept} seed={seed} width={W} height={H} light={light} className={SHADOW} />
+            <ConceptPainting concept={concept} seed={seed} width={W} height={H} light={light} className={SHADOW} />
           </div>
         )}
         {measuring && size && line.length > 0 && (

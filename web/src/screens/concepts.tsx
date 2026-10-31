@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { LightMarker, LitPainting } from '@/components/lit-painting'
+import { ConceptPainting, LightMarker } from '@/components/lit-painting'
 import { WallMockup } from '@/components/wall-mockup'
 import { cn } from '@/lib/utils'
 import { offBands, reliefSummary, type Concept, type Piece } from '@/lib/concepts'
@@ -31,6 +31,8 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
   const drag = useLightDrag(light, setLight)
   const concept = concepts[pick]
   const off = offBands(concept)
+  // Only the relief preview has a light to move; Muse's painting is a finished picture.
+  const relief = !concept.layout
 
   const wall = {
     w: piece.wallWidthCm ?? DEFAULT_WALL_WIDTH,
@@ -81,11 +83,11 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
                 <rect x="197" y="76" width="5" height="6" className="fill-[oklch(0.35_0.01_60)]" />
               </svg>
               <div
-                {...drag}
-                className="absolute left-1/2 -translate-x-1/2 cursor-grab touch-none select-none active:cursor-grabbing"
+                {...(relief ? drag : {})}
+                className={cn('absolute left-1/2 -translate-x-1/2', relief && 'cursor-grab touch-none select-none active:cursor-grabbing')}
                 style={{ width: pct(piece.widthCm, wall.w), bottom: pct(SKIRTING + SOFA.h + HANG_GAP, wall.h) }}
               >
-                <LitPainting
+                <ConceptPainting
                   concept={concept}
                   seed={pick + 1}
                   width={W}
@@ -93,7 +95,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
                   light={light}
                   className="shadow-[0_2px_3px_rgb(0_0_0/0.18),0_14px_28px_-10px_rgb(0_0_0/0.3)]"
                 />
-                <LightMarker light={light} />
+                {relief && <LightMarker light={light} />}
               </div>
             </div>
             <figcaption className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
@@ -101,7 +103,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
                 {piece.widthCm} × {piece.heightCm} cm on a {wall.w} cm wall{piece.wallWidthCm ? '' : ' (assumed)'}, to scale.
                 The wall and sofa are placeholders until the wall photo is in.
               </span>
-              <span>Lit from {lightName(light)} · drag on the painting</span>
+              {relief && <span>Lit from {lightName(light)} · drag on the painting</span>}
             </figcaption>
           </figure>
         )}
@@ -152,18 +154,6 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
           )}
         </section>
 
-        {concept.layout && (
-          <figure className="flex items-center gap-3">
-            <img
-              src={concept.layout.image}
-              alt={`Muse Image's painting of ${concept.title}`}
-              className="h-16 w-auto rounded-sm shadow-[0_0_0_1px_rgb(0_0_0/0.08)]"
-            />
-            <figcaption className="text-xs text-pretty text-muted-foreground">
-              Painted by Muse Image. The preview follows its layout, in the mixes your tubes make.
-            </figcaption>
-          </figure>
-        )}
         {concept.layout_note && <p className="text-xs text-pretty text-muted-foreground">{concept.layout_note}</p>}
 
         <Button size="lg" className="self-start" onClick={() => onChoose(pick)}>Paint this one</Button>

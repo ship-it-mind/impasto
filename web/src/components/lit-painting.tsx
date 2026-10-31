@@ -72,6 +72,21 @@ export function LitPainting({ concept, seed, width, height, light, gloss = 0.15,
   )
 }
 
+// A concept as the app shows it: Muse Image's painting, or the relief preview when Muse
+// has no usable painting of it. The painting is cropped to the canvas's exact shape.
+export function ConceptPainting({ concept, ...lit }: LitPaintingProps) {
+  if (!concept.layout) return <LitPainting concept={concept} {...lit} />
+  return (
+    <img
+      src={concept.layout.image}
+      alt={`${concept.title}, painted by Muse Image`}
+      draggable={false}
+      className={cn('block w-full bg-muted object-cover', lit.className)}
+      style={{ aspectRatio: `${lit.width} / ${lit.height}` }}
+    />
+  )
+}
+
 // A small sun on the painting's edge, where the light comes from.
 export function LightMarker({ light, className }: { light: number; className?: string }) {
   const a = (light * Math.PI) / 180
