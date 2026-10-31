@@ -5,8 +5,7 @@ A session is a random token in an HttpOnly cookie, so the browser sends it for p
 passwords only as Argon2 hashes, so a copy of the database signs nobody in.
 
 Model calls cost money and this is a private demo, so signing up takes the invite code in
-IMPASTO_INVITE_CODE, and without one set nobody can. Each job also spends credits from a
-capped allowance, per account and overall (charge), so a leaked code can only spend so much.
+IMPASTO_INVITE_CODE, and without one set nobody can.
 """
 
 from __future__ import annotations
@@ -33,8 +32,6 @@ MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS = 8, 256
 MAX_EMAIL_CHARS = 254
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 WRONG_LOGIN = "That email and password don't match."
-# About one model call each; a whole painting from brief to check-ins is around 25.
-ACCOUNT_CREDITS, TOTAL_CREDITS = 100, 500
 
 router = APIRouter(prefix="/api/auth")
 hasher = PasswordHasher()
@@ -137,18 +134,6 @@ def invited(code: str) -> bool:
     expected = os.environ.get("IMPASTO_INVITE_CODE", "").strip()
     return bool(expected) and secrets.compare_digest(code.strip().encode(), expected.encode())
 
-
-def charge(user: dict, credits: int) -> None:
-    """Spend credits for a job about to start, or refuse it. Kept in the database, so restarting doesn't refill them."""
-    refused = store.spend(
-        user["id"], credits,
-        int(os.environ.get("IMPASTO_ACCOUNT_CREDITS", ACCOUNT_CREDITS)),
-        int(os.environ.get("IMPASTO_TOTAL_CREDITS", TOTAL_CREDITS)),
-    )
-    if refused == "account":
-        raise HTTPException(429, "This account has used up its demo allowance.")
-    if refused == "total":
-        raise HTTPException(429, "The demo has used up its allowance for now.")
 
 
 @router.get("/me")

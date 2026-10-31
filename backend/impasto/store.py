@@ -33,10 +33,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS spent (  -- model use so far, against the caps in impasto.auth
-    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    credits INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS pieces (
     id TEXT PRIMARY KEY,
     user_id TEXT REFERENCES users(id),  -- empty only for pieces from before accounts, until the first sign-up
@@ -203,22 +199,6 @@ def session_user(token_hash: str) -> dict | None:
 def end_session(token_hash: str) -> None:
     with connect() as db:
         db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
-
-
-def spend(user_id: str, credits: int, account_limit: int, total_limit: int) -> str | None:
-    """Spend credits if both caps allow it. If not, nothing is spent, and which cap stopped it: account or total."""
-    with connect() as db:
-        db.execute("BEGIN IMMEDIATE")  # two jobs starting together can't both take the last credits
-        row = db.execute("SELECT credits FROM spent WHERE user_id = ?", (user_id,)).fetchone()
-        if (row["credits"] if row else 0) + credits > account_limit:
-            return "account"
-        if db.execute("SELECT coalesce(sum(credits), 0) FROM spent").fetchone()[0] + credits > total_limit:
-            return "total"
-        db.execute(
-            "INSERT INTO spent (user_id, credits) VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET credits = credits + excluded.credits",
-            (user_id, credits),
-        )
-    return None
 
 
 # --- Pieces ------------------------------------------------------------------

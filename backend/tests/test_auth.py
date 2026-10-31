@@ -1,13 +1,11 @@
-"""Accounts, that only the invited get one, that one user can't reach another's pieces, pictures or jobs, and the caps on model use."""
+"""Accounts, that only the invited get one, and that one user can't reach another's pieces, pictures or jobs."""
 
 import re
 import sqlite3
-import threading
 import time
 import uuid
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from impasto import api as api_module
@@ -282,52 +280,6 @@ def test_a_job_is_only_visible_to_who_started_it():
     answer = a.get(f"/api/jobs/{job}").json()
     assert answer["result"] == {"secret": 1}
     assert "user" not in answer
-
-
-def nothing(phase) -> dict:
-    return {}
-
-
-def test_an_account_can_only_spend_its_allowance(monkeypatch):
-    monkeypatch.setenv("IMPASTO_ACCOUNT_CREDITS", "3")
-    a, b = signed_up("a@example.com"), signed_up("b@example.com")
-    first, second = {"id": user_id(a)}, {"id": user_id(b)}
-    api_module.start(first, nothing, credits=2)
-    api_module.start(first, nothing)
-    with pytest.raises(HTTPException) as refused:
-        api_module.start(first, nothing)
-    assert refused.value.status_code == 429
-    api_module.start(second, nothing)  # the next account has its own
-
-
-def test_the_demo_as_a_whole_can_only_spend_its_allowance(monkeypatch):
-    monkeypatch.setenv("IMPASTO_TOTAL_CREDITS", "4")
-    a, b = signed_up("a@example.com"), signed_up("b@example.com")
-    api_module.start({"id": user_id(a)}, nothing, credits=3)
-    with pytest.raises(HTTPException) as refused:
-        api_module.start({"id": user_id(b)}, nothing, credits=2)
-    assert refused.value.status_code == 429
-    api_module.start({"id": user_id(b)}, nothing)  # a refused job spends nothing
-    with pytest.raises(HTTPException):
-        api_module.start({"id": user_id(a)}, nothing)
-
-
-def test_joining_a_running_job_and_a_stored_answer_cost_nothing(monkeypatch):
-    monkeypatch.setenv("IMPASTO_ACCOUNT_CREDITS", "1")
-    user = {"id": user_id(signed_up("a@example.com"))}
-    release = threading.Event()
-    job = api_module.start(user, lambda phase: release.wait(5) and {}, key="same")
-    assert api_module.start(user, nothing, key="same") == job  # at the cap, and still let in
-    assert api_module.finished(user, {})["job"]
-    release.set()
-
-
-def test_a_refused_job_reaches_the_browser_as_a_message(monkeypatch):
-    monkeypatch.setenv("IMPASTO_ACCOUNT_CREDITS", "0")
-    answer = signed_up("a@example.com").post("/api/brief", data={"text": "A piece for the hall"})
-    assert answer.status_code == 429
-    assert "allowance" in answer.json()["detail"]
-    assert not api_module.jobs
 
 
 def test_the_first_account_gets_the_pieces_from_before_accounts():

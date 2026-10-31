@@ -73,8 +73,6 @@ CACHE_FOREVER = {"Cache-Control": "private, max-age=31536000, immutable"}
 CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|edit|layout)\.png$")
 MAX_EDIT_CHARS = 1000
 MAX_QUESTION_CHARS = 1000
-# Jobs spend 1 credit unless they're dearer: Spark and three Muse Images, or one Muse Image repaint and its mix.
-CONCEPTS_CREDITS, EDIT_CREDITS = 5, 2
 CHECK_IMAGES = {"photo.jpg"}
 
 log = logging.getLogger("impasto.api")
@@ -94,12 +92,10 @@ store.init()
 
 # --- Jobs --------------------------------------------------------------------
 
-def start(user: dict, work: Callable[[Callable[[str], None]], dict], key: str | None = None, credits: int = 1) -> dict:
-    """Start a job, spending credits for its model calls. Joining one already running costs nothing."""
+def start(user: dict, work: Callable[[Callable[[str], None]], dict], key: str | None = None) -> dict:
     with running_lock:
         if key in running:
             return {"job": running[key]}
-        auth.charge(user, credits)
         job_id = uuid.uuid4().hex
         jobs[job_id] = {"user": user["id"], "status": "running", "phase": "Starting…", "result": None, "error": None}
         if key:
@@ -374,7 +370,7 @@ def new_concepts(
             store.save_run(brief_id, run, drafted, {path.name: path.read_bytes() for path in folder.iterdir()})
         return {**run_view(drafted, brief_id, run), "brief": brief_view(record, brief_id)}
 
-    return start(user, work, key=concepts_key(brief_id), credits=CONCEPTS_CREDITS)
+    return start(user, work, key=concepts_key(brief_id))
 
 
 def exact_picture(upload: UploadFile) -> bytes:
@@ -470,7 +466,7 @@ def edit_concept(user: CurrentUser, brief_id: str, run: str, concept: int, body:
             index = store.add_concept(brief_id, run, edited, {path.name: path.read_bytes() for path in folder.iterdir()})
         return {"concept": concept_view(edited, brief_id, run), "index": index}
 
-    return start(user, work, key=f"edit:{run}", credits=EDIT_CREDITS)
+    return start(user, work, key=f"edit:{run}")
 
 
 # --- Recipe ------------------------------------------------------------------
@@ -980,7 +976,7 @@ def new_mix_check(
         store.save_check(brief_id, check_id, run, concept, "mix", record, {"photo.jpg": photo_data})
         return check_view(record, check_id, brief_id, run, concept)
 
-    return start(user, work, credits=0)  # measured here, with no model
+    return start(user, work)
 
 
 @api.get("/api/checks")
