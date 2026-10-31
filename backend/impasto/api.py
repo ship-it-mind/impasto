@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable, Iterator
 
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
@@ -34,11 +34,14 @@ from pydantic import BaseModel
 from impasto import brief as briefs
 from impasto import checkin as checkins
 from impasto import concepts
+from impasto import guide as guides
+from impasto import method
 from impasto import store
 from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
 from impasto.recipe_cards import band_brief, write_cards
+from impasto.tools import TUB_SIZES_ML, TUBE_SIZES_ML, tools_for
 from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
@@ -469,6 +472,89 @@ def new_recipe(body: RecipeRequest) -> dict:
         return result
 
     return start(work, key=f"recipe:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
+
+
+@app.get("/api/pieces/{brief_id}/method")
+def paste_method(
+    brief_id: str,
+    run: str,
+    concept: int,
+    without_tubes: Annotated[list[str], Query(alias="without")] = [],  # noqa: B006 - FastAPI copies defaults
+) -> dict:
+    """Paste mixed in or underneath, for this painting: the recommendation and what each way can mix."""
+    bands = known_concept(run_or_404(brief_id, run), concept)["bands"]
+    try:
+        return method.advise(bands, without_tubes)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+# --- Supplies ----------------------------------------------------------------
+
+class Have(BaseModel):
+    qty: int
+    size: float | None = None
+
+
+class Supplies(BaseModel):
+    """What the painter already has for this piece, by item: tube:NAME, paste, or tool:ID."""
+    have: dict[str, Have]
+
+
+@app.get("/api/pieces/{brief_id}/supplies")
+def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = False) -> dict:
+    """The tools this painting needs, what the painter already has, and what the app needs to work out what's left to buy."""
+    drafted = known_concept(run_or_404(brief_id, run), concept)
+    piece = piece_or_404(brief_id)["record"]["brief"]["piece"]
+    if not (piece["width_cm"] and piece["height_cm"]):
+        raise HTTPException(409, "The brief has no piece size yet.")
+    materials = Materials()
+    return {
+        "tools": tools_for(piece["width_cm"], piece["height_cm"], drafted["flow"], [band["relief"] for band in drafted["bands"]], paste_in_mix),
+        "have": store.supplies(brief_id),
+        "sizes": {"tube": TUBE_SIZES_ML, "tub": TUB_SIZES_ML},
+        "density": {"paint": materials.paint_density_g_cm3, "paste": materials.paste_density_g_cm3},
+    }
+
+
+@app.put("/api/pieces/{brief_id}/supplies")
+def save_supplies(brief_id: str, body: Supplies) -> dict:
+    piece_or_404(brief_id)
+    if any(item.qty < 1 for item in body.have.values()):
+        raise HTTPException(422, "Quantities start at 1; leave out what you don't have.")
+    have = body.model_dump()["have"]
+    store.save_supplies(brief_id, have)
+    return {"have": have}
+
+
+# --- Painting guide ----------------------------------------------------------
+
+class GuideRequest(BaseModel):
+    brief_id: str
+    run: str
+    concept: int
+    without: list[str] = []
+    paste_in_mix: bool = False
+
+
+@app.post("/api/guide")
+def new_guide(body: GuideRequest) -> dict:
+    """How to paint the concept, for one recipe. A guide already written comes back as it was."""
+    concept = known_concept(run_or_404(body.brief_id, body.run), body.concept)
+    if made := store.guide(body.run, body.concept, body.without, body.paste_in_mix):
+        return finished(made)
+    recipe = store.recipe(body.run, body.concept, body.without, body.paste_in_mix)
+    if recipe is None:
+        raise HTTPException(409, "Make the recipes first.")
+    piece = piece_or_404(body.brief_id)["record"]["brief"]["piece"]
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Writing how to paint it…")
+        made = guides.write(concept, recipe, piece["width_cm"], piece["height_cm"])
+        store.save_guide(body.brief_id, body.run, body.concept, body.without, body.paste_in_mix, made)
+        return made
+
+    return start(work, key=f"guide:{body.run}:{body.concept}:{store.tubes_key(body.without)}:{body.paste_in_mix}")
 
 
 # --- Pieces ------------------------------------------------------------------

@@ -46,6 +46,18 @@ CREATE TABLE IF NOT EXISTS recipes (
     used_at REAL NOT NULL,
     PRIMARY KEY (run, concept, without_tubes, paste_in_mix)
 );
+CREATE TABLE IF NOT EXISTS guides (
+    run TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    concept INTEGER NOT NULL,
+    without_tubes TEXT NOT NULL,
+    paste_in_mix INTEGER NOT NULL,
+    record TEXT NOT NULL,
+    PRIMARY KEY (run, concept, without_tubes, paste_in_mix)
+);
+CREATE TABLE IF NOT EXISTS supplies (
+    piece TEXT PRIMARY KEY REFERENCES pieces(id) ON DELETE CASCADE,
+    record TEXT NOT NULL  -- what the painter already has for this piece
+);
 CREATE TABLE IF NOT EXISTS checkins (
     id TEXT PRIMARY KEY,
     run TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
@@ -210,6 +222,37 @@ def latest_recipe(run_id: str, concept: int) -> dict | None:
             "SELECT record FROM recipes WHERE run = ? AND concept = ? ORDER BY used_at DESC LIMIT 1", (run_id, concept),
         ).fetchone()
     return json.loads(row["record"]) if row else None
+
+
+# --- Painting guides and supplies --------------------------------------------
+
+def save_guide(piece_id: str, run_id: str, concept: int, without: list[str], paste_in_mix: bool, record: dict) -> None:
+    with connect() as db:
+        db.execute(
+            "INSERT OR REPLACE INTO guides (run, concept, without_tubes, paste_in_mix, record) VALUES (?, ?, ?, ?, ?)",
+            (run_id, concept, tubes_key(without), paste_in_mix, dumps(record)),
+        )
+        touch(db, piece_id)
+
+
+def guide(run_id: str, concept: int, without: list[str], paste_in_mix: bool) -> dict | None:
+    with connect() as db:
+        row = db.execute(
+            "SELECT record FROM guides WHERE run = ? AND concept = ? AND without_tubes = ? AND paste_in_mix = ?",
+            (run_id, concept, tubes_key(without), paste_in_mix),
+        ).fetchone()
+    return json.loads(row["record"]) if row else None
+
+
+def save_supplies(piece_id: str, have: dict) -> None:
+    with connect() as db:
+        db.execute("INSERT OR REPLACE INTO supplies (piece, record) VALUES (?, ?)", (piece_id, dumps(have)))
+
+
+def supplies(piece_id: str) -> dict:
+    with connect() as db:
+        row = db.execute("SELECT record FROM supplies WHERE piece = ?", (piece_id,)).fetchone()
+    return json.loads(row["record"]) if row else {}
 
 
 # --- Check-ins ---------------------------------------------------------------
