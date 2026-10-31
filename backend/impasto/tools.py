@@ -6,9 +6,6 @@ the bands still works, but takes far more passes and leaves more joins.
 
 from __future__ import annotations
 
-# Containers paint and paste commonly come in, in ml.
-TUBE_SIZES_ML = [20, 37, 60, 75, 120, 200, 250, 500]
-TUB_SIZES_ML = [120, 250, 500, 1000, 2000, 4000]
 # Flows with straight edges, where tape keeps a band's edge clean.
 STRAIGHT_FLOWS = {"horizontal", "diagonal", "grid", "diagonal split"}
 

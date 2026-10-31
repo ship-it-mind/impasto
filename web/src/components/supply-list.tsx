@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Check, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { grams, type MixSettings, type Recipe } from '@/lib/recipe'
-import { PASTE_ID, stillToBuy, toolId, toolShort, tubeId, type Have, type Supplies, type Tool } from '@/lib/supplies'
+import type { MixSettings, Recipe } from '@/lib/recipe'
+import { PASTE_ID, ml, needMl, stillToBuyMl, toolId, toolShort, tubeId, type Have, type Supplies, type Tool } from '@/lib/supplies'
 import { cn } from '@/lib/utils'
 
 const QUANTITIES = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -20,6 +20,31 @@ function Picker({ label, value, options, unit, disabled, onChange }: {
     >
       {options.map(o => <option key={o} value={o}>{o}{unit ? ` ${unit}` : ''}</option>)}
     </select>
+  )
+}
+
+// How many ml the painter has. Clearing it to type a new number counts as none until they do.
+function MlInput({ label, value, disabled, onChange }: { label: string; value: number; disabled?: boolean; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value))
+  return (
+    <div className="relative">
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        step={1}
+        aria-label={label}
+        value={Number(text) === value ? text : value}
+        disabled={disabled}
+        onFocus={e => e.target.select()}
+        onChange={e => {
+          setText(e.target.value)
+          onChange(Math.max(0, Number(e.target.value) || 0))
+        }}
+        className="h-8 w-24 [appearance:textfield] rounded-lg border border-input bg-background pr-8 pl-2 text-base tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <span aria-hidden className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">ml</span>
+    </div>
   )
 }
 
@@ -100,10 +125,10 @@ type SupplyListProps = {
 }
 
 export function SupplyList({ recipe, supplies, allTubes, onHave, applied, draftWithout, onDraftWithout, busy, onRemix }: SupplyListProps) {
-  const { have, sizes, density } = supplies
-  const { tube_ml, tub_ml } = recipe.materials
+  const { have, density } = supplies
   const pasteHave = have[PASTE_ID]
-  const pasteShort = stillToBuy(recipe.shopping.paste.buy_g, pasteHave, density.paste, tub_ml)
+  const pasteNeed = needMl(recipe.shopping.paste.buy_g, density.paste)
+  const pasteShort = stillToBuyMl(pasteNeed, pasteHave)
   const changed = draftWithout.join() !== applied.without.join()
   const toggleOut = (tube: string) => {
     const without = draftWithout.includes(tube) ? draftWithout.filter(t => t !== tube) : [...draftWithout, tube].sort()
@@ -123,25 +148,22 @@ export function SupplyList({ recipe, supplies, allTubes, onHave, applied, draftW
         {recipe.shopping.tubes.map(tube => {
           const id = tubeId(tube.name)
           const item = have[id]
-          const short = stillToBuy(tube.buy_g, item, density.paint, tube_ml)
+          const need = needMl(tube.buy_g, density.paint)
+          const short = stillToBuyMl(need, item)
           const out = draftWithout.includes(tube.name)
           return (
             <Row
               key={tube.name}
               name={tube.name}
               struck={out}
-              need={`${grams(tube.buy_g)}, about ${tube.tubes} × ${tube_ml} ml`}
+              need={`Needs ${ml(need)}`}
               have={!!item}
               enough={!short && !out}
               disabled={out}
-              status={out ? 'Mixing without it' : short ? `Buy ${short} × ${tube_ml} ml` : 'Enough'}
-              onHave={on => onHave(id, on ? { qty: tube.tubes, size: tube_ml } : null)}
+              status={out ? 'Mixing without it' : short ? `Buy ${ml(short)}` : 'Enough'}
+              onHave={on => onHave(id, on ? { qty: 1, size: need } : null)}
               controls={item && !out && (
-                <>
-                  <Picker label={`How many tubes of ${tube.name}`} value={item.qty} options={QUANTITIES} onChange={qty => onHave(id, { ...item, qty })} />
-                  <span className="text-muted-foreground">×</span>
-                  <Picker label={`${tube.name} tube size`} value={item.size ?? tube_ml} options={sizes.tube} unit="ml" onChange={size => onHave(id, { ...item, size })} />
-                </>
+                <MlInput label={`How many ml of ${tube.name} you have`} value={item.qty * (item.size ?? 0)} onChange={size => onHave(id, { qty: 1, size })} />
               )}
               action={!item && (
                 <button
@@ -177,17 +199,13 @@ export function SupplyList({ recipe, supplies, allTubes, onHave, applied, draftW
       <Group title="Paste">
         <Row
           name="Modeling paste"
-          need={`${grams(recipe.shopping.paste.buy_g)}, about ${recipe.shopping.paste.tubs} × ${tub_ml} ml`}
+          need={`Needs ${ml(pasteNeed)}`}
           have={!!pasteHave}
           enough={!pasteShort}
-          status={pasteShort ? `Buy ${pasteShort} × ${tub_ml} ml` : 'Enough'}
-          onHave={on => onHave(PASTE_ID, on ? { qty: recipe.shopping.paste.tubs, size: tub_ml } : null)}
+          status={pasteShort ? `Buy ${ml(pasteShort)}` : 'Enough'}
+          onHave={on => onHave(PASTE_ID, on ? { qty: 1, size: pasteNeed } : null)}
           controls={pasteHave && (
-            <>
-              <Picker label="How many tubs of paste" value={pasteHave.qty} options={QUANTITIES} onChange={qty => onHave(PASTE_ID, { ...pasteHave, qty })} />
-              <span className="text-muted-foreground">×</span>
-              <Picker label="Paste tub size" value={pasteHave.size ?? tub_ml} options={sizes.tub} unit="ml" onChange={size => onHave(PASTE_ID, { ...pasteHave, size })} />
-            </>
+            <MlInput label="How many ml of modeling paste you have" value={pasteHave.qty * (pasteHave.size ?? 0)} onChange={size => onHave(PASTE_ID, { qty: 1, size })} />
           )}
         />
       </Group>

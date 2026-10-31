@@ -41,7 +41,7 @@ from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
 from impasto.recipe_cards import band_brief, write_cards
-from impasto.tools import TUB_SIZES_ML, TUBE_SIZES_ML, tools_for
+from impasto.tools import tools_for
 from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
@@ -497,7 +497,7 @@ class Have(BaseModel):
 
 
 class Supplies(BaseModel):
-    """What the painter already has for this piece, by item: tube:NAME, paste, or tool:ID."""
+    """What the painter already has for this piece, by item: tube:NAME and paste as ml in size, tool:ID as qty and size."""
     have: dict[str, Have]
 
 
@@ -512,7 +512,6 @@ def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = Fal
     return {
         "tools": tools_for(piece["width_cm"], piece["height_cm"], drafted["flow"], [band["relief"] for band in drafted["bands"]], paste_in_mix),
         "have": store.supplies(brief_id),
-        "sizes": {"tube": TUBE_SIZES_ML, "tub": TUB_SIZES_ML},
         "density": {"paint": materials.paint_density_g_cm3, "paste": materials.paste_density_g_cm3},
     }
 
@@ -520,8 +519,8 @@ def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = Fal
 @app.put("/api/pieces/{brief_id}/supplies")
 def save_supplies(brief_id: str, body: Supplies) -> dict:
     piece_or_404(brief_id)
-    if any(item.qty < 1 for item in body.have.values()):
-        raise HTTPException(422, "Quantities start at 1; leave out what you don't have.")
+    if any(item.qty < 1 or (item.size or 0) < 0 for item in body.have.values()):
+        raise HTTPException(422, "Quantities start at 1 and sizes can't be negative; leave out what you don't have.")
     have = body.model_dump()["have"]
     store.save_supplies(brief_id, have)
     return {"have": have}
