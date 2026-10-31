@@ -6,15 +6,20 @@ the bands still works, but takes far more passes and leaves more joins.
 
 from __future__ import annotations
 
-# Flows with straight edges, where tape keeps a band's edge clean.
+# Tape keeps a straight edge clean. These flows have them.
 STRAIGHT_FLOWS = {"horizontal", "diagonal", "grid", "diagonal split"}
+
+
+def has_straight_edges(concept: dict) -> bool:
+    """What the concept says about its edges; concepts drafted before it said have only their flow."""
+    return concept.get("straight_edges", concept["flow"] in STRAIGHT_FLOWS)
 
 
 def tool(id_: str, name: str, why: str, need: int = 1, sizes: list[float] | None = None, min_size: float | None = None) -> dict:
     return {"id": id_, "name": name, "why": why, "need": need, "sizes": sizes, "min_size": min_size}
 
 
-def tools_for(width_cm: float, height_cm: float, flow: str, levels: list[str], paste_in_mix: bool) -> list[dict]:
+def tools_for(width_cm: float, height_cm: float, straight_edges: bool, levels: list[str], paste_in_mix: bool) -> list[dict]:
     long_side = max(width_cm, height_cm)
     blade = 10 if long_side >= 100 else 8 if long_side >= 60 else 6
     tools = [
@@ -31,7 +36,7 @@ def tools_for(width_cm: float, height_cm: float, flow: str, levels: list[str], p
         tool("tubs", "Lidded tubs", "One per band, so a mix stays wet between sessions", need=len(levels)),
         tool("charcoal", "Charcoal or soft pencil", "Marks where the bands go"),
     ]
-    if flow in STRAIGHT_FLOWS:
+    if straight_edges:
         tools.append(tool("tape", "Masking tape", "Keeps the straight edges clean"))
     tools += [
         tool("spray", "Spray bottle", "Keeps paint workable on the palette"),

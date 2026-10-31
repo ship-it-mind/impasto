@@ -48,7 +48,7 @@ from impasto.color import rgb_to_hex
 from impasto.mixing import PLACEHOLDER_INVENTORY, Mixer, without
 from impasto.presets import DEFAULT_PRESET, PRESETS
 from impasto.recipe_cards import band_brief, write_cards
-from impasto.tools import tools_for
+from impasto.tools import has_straight_edges, tools_for
 from impasto.voice import transcribe
 from impasto.volume import Materials, estimate
 
@@ -626,7 +626,7 @@ def get_supplies(brief_id: str, run: str, concept: int, paste_in_mix: bool = Fal
         raise HTTPException(409, "The brief has no piece size yet.")
     materials = Materials()
     return {
-        "tools": tools_for(piece["width_cm"], piece["height_cm"], drafted["flow"], [band["relief"] for band in drafted["bands"]], paste_in_mix),
+        "tools": tools_for(piece["width_cm"], piece["height_cm"], has_straight_edges(drafted), [band["relief"] for band in drafted["bands"]], paste_in_mix),
         "have": store.supplies(brief_id),
         "density": {"paint": materials.paint_density_g_cm3, "paste": materials.paste_density_g_cm3},
     }
