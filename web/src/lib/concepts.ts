@@ -11,8 +11,9 @@ export type Band = {
 export type Layout = { image: string; map: string; shares: number[] }
 // index: the concept's place in its run on the server. layout_note: why Muse's layout isn't used, or how an exact
 // picture became this plan. exact: this is the user's own picture, to paint as it is.
+// composition: Spark's words on the arrangement; flow is then only the nearest layout, for a fallback sketch.
 export type Concept = {
-  title: string; flow: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number
+  title: string; flow: string; composition?: string; idea: string; bands: Band[]; mix_warnings: string[]; index: number
   layout?: Layout; layout_note?: string; exact?: boolean
   // This concept is a change the painter asked for in the chat: from which concept, and what they asked.
   // segments: the parts it was about; area: the same, on versions made when a part was dragged as a box.
@@ -46,5 +47,6 @@ export function offBands(c: Concept): Band[] {
 
 export function reliefSummary(c: Concept): string {
   const heavy = c.bands.filter(b => b.relief === 'heavy').length
-  return `${c.bands.length} bands · ${heavy ? `${heavy} heavy` : 'no heavy'} · ${c.flow}`
+  const summary = `${c.bands.length} bands · ${heavy ? `${heavy} heavy` : 'no heavy'}`
+  return c.composition ? summary : `${summary} · ${c.flow}`
 }

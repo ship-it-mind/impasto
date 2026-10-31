@@ -109,7 +109,7 @@ async function usableConcepts(start: Promise<{ job: string }>, onPhase?: (phase:
   return { set, brief }
 }
 
-// A concept that broke the spec (no valid color, a flow the style doesn't allow) can't be painted.
+// A concept that broke the spec (no valid color, no composition) can't be painted.
 // Each keeps its index in the run, which is how the recipe and check-ins ask for it.
 function conceptSet(record: ConceptsRecord, result: BriefResult): ConceptSet {
   const { piece, room } = result.brief

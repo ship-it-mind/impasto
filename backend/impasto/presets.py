@@ -1,13 +1,13 @@
-"""Built-in style presets for concept generation.
+"""Built-in style presets for concept generation, from the command line; the app doesn't use them.
 
 A preset is text only: no bundled images. It sets the composition (which
 flows Spark may pick, how many bands), the default relief per band, and a
 prompt fragment for Muse Image. The palette comes from the client's brief;
 a preset's palette is only a fallback for briefs that name no colors.
 
-When the user uploads references as well, both are used: the references
-steer the look and palette, the preset sets flow, band count and relief.
-With neither, concepts use DEFAULT_PRESET.
+When references are given as well, both are used: the references steer the
+look and palette, the preset sets flow, band count and relief. DEFAULT_PRESET's
+palette is what concepts use with no brief and no references at all.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ DEFAULT_PRESET = "flowing-bands"
 
 BASE_PROMPT = (
     "A palette-knife impasto painting, shot straight-on as a flat canvas filling the whole "
-    "image, with no frame, wall or room. Abstract and non-figurative. The canvas is made of "
-    "clearly separate color bands with distinct edges between them. Within each band the knife "
-    "strokes run in one consistent direction that follows the band across the whole canvas. No band "
-    "is suddenly much thicker than its neighbours unless the style below makes it the accent. Broad, calm "
-    "areas only: no tiny scattered shapes or specks. The colors sit well together; no clashing accents."
+    "image, with no frame, wall or room. Abstract unless the composition below names a subject. The canvas "
+    "is made of clearly separate areas of flat color with distinct edges between them. Within each area the "
+    "knife strokes follow its shape in one consistent direction. No area is suddenly much thicker than "
+    "its neighbours unless the description below makes it the accent. Broad, calm areas only: no gradients, "
+    "no tiny scattered shapes or specks. The colors sit well together; no clashing accents."
 )
 
 PRESETS = {

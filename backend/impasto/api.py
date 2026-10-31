@@ -348,7 +348,7 @@ def new_concepts(
         with scratch(refs) as folder:
             paths = [folder / name for name in refs]
             phase("Drafting 3 concepts…")
-            drafted = concepts.draft(record["brief"], None, paths)  # no pictures: the default preset
+            drafted = concepts.draft(record["brief"], None, paths)  # no pictures: Spark goes by the brief
             drafted["style"]["references"] = list(refs)
             phase("Mixing each band from the tubes on hand…")
             concepts.mix(drafted, without_tubes, paste_in_mix)

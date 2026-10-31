@@ -10,8 +10,8 @@ a few spare groups for the shadows and highlights of thick paste, which then
 join the band nearest in color. That keeps the band count and order the recipe
 relies on.
 Specks and slivers smaller than MIN_ISLAND are merged into the band around
-them. In flows whose bands follow each other (all but grids and diagonal
-splits), a band only borders the bands listed next to it, so a patch that
+them. In concepts whose bands follow each other (in_sequence), a band only
+borders the bands listed next to it, so a patch that
 borders neither is merged too, whatever its size: it is the ridge shadow of
 thick paste read as another band of the same hue. The knife runs along the bands: the direction is read from the band
 edges (and, more weakly, the painting's own stroke texture) as a structure
@@ -176,7 +176,7 @@ def smoothed(image: np.ndarray) -> np.ndarray:
 def read_layout(painting: np.ndarray, colors: list[str], size: tuple[int, int], ordered: bool = True) -> Layout:
     """The band layout of a painting of `colors` (the spec's bands, in order), at the canvas size.
 
-    ordered: the bands follow each other across the canvas (every flow but grids and diagonal splits)."""
+    ordered: the bands follow each other across the canvas, each next to the ones listed beside it."""
     image = crop_to(painting, size)
     long_side = max(size)
     n = len(colors)
@@ -241,7 +241,7 @@ def main() -> None:
     parser.add_argument("painting", type=Path)
     parser.add_argument("--colors", required=True, help="the bands' hex colors in spec order, comma-separated")
     parser.add_argument("--size", required=True, help="canvas WIDTHxHEIGHT in pixels")
-    parser.add_argument("--panels", action="store_true", help="a grid or diagonal split: bands needn't follow each other")
+    parser.add_argument("--panels", action="store_true", help="bands needn't follow each other, as in a grid or free shapes")
     parser.add_argument("--out", type=Path, required=True, help="layout PNG; a -check.png for the eye is written beside it")
     args = parser.parse_args()
 
