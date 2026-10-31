@@ -213,24 +213,11 @@ def busy_note(layout: layouts.Layout) -> str | None:
     return f"This picture has a lot of small shapes. The plan paints it from {len(layout.shares)} mixes, so its fine detail is yours to add by eye."
 
 
-def draft(brief: dict | None, path: Path, folder: Path, corners: list[tuple[float, float]] | None = None) -> dict:
-    """The one concept for this picture, in the shape concepts.draft and concepts.paint leave theirs."""
-    picture = cv2.imread(str(path))
-    if picture is None:
-        raise RuntimeError("Couldn't read this picture.")
-    size = canvas_px(brief)
-    notes: list[str] = []
-    if corners:
-        image, straightened = rectify(picture, np.array(corners, dtype=np.float32), size, px_per_cm=1.0)
-        notes += straightened.warnings
-    else:
-        image = layouts.crop_to(picture, size)
-        notes.append(crop_note(picture, size))
-    cv2.imwrite(str(folder / IMAGE), image)
-
+def plan_picture(image: np.ndarray, size: tuple[int, int], folder: Path, image_name: str, map_name: str, notes: list[str | None]) -> dict:
+    """The concept for a picture already cut to the canvas: its colors measured, named and mapped, with both images in folder."""
+    cv2.imwrite(str(folder / image_name), image)
     colors, layout = read_picture(image, size)
-    described = describe(folder / IMAGE, colors, layout)
-    notes.append(busy_note(layout))
+    described = describe(folder / image_name, colors, layout)
 
     average = 1 / len(colors)
     concept = {
@@ -241,14 +228,31 @@ def draft(brief: dict | None, path: Path, folder: Path, corners: list[tuple[floa
             for color, share, words in zip(colors, layout.shares, described["colors"])
         ],
         "warnings": [],
-        "layout": {"image": IMAGE, "map": MAP, "shares": layout.shares, "color_de": layout.color_de, "prompt": described["prompt"]},
+        "layout": {"image": image_name, "map": map_name, "shares": layout.shares, "color_de": layout.color_de, "prompt": described["prompt"]},
     }
-    layouts.write_layout(layout, folder / MAP)
-    if note := " ".join(filter(None, notes)):
+    layouts.write_layout(layout, folder / map_name)
+    if note := " ".join(filter(None, [*notes, busy_note(layout)])):
         concept["layout_note"] = note
+    return concept
+
+
+def draft(brief: dict | None, path: Path, folder: Path, corners: list[tuple[float, float]] | None = None) -> dict:
+    """The one concept for this picture, in the shape concepts.draft and concepts.paint leave theirs."""
+    picture = cv2.imread(str(path))
+    if picture is None:
+        raise RuntimeError("Couldn't read this picture.")
+    size = canvas_px(brief)
+    notes: list[str | None] = []
+    if corners:
+        image, straightened = rectify(picture, np.array(corners, dtype=np.float32), size, px_per_cm=1.0)
+        notes += straightened.warnings
+    else:
+        image = layouts.crop_to(picture, size)
+        notes.append(crop_note(picture, size))
+    concept = plan_picture(image, size, folder, IMAGE, MAP, notes)
     return {
         "style": {"preset": None, "references": [], "exact": path.name},
-        "canvas_px": list(size), "prompt": described["prompt"], "concepts": [concept],
+        "canvas_px": list(size), "prompt": concept["layout"]["prompt"], "concepts": [concept],
     }
 
 

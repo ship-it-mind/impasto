@@ -26,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Callable, Iterator
 
+import cv2
+import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
@@ -34,6 +36,7 @@ from pydantic import BaseModel
 from impasto import brief as briefs
 from impasto import checkin as checkins
 from impasto import concepts
+from impasto import edits
 from impasto import exact as exact_pictures
 from impasto import guide as guides
 from impasto import method
@@ -60,7 +63,8 @@ CHECKIN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{4}$")
 CHECKIN_IMAGES = {"progress.png", "rectified.png"}
 # A stored picture never changes, so the browser needn't fetch it again.
 CACHE_FOREVER = {"Cache-Control": "public, max-age=31536000, immutable"}
-CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|layout)\.png$")
+CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|edit|layout)\.png$")
+MAX_EDIT_CHARS = 1000
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -407,6 +411,46 @@ def concept_file(brief_id: str, run: str, name: str) -> Response:
     if not CONCEPT_FILE.match(name):
         raise HTTPException(404, "No such image.")
     return stored_image(run, name)
+
+
+class EditRequest(BaseModel):
+    """What the painter asks to change. area: the part it's about, as shares of the canvas (left, top, right, bottom)."""
+    message: str
+    area: tuple[float, float, float, float] | None = None
+
+
+@app.post("/api/concepts/{brief_id}/{run}/{concept}/edit")
+def edit_concept(brief_id: str, run: str, concept: int, body: EditRequest) -> dict:
+    """The painter's change, as a new concept in the run. One edit at a time per run: asking again joins it."""
+    drafted = run_or_404(brief_id, run)
+    source = known_concept(drafted, concept)
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(422, "Say what to change first.")
+    if len(message) > MAX_EDIT_CHARS:
+        raise HTTPException(422, f"Keep it under {MAX_EDIT_CHARS} characters.")
+    if "layout" not in source:
+        raise HTTPException(409, "This concept has only a drawn preview, so there's no painting to change. Pick another, or make new ones.")
+    if body.area:
+        left, top, right, bottom = body.area
+        if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
+            raise HTTPException(422, "Select the area again.")
+    painting = cv2.imdecode(np.frombuffer(store.image(run, source["layout"]["image"]), np.uint8), cv2.IMREAD_COLOR)
+    size = tuple(drafted["canvas_px"])
+    mixing = drafted["mixing"]
+
+    def work(phase: Callable[[str], None]) -> dict:
+        # Read again here: an edit that just finished has added to the run.
+        number = len(store.run(brief_id, run)["concepts"]) + 1
+        with scratch({}) as folder:
+            phase("Muse Image is repainting it…")
+            edited = edits.edit(source, concept, painting, size, message, body.area, number, folder)
+            phase("Mixing each color from the tubes on hand…")
+            concepts.mix({"concepts": [edited]}, mixing["without"], mixing["paste_in_mix"])
+            index = store.add_concept(brief_id, run, edited, {path.name: path.read_bytes() for path in folder.iterdir()})
+        return {"concept": concept_view(edited, brief_id, run), "index": index}
+
+    return start(work, key=f"edit:{run}")
 
 
 # --- Recipe ------------------------------------------------------------------

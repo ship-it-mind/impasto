@@ -182,6 +182,18 @@ def save_run(piece_id: str, run_id: str, record: dict, images: dict[str, bytes])
         touch(db, piece_id, now)
 
 
+def add_concept(piece_id: str, run_id: str, concept: dict, images: dict[str, bytes]) -> int:
+    """A concept added to a run, as an edit of one of its concepts. Its index in the run, which nothing else changes."""
+    with connect() as db:
+        row = db.execute("SELECT record FROM runs WHERE id = ? AND piece = ?", (run_id, piece_id)).fetchone()
+        record = json.loads(row["record"])
+        record["concepts"].append(concept)
+        db.execute("UPDATE runs SET record = ? WHERE id = ?", (dumps(record), run_id))
+        put_images(db, run_id, images)
+        touch(db, piece_id)
+    return len(record["concepts"]) - 1
+
+
 def run(piece_id: str, run_id: str) -> dict | None:
     with connect() as db:
         row = db.execute("SELECT record FROM runs WHERE id = ? AND piece = ?", (run_id, piece_id)).fetchone()
