@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { webImage } from '@/lib/api'
 
-// A hidden camera / file input: open it from any button, and get back a photo the browser can show.
+// A hidden file input: open it from any button, and get back a photo the browser can show. A phone offers its camera or its library.
 export function usePhotoInput(onPhoto: (file: File) => void) {
   const input = useRef<HTMLInputElement>(null)
   const [preparing, setPreparing] = useState(false)
@@ -25,7 +25,6 @@ export function usePhotoInput(onPhoto: (file: File) => void) {
       ref={input}
       type="file"
       accept="image/*,.heic,.heif"
-      capture="environment"
       className="sr-only"
       tabIndex={-1}
       onChange={e => { choose(e.target.files?.[0]); e.target.value = '' }}

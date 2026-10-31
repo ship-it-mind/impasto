@@ -781,7 +781,8 @@ def new_checkin(
     # The seed the relief preview painted the concept with, so the band map matches what she saw.
     seed: Annotated[int, Form()],
     photo: Annotated[UploadFile, File()],
-    white: Annotated[str, Form()],
+    # Marks the painter made: all optional, since white and the corners are found in the photo.
+    white: Annotated[str | None, Form()] = None,
     corners: Annotated[list[str], Form()] = [],  # noqa: B006 - FastAPI copies defaults
     ground: Annotated[str | None, Form()] = None,
 ) -> dict:
@@ -792,7 +793,7 @@ def new_checkin(
         raise HTTPException(409, "The brief has no piece size yet.")
     if corners and len(corners) != 4:
         raise HTTPException(422, "Tap all 4 corners of the canvas, or none to find them automatically.")
-    white_px = point(white, "white paper")
+    white_px = point(white, "white") if white else None
     corners_px = [point(c, "corner") for c in corners] or None
     ground_px = point(ground, "bare canvas") if ground else None
 
@@ -907,7 +908,7 @@ def new_step_check(
     # How the canvas should look after this step, as the guide draws it.
     expected: Annotated[UploadFile, File()],
 ) -> dict:
-    """Spark's look at a photo of one step of the guide. Only colors measured against white paper are trusted, so nothing here measures."""
+    """Spark's look at a photo of one step of the guide. Color is measured by the mix and whole-canvas checks, so nothing here measures."""
     _, recipe, guide, plan = painting_plan(brief_id, run, concept)
     stage = next((s for s in guide["steps"] if s["id"] == step), None)
     if stage is None:
@@ -927,41 +928,33 @@ def new_step_check(
     return start(work)
 
 
-class MixSample(BaseModel):
-    band: int
-    point: PhotoPoint
-
-
 @app.post("/api/mix-checks")
 def new_mix_check(
     brief_id: Annotated[str, Form()],
     run: Annotated[str, Form()],
     concept: Annotated[int, Form()],
     photo: Annotated[UploadFile, File()],
-    white: Annotated[str, Form()],
-    # JSON: the colors tapped in the photo, each with the band it's meant to be.
-    samples: Annotated[str, Form()],
+    # The color it's meant to be.
+    band: Annotated[int, Form()],
+    # Only when what's found in the photo was wrong: a tap on the paint, or on something white.
+    paint: Annotated[str | None, Form()] = None,
+    white: Annotated[str | None, Form()] = None,
 ) -> dict:
     """The paint in the bowl against the recipe: measured, with what to do if it's off."""
     known_concept(run_or_404(brief_id, run), concept)
     recipe = store.latest_recipe(run, concept)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
-    try:
-        tapped = [MixSample(**sample) for sample in json.loads(samples)]
-    except (ValueError, TypeError) as error:
-        raise HTTPException(422, "Tap the paint again.") from error
-    if not tapped:
-        raise HTTPException(422, "Tap at least one color.")
-    if any(not 0 <= sample.band < len(recipe["bands"]) for sample in tapped):
+    if not 0 <= band < len(recipe["bands"]):
         raise HTTPException(422, "This painting has no such color.")
-    white_px = point(white, "white paper")
+    paint_px = point(paint, "paint") if paint else None
+    white_px = point(white, "white") if white else None
     photo_data = upright_jpeg(photo)
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Reading the color…")
         image = cv2.imdecode(np.frombuffer(photo_data, np.uint8), cv2.IMREAD_COLOR)
-        found = mix_check.check(image, white_px, [{"band": s.band, "point": s.point} for s in tapped], recipe)
+        found = mix_check.check(image, band, recipe, paint_px, white_px)
         check_id = new_check_id()
         record = {"taken_at": now_iso(), "paste_in_mix": recipe["mixing"]["paste_in_mix"], **found}
         store.save_check(brief_id, check_id, run, concept, "mix", record, {"photo.jpg": photo_data})

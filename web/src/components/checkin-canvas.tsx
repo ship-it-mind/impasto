@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { LoaderCircle, TriangleAlert, Upload } from 'lucide-react'
 import { CheckInTrends } from '@/components/checkin-trends'
 import { ConceptPainting, LitPainting } from '@/components/lit-painting'
 import { usePhotoInput } from '@/components/photo-input'
@@ -107,24 +107,45 @@ type CanvasSectionProps = {
   onCheckIn: (checkin: CheckIn) => void
 }
 
-// The whole canvas measured against the plan, from a photo with white paper beside it: how much is painted, and each band's color.
+// The whole canvas measured against the plan, from a photo and nothing else: how much is painted, and each band's color.
+// The photo goes straight off. Marking it by hand is only for when the canvas or white wasn't found right.
 export function CanvasSection({ brief, set, concept, planned, seed, history, onCheckIn }: CanvasSectionProps) {
   const [W, H] = set.canvasPx
   const [picked, setPicked] = useState<CheckIn | null>(null)
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  const [marking, setMarking] = useState(false)
   const [taps, setTaps] = useState<Taps>(NO_TAPS)
-  const [target, setTarget] = useState<Target | null>('white')
+  const [target, setTarget] = useState<Target | null>(null)
   const [phase, setPhase] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const shown = picked ?? history.at(-1) ?? null
 
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
 
-  const input = usePhotoInput(file => {
+  const send = async (file: File, marks: Taps) => {
     setError(null)
+    setPhase(marks.corners.length ? 'Straightening the photo…' : 'Finding the canvas…')
+    try {
+      const result = await checkIn(brief, set, concept, seed, { photo: file, white: marks.white, corners: marks.corners, ground: marks.ground }, setPhase)
+      onCheckIn(result)
+      setPicked(result)
+      setMarking(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
+      // The canvas probably wasn't found: its corners by hand get past that.
+      setMarking(true)
+      setTarget('corners')
+    } finally {
+      setPhase(null)
+    }
+  }
+
+  const input = usePhotoInput(file => {
     setPhoto({ file, url: URL.createObjectURL(file) })
     setTaps(NO_TAPS)
-    setTarget('white')
+    setMarking(false)
+    setTarget(null)
+    send(file, NO_TAPS)
   })
 
   const tap = (p: Point) => {
@@ -142,63 +163,48 @@ export function CanvasSection({ brief, set, concept, planned, seed, history, onC
   }
 
   const cornersReady = taps.corners.length === 0 || taps.corners.length === 4
-  const ready = !!photo && !!taps.white && cornersReady && !phase
+  const ready = !!photo && cornersReady && !phase
 
-  const submit = async () => {
-    if (!photo || !taps.white) return
-    setError(null)
-    setPhase(taps.corners.length ? 'Straightening the photo…' : 'Finding the canvas…')
-    try {
-      const result = await checkIn(brief, set, concept, seed, { photo: photo.file, white: taps.white, corners: taps.corners, ground: taps.ground }, setPhase)
-      onCheckIn(result)
-      setPicked(result)
-      setPhoto(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
-    } finally {
-      setPhase(null)
-    }
-  }
-
-  const pick = (c: CheckIn) => { setPicked(c); setPhoto(null) }
+  const pick = (c: CheckIn) => { setPicked(c); setPhoto(null); setMarking(false) }
 
   return (
     <div className="flex flex-col gap-6 pb-6" aria-live="polite">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-[60ch] text-pretty text-muted-foreground">
-          Photograph the whole canvas from the same spot each time, in daylight, with white paper held flat against its edge.
+          Upload a photo of the whole canvas, taken from the same spot each time. White paper or some bare canvas in the shot makes the colors more exact.
         </p>
         {input.element}
         <Button onClick={input.open} disabled={!!phase || input.preparing} variant="outline">
-          {input.preparing ? <LoaderCircle className="animate-spin" /> : <Camera />} {photo ? 'Another photo' : 'New check-in'}
+          {phase || input.preparing ? <LoaderCircle className="animate-spin" /> : <Upload />} {phase ?? 'Upload a photo'}
         </Button>
       </div>
 
       {(error || input.error) && <p role="alert" className="text-destructive">{error ?? input.error}</p>}
 
-      {photo && (
+      {photo && marking && (
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
           <PhotoStage url={photo.url} alt="The canvas photo" taps={taps} target={phase ? null : target} onTap={tap} />
           <div className="flex flex-col gap-4">
             <ol className="-mx-2.5 flex flex-col gap-1">
               <TapStep
-                label="White paper"
-                hint="Tap the paper by the canvas. Colors are corrected against it."
-                done={!!taps.white}
-                active={target === 'white'}
-                onPick={() => setTarget('white')}
-                onClear={() => { setTaps(t => ({ ...t, white: null })); setTarget('white') }}
-              />
-              <TapStep
                 label="Corners"
                 hint={taps.corners.length && taps.corners.length < 4
                   ? `${taps.corners.length} of 4 tapped.`
-                  : 'Found automatically. Tap all 4 if they come out wrong.'}
+                  : 'Tap all 4 if they came out wrong.'}
                 optional
                 done={taps.corners.length > 0}
                 active={target === 'corners'}
                 onPick={() => { setTarget('corners'); if (taps.corners.length === 4) setTaps(t => ({ ...t, corners: [] })) }}
                 onClear={() => { setTaps(t => ({ ...t, corners: [] })); setTarget('corners') }}
+              />
+              <TapStep
+                label="White"
+                hint="Tap something white if the colors came out wrong."
+                optional
+                done={!!taps.white}
+                active={target === 'white'}
+                onPick={() => setTarget('white')}
+                onClear={() => { setTaps(t => ({ ...t, white: null })); setTarget('white') }}
               />
               <TapStep
                 label="Bare canvas"
@@ -210,16 +216,20 @@ export function CanvasSection({ brief, set, concept, planned, seed, history, onC
                 onClear={() => { setTaps(t => ({ ...t, ground: null })); setTarget('ground') }}
               />
             </ol>
-            <Button onClick={submit} disabled={!ready} className="self-start">
+            <Button onClick={() => photo && send(photo.file, taps)} disabled={!ready} className="self-start">
               {phase ? <><LoaderCircle className="animate-spin" /> {phase}</> : 'Check in'}
             </Button>
-            {!taps.white && <p className="text-xs text-muted-foreground">Tap the white paper first.</p>}
             {!cornersReady && <p className="text-xs text-muted-foreground">Tap all 4 corners, or redo to find them automatically.</p>}
           </div>
         </div>
       )}
 
-      {!photo && shown && <Result checkin={shown} plan={{ concept: planned, seed, size: [W, H] }} />}
+      {!marking && shown && !phase && <Result checkin={shown} plan={{ concept: planned, seed, size: [W, H] }} />}
+      {!marking && photo && !phase && (
+        <Button variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground" onClick={() => setMarking(true)}>
+          Didn't read it right? Mark the photo yourself
+        </Button>
+      )}
 
       {history.length > 0 && (
         <div className="grid gap-8 border-t pt-5 md:grid-cols-2">

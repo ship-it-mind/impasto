@@ -1,7 +1,7 @@
 """Progress check-ins: a mid-way photo of the canvas against the plan → coverage and color drift per band.
 
     uv run python -m impasto.checkin photo.jpg --concept output/concepts/x/concept-1.json \
-        --size 100x75 --white 1300,700 --corners 20,60 1170,45 1185,1480 95,1495
+        --size 100x75 --corners 20,60 1170,45 1185,1480 95,1495
 
 The plan is the concept spec the artist chose: its band map (which band each
 part of the canvas belongs to) comes from the same geometry the relief preview
@@ -11,9 +11,10 @@ it matches what she saw. --seed defaults to N in concept-N.json, as the app and
 instead, e.g. one taken from a photo of a piece that had no concept.
 
 The photo is rectified and white-balanced as in impasto.rectify (corners are
-found by SAM unless --corners gives them). The white reference is required:
-without it, bare canvas under warm light reads as paint and every band seems
-to drift. A pixel counts as painted when it
+found by SAM unless --corners gives them). White is the brightest near-neutral
+part of the photo (paper, bare canvas), or the point --white gives. With nothing
+white in the photo the colors stand as the camera saw them, and it says so: bare
+canvas under warm light can then read as paint. A pixel counts as painted when it
 is clearly off the bare ground's color, or a bit off it and textured; the
 ground is primed white unless --ground X,Y points at bare canvas in the photo.
 Per band: coverage = painted / planned area, and color drift = CIEDE2000
@@ -51,9 +52,10 @@ from impasto.concepts import canvas_px
 from impasto.meta import REPO_ROOT
 from impasto.mixing import MIN_GAIN_DE, PLACEHOLDER_INVENTORY, without
 from impasto.rectify import (
-    DEFAULT_PX_PER_CM, TARGET_WHITE, detect_corners, linear_to_srgb, parse_point, parse_size,
-    photo_to_canvas, rectify, srgb_to_linear,
+    AS_SEEN, DEFAULT_PX_PER_CM, TARGET_WHITE, apply_white_balance, detect_corners, linear_to_srgb, parse_point,
+    parse_size, photo_to_canvas, rectify, srgb_to_linear,
 )
+from impasto.scene import regions, white_spot, whitest
 
 BANDMAP = REPO_ROOT / "web" / "relief" / "bandmap.ts"
 # Painted: this far (ΔE76) from the ground, or half as far and textured (paste ridges),
@@ -86,6 +88,10 @@ NO_BAND = 255
 MAX_OUTSIDE = 0.01
 # Primed canvas, as it reads after white balance against paper.
 WHITE_GROUND_LAB = rgb_to_lab((TARGET_WHITE,) * 3)
+NO_WHITE = (
+    "Nothing white in the photo to correct the light against, so colors are as the camera saw them, "
+    "and bare canvas may count as painted. White paper or some bare canvas in the shot makes it more exact."
+)
 
 
 @dataclass
@@ -337,7 +343,7 @@ async def check_in(
     photo: Path,
     concept_path: Path,
     size: tuple[float, float],
-    white: tuple[float, float],
+    white: tuple[float, float] | None,
     out: Path,
     *,
     corners: list[tuple[float, float]] | None = None,
@@ -361,8 +367,13 @@ async def check_in(
         corners_px, source = np.array(corners, dtype=np.float32), "manual"
     else:
         corners_px, source = await detect_corners(photo, (width, height)), "auto"
+    if white is None and (reference := whitest(regions(image))) is not None:
+        white = white_spot(reference, image)
     warped, info = rectify(image, corners_px, size, px_per_cm, source, white)
     warnings = list(info.warnings)
+    if white is None:
+        warped = apply_white_balance(warped, AS_SEEN)
+        warnings.append(NO_WHITE)
     if ground:
         (ground_px,) = photo_to_canvas([ground], info.homography)
         ground_lab = sample_ground(warped, ground_px)
@@ -429,8 +440,8 @@ async def main() -> None:
     parser.add_argument("--size", type=parse_size, required=True, help="canvas WIDTHxHEIGHT in cm")
     parser.add_argument("--corners", type=parse_point, nargs=4, metavar="X,Y",
                         help="canvas corners in photo pixels; skips automatic detection")
-    parser.add_argument("--white", type=parse_point, metavar="X,Y", required=True,
-                        help="a point on something white in the photo (paper beside the canvas), for color correction")
+    parser.add_argument("--white", type=parse_point, metavar="X,Y",
+                        help="a point on something white in the photo, for color correction (default: found in the photo)")
     parser.add_argument("--ground", type=parse_point, metavar="X,Y",
                         help="a point on bare canvas in the photo (default: primed white)")
     parser.add_argument("--without", action="append", default=[], metavar="TUBE",

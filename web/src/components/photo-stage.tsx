@@ -44,7 +44,7 @@ export function PhotoStage({ url, alt, taps, dots = [], target, onTap }: { url: 
     onTap([Math.round(((e.clientX - r.left) / r.width) * el.naturalWidth), Math.round(((e.clientY - r.top) / r.height) * el.naturalHeight)])
   }
   const marks: [Point, Target, string][] = [
-    ...(taps.white ? [[taps.white, 'white', 'White paper'] as [Point, Target, string]] : []),
+    ...(taps.white ? [[taps.white, 'white', 'White'] as [Point, Target, string]] : []),
     ...taps.corners.map((c, i) => [c, 'corners', `Corner ${i + 1}`] as [Point, Target, string]),
     ...(taps.ground ? [[taps.ground, 'ground', 'Bare canvas'] as [Point, Target, string]] : []),
   ]

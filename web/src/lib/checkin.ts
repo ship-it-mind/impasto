@@ -26,8 +26,8 @@ export type CheckIn = {
   images: { progress: string; rectified: string }
 }
 
-// Points tapped on the photo, in its own pixels. Without corners, SAM finds the canvas.
-export type CheckInInput = { photo: File; white: Point; corners: Point[]; ground: Point | null }
+// Points tapped on the photo, in its own pixels, all optional: SAM finds the canvas, and white is found in the photo.
+export type CheckInInput = { photo: File; white: Point | null; corners: Point[]; ground: Point | null }
 
 // Same thresholds as DONE and MIN_STARTED in backend/impasto/checkin.py.
 export const DONE = 0.95

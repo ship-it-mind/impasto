@@ -3,7 +3,7 @@
 Both work from the plan as it stands: the recipe's numbers, the guide's stages and
 what the check-ins have measured. Spark does not judge exact color from a step's
 photo, since the light in it shifts every color: the mix check and the whole-canvas
-check-in measure color against white paper, and Spark passes on what they found.
+check-in measure color, and Spark passes on what they found.
 """
 
 from __future__ import annotations
@@ -64,8 +64,8 @@ easel with paint on their hands: answer the question first, in a few short sente
 needed. Write plain text with no markdown. If the guide's wording didn't help, say it another way rather than repeating it.
 
 Every amount and mix below is computed: use them as they are, and don't make up other numbers. Don't judge exact color
-from a photo, since the light shifts it; point to the Color mixes or Whole canvas check, which measure it against white
-paper. If you don't know something about this painting, say so. If they want the painting itself changed, that's the chat
+from a photo, since the light shifts it; point to the Color mixes or Whole canvas check, which measure it.
+If you don't know something about this painting, say so. If they want the painting itself changed, that's the chat
 on the Concepts screen.
 
 The plan:

@@ -230,7 +230,7 @@ export function checkIn(
   form.append('concept', String(concept.index))
   form.append('seed', String(seed))
   form.append('photo', input.photo)
-  form.append('white', input.white.join(','))
+  if (input.white) form.append('white', input.white.join(','))
   input.corners.forEach(c => form.append('corners', c.join(',')))
   if (input.ground) form.append('ground', input.ground.join(','))
   return poll(request('/checkins', { method: 'POST', body: form }), onPhase)
@@ -265,11 +265,12 @@ export function checkStep(result: BriefResult, set: ConceptSet, concept: Concept
   return poll(request('/step-checks', { method: 'POST', body: form }), onPhase)
 }
 
-// The paint in the bowl, measured against the recipe: white paper and one tap per color, in the photo's own pixels.
-export function checkMixes(result: BriefResult, set: ConceptSet, concept: Concept, photo: File, white: Point, samples: { band: number; point: Point }[], onPhase?: (phase: string) => void): Promise<MixCheck> {
+// The paint in the bowl, measured against the recipe. Paint and white are found in the photo; marks, in its own pixels, override them.
+export function checkMix(result: BriefResult, set: ConceptSet, concept: Concept, photo: File, band: number, marks: { paint?: Point; white?: Point }, onPhase?: (phase: string) => void): Promise<MixCheck> {
   const form = checkForm(result, set, concept, photo)
-  form.append('white', white.join(','))
-  form.append('samples', JSON.stringify(samples))
+  form.append('band', String(band))
+  if (marks.paint) form.append('paint', marks.paint.join(','))
+  if (marks.white) form.append('white', marks.white.join(','))
   return poll(request('/mix-checks', { method: 'POST', body: form }), onPhase)
 }
 

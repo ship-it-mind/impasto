@@ -1,5 +1,7 @@
 // What the check-ins screen keeps besides whole-canvas check-ins (backend/impasto/api.py).
 
+import type { Point } from '@/lib/checkin'
+
 export type Verdict = 'on_track' | 'needs_work' | 'unclear'
 
 // Spark's look at a photo of one step of the guide.
@@ -14,7 +16,7 @@ export type StepCheck = {
 
 export type MixState = 'match' | 'close' | 'off'
 
-// One color tapped in a photo of the bowl, measured against its band's mix.
+// One color in a photo of the bowl, measured against its band's mix.
 export type MixResult = {
   band: number
   name: string
@@ -25,9 +27,11 @@ export type MixResult = {
   drift: string | null
   advice: string[]
   warnings: string[]
+  // Where it was read, in the photo's own pixels. Checks from before paint was found automatically don't have it.
+  point?: Point
 }
 
-export type MixCheck = { id: string; taken_at: string; paste_in_mix: boolean; results: MixResult[]; warnings: string[]; photo: string }
+export type MixCheck = { id: string; taken_at: string; paste_in_mix: boolean; results: MixResult[]; white?: Point | null; warnings: string[]; photo: string }
 
 export type Asked = { question: string; answer: string; asked_at: string; section: string | null }
 

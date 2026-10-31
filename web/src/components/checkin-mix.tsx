@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Camera, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { LoaderCircle, TriangleAlert, Upload } from 'lucide-react'
 import { usePhotoInput } from '@/components/photo-input'
-import { PhotoStage, TapStep, NO_TAPS } from '@/components/photo-stage'
+import { PhotoStage, NO_TAPS } from '@/components/photo-stage'
 import { Button } from '@/components/ui/button'
-import { checkMixes, type ConceptSet } from '@/lib/api'
+import { checkMix, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import { when, type Point } from '@/lib/checkin'
 import { latestMixes, type MixCheck, type MixResult, type MixState } from '@/lib/checks'
@@ -51,47 +51,34 @@ type MixSectionProps = {
   onCheck: (check: MixCheck) => void
 }
 
-// The paint in the bowl against the recipe: white paper, then a tap on each color in the photo.
+// The paint in the bowl against the recipe: a photo, which color it should be, and the answer. Paint and white are
+// found in the photo; tapping it only corrects what was found.
 export function MixSection({ brief, set, concept, recipe, checks, focus, onCheck }: MixSectionProps) {
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  const [band, setBand] = useState<number | null>(null)
+  // Asked for from a step: the next photo is of this color, so it needn't ask.
+  const [asked, setAsked] = useState<number | null>(null)
+  // This photo's readings, and the marks that corrected them.
+  const [readings, setReadings] = useState<Map<number, MixCheck>>(new Map())
+  const [taps, setTaps] = useState<Map<number, Point>>(new Map())
   const [white, setWhite] = useState<Point | null>(null)
-  const [samples, setSamples] = useState<Map<number, Point>>(new Map())
-  const [band, setBand] = useState(0)
-  const [target, setTarget] = useState<'white' | 'paint' | null>(null)
+  const [movingWhite, setMovingWhite] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latest = useMemo(() => latestMixes(checks), [checks])
   const tinted = recipe.mixing.paste_in_mix
 
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
-  useEffect(() => { if (focus) setBand(focus.band) }, [focus])
+  useEffect(() => { if (focus) setAsked(focus.band) }, [focus])
 
-  const input = usePhotoInput(file => {
+  const read = async (file: File, which: number, marks: { paint?: Point; white?: Point }) => {
     setError(null)
-    setPhoto({ file, url: URL.createObjectURL(file) })
-    setWhite(null)
-    setSamples(new Map())
-    setTarget('white')
-  })
-
-  const tap = (p: Point) => {
-    if (target === 'white') {
-      setWhite(p)
-      setTarget(samples.has(band) ? null : 'paint')
-    } else if (target === 'paint') {
-      setSamples(s => new Map(s).set(band, p))
-      setTarget(white ? null : 'white')
-    }
-  }
-
-  const submit = async () => {
-    if (!photo || !white || samples.size === 0) return
-    setError(null)
+    setBand(which)
     setPhase('Reading the color…')
     try {
-      const check = await checkMixes(brief, set, concept, photo.file, white, [...samples].map(([b, point]) => ({ band: b, point })), setPhase)
+      const check = await checkMix(brief, set, concept, file, which, marks, setPhase)
       onCheck(check)
-      setPhoto(null)
+      setReadings(r => new Map(r).set(which, check))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
     } finally {
@@ -99,59 +86,100 @@ export function MixSection({ brief, set, concept, recipe, checks, focus, onCheck
     }
   }
 
-  const dots = [...samples].map(([b, point]) => ({ point, color: recipe.bands[b].mix_hex, label: recipe.bands[b].name }))
-  const ready = !!photo && !!white && samples.size > 0 && !phase
+  const input = usePhotoInput(file => {
+    setError(null)
+    setPhoto({ file, url: URL.createObjectURL(file) })
+    setBand(null)
+    setReadings(new Map())
+    setTaps(new Map())
+    setWhite(null)
+    setMovingWhite(false)
+    if (asked !== null) {
+      setAsked(null)
+      read(file, asked, {})
+    }
+  })
+
+  const marksFor = (which: number, newWhite = white) => ({ paint: taps.get(which), white: newWhite ?? undefined })
+
+  const tap = (p: Point) => {
+    if (!photo || band === null) return
+    if (movingWhite) {
+      setWhite(p)
+      setMovingWhite(false)
+      read(photo.file, band, marksFor(band, p))
+    } else {
+      setTaps(t => new Map(t).set(band, p))
+      read(photo.file, band, { ...marksFor(band), paint: p })
+    }
+  }
+
+  const shown = band !== null ? readings.get(band) : undefined
+  const result = shown?.results[0]
+  const dots = [...readings].flatMap(([b, check]) => {
+    const point = check.results[0]?.point
+    return point ? [{ point, color: recipe.bands[b].mix_hex, label: recipe.bands[b].name }] : []
+  })
 
   return (
     <div className="flex flex-col gap-5 pb-6" aria-live="polite">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-[60ch] text-pretty text-muted-foreground">
-          Photograph the {tinted ? 'tinted paste, with the paste already mixed in,' : 'paint'} in the bowl, in daylight, with a sheet of white paper beside it in the same light. Several bowls can go in one photo. Acrylic dries a little darker than it looks wet.
+          Upload a photo of the {tinted ? 'tinted paste, with the paste already mixed in,' : 'paint'} and pick the color it should be. Anything white in the shot, like a rag or paper, makes the reading more exact. Acrylic dries a little darker than it looks wet.
         </p>
         {input.element}
         <Button variant="outline" onClick={input.open} disabled={input.preparing || !!phase}>
-          {input.preparing ? <LoaderCircle className="animate-spin" /> : <Camera />} {photo ? 'Another photo' : 'Check a mix'}
+          {input.preparing ? <LoaderCircle className="animate-spin" /> : <Upload />} {photo ? 'Another photo' : 'Upload a photo'}
         </Button>
       </div>
       {(error || input.error) && <p role="alert" className="text-destructive">{error ?? input.error}</p>}
 
       {photo && (
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
-          <PhotoStage url={photo.url} alt="The paint in the bowl" taps={{ ...NO_TAPS, white }} dots={dots} target={phase ? null : target} onTap={tap} />
-          <div className="flex flex-col gap-3">
-            <ol className="-mx-2.5 flex flex-col gap-1">
-              <TapStep
-                label="White paper"
-                hint="Tap the paper. Colors are corrected against it."
-                done={!!white}
-                active={target === 'white'}
-                onPick={() => setTarget('white')}
-                onClear={() => { setWhite(null); setTarget('white') }}
-              />
-            </ol>
+        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_280px]">
+          <PhotoStage
+            url={photo.url}
+            alt="The paint in the bowl"
+            taps={{ ...NO_TAPS, white: shown?.white ?? null }}
+            dots={dots}
+            target={phase || band === null ? null : movingWhite ? 'white' : 'paint'}
+            onTap={tap}
+          />
+          <div className="flex flex-col gap-4">
             <fieldset className="flex flex-col gap-1">
-              <legend className="pb-1 text-xs font-medium text-muted-foreground">Which color? Pick it, then tap it in the photo</legend>
+              <legend className="pb-1 text-xs font-medium text-muted-foreground">Which color should it be?</legend>
               {recipe.bands.map((b, i) => (
                 <button
                   key={b.name}
                   type="button"
-                  aria-pressed={band === i && target === 'paint'}
-                  onClick={() => { setBand(i); setTarget('paint') }}
+                  aria-pressed={band === i}
+                  disabled={!!phase}
+                  onClick={() => { setMovingWhite(false); read(photo.file, i, marksFor(i)) }}
                   className={cn(
-                    'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150 ease-out hover:bg-muted/60',
-                    band === i && target === 'paint' && 'bg-background shadow-[0_0_0_1px_rgb(0_0_0/0.08)]',
+                    'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150 ease-out hover:bg-muted/60 disabled:pointer-events-none',
+                    band === i && 'bg-background shadow-[0_0_0_1px_rgb(0_0_0/0.08)]',
                   )}
                 >
                   <span aria-hidden className="size-4 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1)]" style={{ background: b.mix_hex }} />
                   <span className="min-w-0 flex-1 truncate capitalize">{b.name}</span>
-                  {samples.has(i) && <span className="text-xs text-muted-foreground">Tapped</span>}
+                  {band === i && phase && <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />}
+                  {readings.has(i) && !(band === i && phase) && <span className="text-xs text-muted-foreground">Checked</span>}
                 </button>
               ))}
             </fieldset>
-            <Button onClick={submit} disabled={!ready} className="self-start">
-              {phase ? <><LoaderCircle className="animate-spin" /> {phase}</> : samples.size > 1 ? `Check ${samples.size} colors` : 'Check the color'}
-            </Button>
-            {!white && <p className="text-xs text-muted-foreground">The paper is needed: without it, the room's light would read as the paint's color.</p>}
+            {phase && <p className="text-muted-foreground">{phase}</p>}
+            {shown && result && !phase && (
+              <div className="flex flex-col gap-3 border-t pt-3">
+                <MixReading result={result} warnings={shown.warnings} takenAt={shown.taken_at} />
+                <p className="text-xs text-pretty text-muted-foreground">
+                  {movingWhite
+                    ? 'Tap something white in the photo.'
+                    : <>Read at the {shown.white ? 'colored dot, with the white dot as white' : 'dot'}. Wrong spot? Tap the paint.</>}
+                </p>
+                <Button variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground" onClick={() => setMovingWhite(m => !m)}>
+                  {movingWhite ? 'Cancel' : shown.white ? 'Pick another white' : 'Pick something white'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
