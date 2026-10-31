@@ -279,7 +279,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
         <div className="flex flex-wrap items-center gap-1">
           <DictateButton onText={dictated} onBusy={setDictating} />
           <Button type="button" variant="ghost" onClick={() => wallInput.current?.click()}><Frame /> Wall photo</Button>
-          <Button type="button" variant="ghost" onClick={() => refsInput.current?.click()}><Images /> Pictures</Button>
+          <Button type="button" variant="ghost" onClick={() => refsInput.current?.click()}><Images /> References</Button>
           <Button type="submit" size="icon-lg" aria-label="Read the brief" disabled={!canRead} className="ml-auto rounded-full">
             {phase ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
           </Button>
@@ -302,7 +302,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
       </form>
       {!result && !phase && (
         <p className="-mt-4 text-center text-xs text-muted-foreground">
-          Enter to read it. Add pictures to steer the look, or say to paint one exactly as it is.
+          Enter to read it. Add references to steer the look, or say to paint one exactly as it is.
         </p>
       )}
 
@@ -344,7 +344,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             {refsOff > 0 && settledSize && (
               <p role="status" className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-pretty text-amber-950">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {refsOff === 1 && refs.length === 1 ? 'This style picture is' : refsOff === refs.length ? 'These style pictures are' : `${refsOff} of the style pictures are`} a very different shape from a {settledSize.w} × {settledSize.h} cm canvas, so they don't match. Try uploading another, or change the size. You can still make concepts with {refsOff === 1 ? 'it' : 'them'}.
+                {refsOff === 1 && refs.length === 1 ? 'This reference is' : refsOff === refs.length ? 'These references are' : `${refsOff} of the references are`} a very different shape from a {settledSize.w} × {settledSize.h} cm canvas, so they don't match. Try uploading another, or change the size. You can still make concepts with {refsOff === 1 ? 'it' : 'them'}.
               </p>
             )}
             <div className="flex items-center gap-3">
@@ -356,10 +356,10 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
                 {!settledSize
                   ? 'Give the width and height first'
                   : asIs && !exact
-                    ? 'The brief asks to paint a picture as it is. Add it with Pictures above.'
+                    ? 'The brief asks to paint a picture as it is. Add it with References above.'
                   : sizeChanged && madeSize
                     ? `The concepts on show are for ${madeSize.w} × ${madeSize.h} cm. New ones are needed at this size.`
-                    : exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} picture${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
+                    : exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} reference${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
               </span>
             </div>
           </article>
