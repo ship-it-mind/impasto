@@ -166,15 +166,6 @@ function ThreeGuessCard({ slot, children }: { slot?: string; children: ReactNode
   )
 }
 
-function ClientBubble() {
-  const f = useCurrentFrame()
-  return (
-    <div style={{ alignSelf: 'flex-start', marginTop: 34, font: `400 36px/1.3 ${SANS}`, color: INK, background: '#fff', padding: '18px 26px', borderRadius: '24px 24px 24px 6px', opacity: interpolate(f, [22, 32], [0, 1], clamp), transform: `translateY(${interpolate(f, [22, 36], [10, 0], { ...clamp, easing: out })}px)` }}>
-      Can you show me how it'll look on my wall?
-    </div>
-  )
-}
-
 function GitLog() {
   const f = useCurrentFrame()
   const row = 46
@@ -357,7 +348,7 @@ export function Demo() {
       <At from={6} to={11} fade={10}><WallStill /></At>
 
       {/* Three guesses */}
-      <At from={11} to={14}><ThreeGuessCard><Big>Will the client like it?</Big><ClientBubble /></ThreeGuessCard></At>
+      <At from={11} to={14}><ThreeGuessCard><Big>Will it work on that wall?</Big></ThreeGuessCard></At>
       <At from={14} to={16.8}><ThreeGuessCard slot="tubes"><Big style={{ opacity: 1 }}>Which colors do I mix?</Big></ThreeGuessCard></At>
       <At from={16.8} to={19.6}><ThreeGuessCard slot="pot"><Big style={{ opacity: 1 }}>How much paint will it take?</Big></ThreeGuessCard></At>
       <At from={19.6} to={25}><GitLog /></At>
