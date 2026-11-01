@@ -387,6 +387,20 @@ def exact_picture(upload: UploadFile) -> bytes:
         raise HTTPException(415, f"{upload.filename}: couldn't read this picture.") from error
 
 
+@api.post("/api/images/painting")
+def find_painting(user: CurrentUser, picture: Annotated[UploadFile, File()]) -> dict:
+    """Where the painting is in a picture to paint, so only it gets planned. Corners are in the pixels a browser shows."""
+    data = exact_picture(picture)
+    size = photo_size(data)
+
+    def work(phase: Callable[[str], None]) -> dict:
+        with scratch({"exact.jpg": data}) as folder:
+            phase("Looking for the painting…")
+            return {"corners": asyncio.run(exact_pictures.find_painting(folder / "exact.jpg", size))}
+
+    return start(user, work)
+
+
 def exact_work(
     brief_id: str, run: str, record: dict, wall_mockup: dict | None, picture: bytes, corners: list[tuple[float, float]], without_tubes: list[str], paste_in_mix: bool,
 ) -> Callable[[Callable[[str], None]], dict]:

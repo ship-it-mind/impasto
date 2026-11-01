@@ -4,9 +4,9 @@
 
 A style picture only steers new concepts. An exact picture is the concept: its
 colors and shapes are measured here, and no image is generated. It is first cut
-to the canvas: straightened from the painting's four corners when the painter
-marks them (a photo of a painting shows the floor around it too), otherwise
-center-cropped to the canvas's shape. Its colors are then clustered, with shades
+to the canvas: straightened from the painting's four corners (a photo of a
+painting shows the floor or a plant around it too), which SAM finds and the
+painter can redo, otherwise center-cropped to the canvas's shape. Its colors are then clustered, with shades
 close enough to be one paint (knife ridges and their shadows, above all) merged
 into one, up to MAX_COLORS. impasto.layout maps them, as it does Muse's
 paintings. Muse Spark only puts words on what was measured: each color's name,
@@ -30,7 +30,8 @@ from impasto import layout as layouts
 from impasto.color import hex_to_rgb, rgb_to_hex, rgb_to_lab
 from impasto.concepts import ALL_FLOWS, MODEL, canvas_px, strict_object
 from impasto.meta import client, data_url
-from impasto.rectify import order_corners, rectify
+from impasto.rectify import order_corners, quad_from_mask, rectify
+from impasto.sam import masks_by_object, segment
 from impasto.volume import LEVELS
 
 MAX_COLORS = 8
@@ -45,6 +46,10 @@ MIN_SHARE = 0.005
 NOTABLE_CROP = 0.02
 # Fitting the picture would cut off more than this share of it: it and the canvas don't match.
 MAX_SHAPE_CROP = 0.15
+# A painting found on less of the picture than this is more likely a detail than the painting.
+MIN_PAINTING_SHARE = 0.1
+# A painting found on more of the picture than this fills it: there's nothing around it to cut away.
+FILLS_PICTURE_SHARE = 0.97
 # Not a regular flow: the colors sit wherever the picture has them.
 FREEFORM = "freeform"
 IMAGE = "concept-1-exact.png"
@@ -187,6 +192,19 @@ def shape_problem(picture_ratio: float, width_cm: float, height_cm: float) -> st
         return None
     return (f"This picture is much {'wider' if ratio > 1 else 'taller'} than a {width_cm:g} × {height_cm:g} cm canvas, "
             "so they don't match. Try uploading another picture, or change the size.")
+
+
+async def find_painting(path: Path, size: tuple[int, int]) -> list[tuple[float, float]] | None:
+    """The corners of the painting in this picture, in its pixels. None if there's nothing to cut away, or no clear painting."""
+    masks = masks_by_object(await segment(path, "painting"), size)
+    if not masks:
+        return None
+    # The biggest one: SAM can also pick out a second picture on the wall, or a patch of the same one.
+    quad = quad_from_mask(max(masks.values(), key=np.sum))
+    share = cv2.contourArea(quad) / (size[0] * size[1])
+    if not MIN_PAINTING_SHARE <= share <= FILLS_PICTURE_SHARE:
+        return None
+    return [(float(x), float(y)) for x, y in quad]
 
 
 def corners_ratio(corners: list[tuple[float, float]]) -> float:
