@@ -3,10 +3,12 @@
     uv run python -m impasto.exact picture.jpg --size 1000x750 --out folder
 
 A style picture only steers new concepts. An exact picture is the concept: its
-colors and shapes are measured here, and no image is generated. It is first cut
-to the canvas: straightened from the painting's four corners (a photo of a
-painting shows the floor or a plant around it too), which SAM finds and the
-painter can redo, otherwise center-cropped to the canvas's shape. Its colors are then clustered, with shades
+colors and shapes are measured here. It is first cut to the canvas: straightened
+from the painting's four corners (a photo of a painting shows the floor or a
+plant around it too), which SAM finds and the painter can redo, otherwise
+center-cropped to the canvas's shape. Muse Image then cleans it, taking out what's
+still in front of the painting and the light falling on it, and changing nothing
+else. If it can't, the picture is used as cut, with a note. Its colors are then clustered, with shades
 close enough to be one paint (knife ridges and their shadows, above all) merged
 into one, up to MAX_COLORS. impasto.layout maps them, as it does Muse's
 paintings. Muse Spark only puts words on what was measured: each color's name,
@@ -21,18 +23,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
 import numpy as np
+from openai import OpenAIError
 
 from impasto import layout as layouts
 from impasto.color import hex_to_rgb, rgb_to_hex, rgb_to_lab
-from impasto.concepts import ALL_FLOWS, MODEL, canvas_px, strict_object
+from impasto.concepts import ALL_FLOWS, MODEL, canvas_px, paint_one, strict_object
 from impasto.meta import client, data_url
 from impasto.rectify import order_corners, quad_from_mask, rectify
 from impasto.sam import masks_by_object, segment
 from impasto.volume import LEVELS
+
+log = logging.getLogger(__name__)
 
 MAX_COLORS = 8
 # Color groups to start from, before merging down.
@@ -54,6 +61,14 @@ FILLS_PICTURE_SHARE = 0.97
 FREEFORM = "freeform"
 IMAGE = "concept-1-exact.png"
 MAP = "concept-1-layout.png"
+
+CLEAN_PROMPT = """This is a photo of a palette-knife / impasto painting, already cut to the painting. Return the same painting, clean:
+- Take out anything that isn't part of the painting, such as a plant, an object or the wall, and continue the painting's shapes and paste where it covered them.
+- Take out shadows and patches of light falling on it from the room, so its colors are even.
+- Change nothing else. Keep the composition, every shape's position and edge, the colors, the knife strokes and the paste exactly as they are. Don't add, restyle or improve anything.
+It's seen straight on and fills the frame edge to edge, with no frame, wall or border."""
+CLEANED_NOTE = "Muse Image cleaned this picture, and the plan is read off its version."
+NOT_CLEANED_NOTE = "Muse Image couldn't clean this picture, so the plan is read off it as it is, with anything in front of the painting."
 
 PROMPT = """You are the studio assistant of a palette-knife / impasto painter, who is going to paint the attached
 picture as it is. Its colors have already been measured, listed below with the share of the canvas each covers and
@@ -254,7 +269,22 @@ def plan_picture(image: np.ndarray, size: tuple[int, int], folder: Path, image_n
     return concept
 
 
-def draft(brief: dict | None, path: Path, folder: Path, corners: list[tuple[float, float]] | None = None) -> dict:
+def clean(image: np.ndarray, size: tuple[int, int], folder: Path) -> tuple[np.ndarray, str]:
+    """Muse Image's clean version of a picture already cut to the canvas, and a note saying what happened."""
+    source = folder / "exact-cut.png"
+    cv2.imwrite(str(source), image)
+    try:
+        return layouts.crop_to(paint_one(CLEAN_PROMPT, [source]), size), CLEANED_NOTE
+    except (RuntimeError, OpenAIError):
+        log.exception("Couldn't clean an exact picture")
+        return image, NOT_CLEANED_NOTE
+    finally:
+        source.unlink()
+
+
+def draft(
+    brief: dict | None, path: Path, folder: Path, corners: list[tuple[float, float]] | None = None, phase: Callable[[str], None] = lambda _: None,
+) -> dict:
     """The one concept for this picture, in the shape concepts.draft and concepts.paint leave theirs."""
     picture = cv2.imread(str(path))
     if picture is None:
@@ -267,7 +297,10 @@ def draft(brief: dict | None, path: Path, folder: Path, corners: list[tuple[floa
     else:
         image = layouts.crop_to(picture, size)
         notes.append(crop_note(picture, size))
-    concept = plan_picture(image, size, folder, IMAGE, MAP, notes)
+    phase("Cleaning the picture with Muse Image…")
+    image, cleaned = clean(image, size, folder)
+    phase("Reading the colors off the picture…")
+    concept = plan_picture(image, size, folder, IMAGE, MAP, [cleaned, *notes])
     return {
         "style": {"preset": None, "references": [], "exact": path.name},
         "canvas_px": list(size), "prompt": concept["layout"]["prompt"], "concepts": [concept],

@@ -384,7 +384,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
                     ? 'The brief asks to paint a picture as it is. Add it with References above.'
                   : sizeChanged && madeSize
                     ? `The concepts on show are for ${madeSize.w} × ${madeSize.h} cm. New ones are needed at this size.`
-                    : exact ? 'Painted as it is, no new concepts' : `Style: ${refs.length ? `${refs.length} reference${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
+                    : exact ? 'Muse Image cleans it, then it\'s planned as it is. No new concepts.' : `Style: ${refs.length ? `${refs.length} reference${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
               </span>
             </div>
           </article>

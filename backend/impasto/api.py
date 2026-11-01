@@ -404,12 +404,11 @@ def find_painting(user: CurrentUser, picture: Annotated[UploadFile, File()]) -> 
 def exact_work(
     brief_id: str, run: str, record: dict, wall_mockup: dict | None, picture: bytes, corners: list[tuple[float, float]], without_tubes: list[str], paste_in_mix: bool,
 ) -> Callable[[Callable[[str], None]], dict]:
-    """The one concept an exact picture gives: no drafting and no painting, so one Spark call and no Muse Image."""
+    """The one concept an exact picture gives: no drafting, one Muse Image call to clean it and one Spark call to name what's measured."""
 
     def work(phase: Callable[[str], None]) -> dict:
         with scratch({"exact.jpg": picture}) as folder:
-            phase("Reading the colors off the picture…")
-            drafted = exact_pictures.draft(record["brief"], folder / "exact.jpg", folder, corners or None)
+            drafted = exact_pictures.draft(record["brief"], folder / "exact.jpg", folder, corners or None, phase)
             phase("Mixing each color from the tubes on hand…")
             concepts.mix(drafted, without_tubes, paste_in_mix)
             keep_size(brief_id, record, wall_mockup)
