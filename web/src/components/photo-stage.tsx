@@ -49,7 +49,9 @@ export function PhotoStage({ url, alt, taps, dots = [], target, onTap }: { url: 
     ...(taps.ground ? [[taps.ground, 'ground', 'Bare canvas'] as [Point, Target, string]] : []),
   ]
   return (
-    <div className="relative overflow-hidden rounded-lg bg-[oklch(0.25_0.005_80)]">
+    <div className="overflow-hidden rounded-lg bg-[oklch(0.25_0.005_80)]">
+      {/* Just the photo's size, so the marks sit on the photo even when the stage around it is bigger. */}
+      <div className="relative mx-auto w-fit">
       <img
         ref={img}
         src={url}
@@ -57,7 +59,7 @@ export function PhotoStage({ url, alt, taps, dots = [], target, onTap }: { url: 
         onLoad={e => setSize([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
         onPointerDown={tap}
         draggable={false}
-        className={cn('mx-auto block max-h-[calc(100dvh-10rem)] w-auto max-w-full select-none', target && 'cursor-crosshair')}
+        className={cn('block max-h-[calc(100dvh-10rem)] w-auto max-w-full select-none', target && 'cursor-crosshair')}
       />
       {size && marks.map(([[x, y], kind, label]) => (
         <span
@@ -85,6 +87,7 @@ export function PhotoStage({ url, alt, taps, dots = [], target, onTap }: { url: 
           />
         </svg>
       )}
+      </div>
     </div>
   )
 }
