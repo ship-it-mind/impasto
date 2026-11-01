@@ -26,6 +26,7 @@ const { positionals, values } = parseArgs({
     swirl: { type: 'string', default: String(DEFAULTS.swirl) },
     knife: { type: 'string', default: '{}' },  // JSON overrides of KNIFE, for tuning
     passes: { type: 'string', default: '[]' },  // JSON overrides per pass, for tuning
+    surface: { type: 'string' },  // also write color and height as raw Float32 (C then Hm)
   },
 });
 if (positionals.length !== 2) {
@@ -49,4 +50,8 @@ timeline.seek(timeline.T, Infinity);
 const rgba = new Uint8ClampedArray(W * H * 4);
 relight(surface, rgba, Number(values.light), Number(values.gloss));
 writeFileSync(outPath, encodePng(rgba, W, H));
+if (values.surface) {
+  // Raw color and height, for testing against a known surface (backend/spikes/relief_scan_sim.py).
+  writeFileSync(values.surface, Buffer.concat([Buffer.from(surface.C.buffer), Buffer.from(surface.Hm.buffer)]));
+}
 console.log(`${spec.title}: ${timeline.T} strokes in ${((performance.now() - started) / 1000).toFixed(1)} s → ${outPath}`);
