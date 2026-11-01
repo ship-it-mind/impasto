@@ -6,7 +6,7 @@ import { NO_TAPS, PhotoStage } from '@/components/photo-stage'
 import { PieceList } from '@/components/piece-list'
 import { PieceSize, sizeFrom, type SizeText } from '@/components/piece-size'
 import { Button } from '@/components/ui/button'
-import { getMockup, joinConcepts, makeConcepts, readBrief, saveMockup, webImage, type ConceptSet } from '@/lib/api'
+import { findPainting, getMockup, joinConcepts, makeConcepts, readBrief, saveMockup, webImage, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import type { Point } from '@/lib/checkin'
 import { useObjectUrl } from '@/lib/use-object-url'
@@ -38,8 +38,9 @@ function Thumbnail({ file, label, onRemove }: { file: File; label: string; onRem
   )
 }
 
-// The picture to paint as it is. A photo of a painting shows what's around it too, so its corners can be marked.
-function ExactPicture({ file, corners, disabled, onCorners }: { file: File; corners: Point[]; disabled: boolean; onCorners: (corners: Point[]) => void }) {
+// The picture to paint as it is. A photo of a painting shows what's around it too, so the painting is looked for
+// and its corners shown here, to clear and tap again if they're off.
+function ExactPicture({ file, corners, looking, found, disabled, onCorners }: { file: File; corners: Point[]; looking: boolean; found: boolean; disabled: boolean; onCorners: (corners: Point[]) => void }) {
   const url = useObjectUrl(file)
   const done = corners.length === 4
   return (
@@ -50,10 +51,14 @@ function ExactPicture({ file, corners, disabled, onCorners }: { file: File; corn
       </div>
       <p className="max-w-[65ch] text-xs text-pretty text-muted-foreground">
         {done
-          ? "Only what's inside these corners will be painted, straightened to the canvas."
+          ? found
+            ? "Found the painting. Only what's inside these corners will be painted, straightened to the canvas. If they're off, clear them and tap the 4 corners yourself."
+            : "Only what's inside these corners will be painted, straightened to the canvas."
           : corners.length > 0
             ? `${corners.length} of 4 corners tapped.`
-            : 'Does it show more than the painting, like a wall or floor? Tap the painting\'s 4 corners. Otherwise all of it is used, cropped to the canvas\'s shape.'}
+            : looking
+              ? 'Looking for the painting in this picture…'
+              : 'Does it show more than the painting, like a wall or a plant? Tap the painting\'s 4 corners. Otherwise all of it is used, cropped to the canvas\'s shape.'}
       </p>
       {url && (
         <PhotoStage
@@ -89,8 +94,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
   const [refs, setRefs] = useState<File[]>([])
-  // Corners tapped on a picture to paint, and which picture they're on.
-  const [marked, setMarked] = useState<{ file: File; corners: Point[] } | null>(null)
+  // The corners on a picture to paint, which picture they're on, and whether they were found rather than tapped.
+  const [marked, setMarked] = useState<{ file: File; corners: Point[]; found?: boolean } | null>(null)
+  // The picture to paint that's been looked at for its painting, and each look: one per picture, even if the brief is read again.
+  const [looked, setLooked] = useState<File | null>(null)
+  const looks = useRef(new Map<File, Promise<Point[] | null>>())
   const [converting, setConverting] = useState(0)
   const [dictating, setDictating] = useState(false)
   const [phase, setPhase] = useState<string | null>(null)
@@ -154,6 +162,23 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const asIs = !!result?.brief.paint_as_is
   const exact = asIs ? refs[0] ?? null : null
   const corners = exact && marked?.file === exact ? marked.corners : []
+  const looking = !!exact && looked !== exact && corners.length === 0
+
+  // Only the painting gets painted, so it's looked for as soon as a picture is to be painted as it is. If it can't
+  // be looked for, that's the same as not finding it: the painter is asked to tap the corners. Corners they've
+  // already tapped, or cleared, stay as they are.
+  useEffect(() => {
+    if (!exact) return
+    let stop = false
+    const look = looks.current.get(exact) ?? findPainting(exact).catch(() => null)
+    looks.current.set(exact, look)
+    look.then(found => {
+      if (stop) return
+      setLooked(exact)
+      if (found) setMarked(now => now?.file === exact ? now : { file: exact, corners: found, found: true })
+    })
+    return () => { stop = true }
+  }, [exact])
 
   // The size the concepts on show were made for, if any: changing it means making new ones.
   const madeSize = hasConcepts && result?.brief.piece.width_cm && result.brief.piece.height_cm
@@ -162,7 +187,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
   const sizeChanged = !!madeSize && (settledSize?.w !== madeSize.w || settledSize?.h !== madeSize.h)
 
   // The exact picture has to fit the canvas, or a big part of it is cut off. Style pictures only steer the look, so they get a warning.
-  const exactRatio = exact && corners.length === 4 ? cornersRatio(corners) : exact ? ratios.get(exact) : undefined
+  const exactRatio = looking ? undefined : exact && corners.length === 4 ? cornersRatio(corners) : exact ? ratios.get(exact) : undefined
   const exactOff = exactRatio && settledSize ? shapeOff(exactRatio, settledSize) : null
   const refsOff = settledSize && !exact ? refs.filter(r => { const ratio = ratios.get(r); return ratio && shapeOff(ratio, settledSize) }).length : 0
 
@@ -334,7 +359,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
               <summary className="cursor-pointer">Transcript</summary>
               <p className="mt-2 max-w-[65ch] text-pretty">{result.transcript}</p>
             </details>
-            {exact && <ExactPicture file={exact} corners={corners} disabled={!!making} onCorners={next => setMarked({ file: exact, corners: next })} />}
+            {exact && <ExactPicture file={exact} corners={corners} looking={looking} found={!!marked?.found} disabled={!!making} onCorners={next => setMarked({ file: exact, corners: next })} />}
             {exactOff && settledSize && (
               <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-pretty text-amber-950">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -349,7 +374,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             )}
             <div className="flex items-center gap-3">
               {hasConcepts && !making && <Button size="lg" variant={sizeChanged ? 'ghost' : 'default'} onClick={onShowConcepts}>See the concepts</Button>}
-              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || !settledSize || (asIs && !exact) || !!exactOff || (corners.length > 0 && corners.length < 4)}>
+              <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || looking || !settledSize || (asIs && !exact) || !!exactOff || (corners.length > 0 && corners.length < 4)}>
                 {making ? <><LoaderCircle className="animate-spin" /> {making}</> : asIs ? 'Plan this picture' : hasConcepts ? 'Make 3 new ones' : 'Make 3 concepts'}
               </Button>
               <span className="text-xs text-muted-foreground">

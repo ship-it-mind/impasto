@@ -130,6 +130,13 @@ export function makeConcepts(result: BriefResult, style: StyleInput, settled: Se
   return usableConcepts(request('/concepts', { method: 'POST', body: form }), onPhase)
 }
 
+// The painting's corners in a picture to paint, in its own pixels. null: nothing around it to cut away, or no clear painting.
+export async function findPainting(picture: File): Promise<Point[] | null> {
+  const form = new FormData()
+  form.append('picture', picture)
+  return (await poll<{ corners: Point[] | null }>(request('/images/painting', { method: 'POST', body: form }))).corners
+}
+
 // Concepts already being made for this piece, from before a reload.
 export function joinConcepts(job: string, onPhase?: (phase: string) => void): Promise<MadeConcepts> {
   return usableConcepts(Promise.resolve({ job }), onPhase)
