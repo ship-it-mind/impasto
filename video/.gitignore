@@ -1,0 +1,12 @@
+node_modules
+out
+# Footage and recordings stay out of the public repo; only the code that makes the film is kept.
+public/footage/*
+!public/footage/.gitkeep
+public/vo/*
+!public/vo/.gitkeep
+public/vo-scratch
+public/captures
+public/stills
+public/music
+src/generated
