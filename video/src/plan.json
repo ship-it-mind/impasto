@@ -1,0 +1,54 @@
+{
+ "totals": {
+  "paint_g": 6600.9,
+  "paste_g": 15437.1,
+  "area_cm2": 25400.5
+ },
+ "bands": [
+  {
+   "name": "pale stone plum",
+   "hex": "#d4c8d3",
+   "area": 8015.6,
+   "paint": 2083.1,
+   "paste": 4871.5,
+   "line": "16 parts Titanium White : 1 part Quinacridone Magenta : 2 parts Mars Black",
+   "de": 1.42
+  },
+  {
+   "name": "deep plum lobe",
+   "hex": "#5f3358",
+   "area": 3047.8,
+   "paint": 792.0,
+   "paste": 1852.3,
+   "line": "2 parts Titanium White : 5 parts Cadmium Red : 8 parts Ultramarine Blue",
+   "de": 0.0
+  },
+  {
+   "name": "plum",
+   "hex": "#964778",
+   "area": 5138.0,
+   "paint": 1335.2,
+   "paste": 3122.6,
+   "line": "5 parts Titanium White : 4 parts Quinacridone Magenta : 5 parts Mars Black",
+   "de": 4.83
+  },
+  {
+   "name": "dusty taupe plum",
+   "hex": "#a88ca2",
+   "area": 5425.0,
+   "paint": 1409.8,
+   "paste": 3297.0,
+   "line": "7 parts Titanium White : 1 part Quinacridone Magenta : 4 parts Mars Black",
+   "de": 0.76
+  },
+  {
+   "name": "dark plum pit",
+   "hex": "#382036",
+   "area": 3774.1,
+   "paint": 980.8,
+   "paste": 2293.7,
+   "line": "3 parts Burnt Sienna : 1 part Quinacridone Magenta : 4 parts Ultramarine Blue",
+   "de": 0.0
+  }
+ ]
+}

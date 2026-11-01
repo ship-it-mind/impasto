@@ -1,0 +1,14 @@
+[
+  {"id":"knife","seconds":6,"volume":1,"title":"Knife through paste","brief":"The opening shot. Low, from the side, so the ridges catch the light. One slow, confident drag of thick paste. Keep the real scrape sound, no talking."},
+  {"id":"tubes","seconds":2.8,"volume":0,"title":"The tubes","brief":"Paint tubes on the table, a few picked up and put down. Behind the words: Which colors do I mix?"},
+  {"id":"pot","seconds":2.8,"volume":0,"title":"Scraped-out pot","brief":"A mix almost gone, knife scraping the last of it, a band half done. Behind the words: How much paint will it take?"},
+  {"id":"stage-marks","seconds":3.8,"volume":0,"title":"Canvas: bands marked","brief":"Photo or clip of the canvas with the pencil lines on it. Same camera position for all three stages."},
+  {"id":"stage-paste","seconds":3.8,"volume":0,"title":"Canvas: paste laid","brief":"The canvas with the white paste on, before any color. Side light so the ridges show."},
+  {"id":"stage-color","seconds":3.9,"volume":0,"title":"Canvas: color going on","brief":"The canvas part-painted, with the same bands done as the plan picture beside it."},
+  {"id":"mixing","seconds":3.5,"volume":0.5,"title":"Taking the bowl photo","brief":"Paint being mixed in the bowl, then a phone taking a picture of it, with a white rag or paper in the shot."},
+  {"id":"whole-canvas","seconds":8,"volume":0,"title":"Screen recording: whole-canvas check-in","brief":"Record on the live site. Check-ins, Whole canvas, upload a real photo of THIS canvas, show coverage and each band's color. This one makes a SAM call, so it isn't recorded for you."},
+  {"id":"timelapse","seconds":16,"volume":0,"fit":true,"title":"Time-lapse of the painting","brief":"Fixed camera, whole canvas, across the days. Any length: it gets sped up to fit. Your cinematic moment, there's no voiceover over it."},
+  {"id":"wife-line","seconds":8,"volume":1,"title":"Your wife, in her own words","brief":"One honest sentence about using it, on camera or at the canvas. Unscripted. Whatever she actually thinks."},
+  {"id":"reveal-wall","seconds":9,"volume":0,"title":"THE SHOT: the painting on that wall","brief":"The finished canvas on the wall, from exactly where the wall photo was taken: cabinet on the left, doorway on the right. Hold still. The app's mockup dissolves into this."},
+  {"id":"reveal-detail","seconds":3,"volume":0.6,"title":"Close on the finished ridges","brief":"Slow push or pan across the finished surface, side light."}
+]

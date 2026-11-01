@@ -1,0 +1,14 @@
+[
+  {"id":"01","text":"My wife paints with a palette knife. Every commission starts the same way: an empty wall, and three guesses."},
+  {"id":"02","text":"Will the client like it? Which colors do I mix? How much paint will it take? Guess wrong, and you find out with paint already on the canvas."},
+  {"id":"03","text":"So I built her a studio co-pilot. From an empty repo, during this hackathon."},
+  {"id":"04","text":"A client's request goes in, typed or dictated, with a photo of their wall. Muse Spark reads it, and recommends a size and where it hangs. Muse Image paints three concepts, on that actual wall."},
+  {"id":"05","text":"Don't like a shape? Tap it, and say what to change. Muse Image repaints only what you tapped. Every answer is a version you can keep, or go back from."},
+  {"id":"06","text":"Then the picture becomes a plan. A band map is read straight off the painting. Each band's area becomes grams of paint and paste. And each color becomes a recipe in parts, from common tubes, searched with the Mixbox paint model."},
+  {"id":"07","text":"Tick what's already in the studio, and you see what's left to buy."},
+  {"id":"08","text":"Muse Spark writes the steps, and the app draws the canvas at every stage, so there's always a picture to paint towards."},
+  {"id":"09","text":"Is this mix right? Photograph the bowl. The color is measured against the recipe, and it says which tube to add, and how much."},
+  {"id":"10","text":"On a photo of the whole canvas, SAM 3.1 finds the corners, and every band is checked for coverage and color against the plan."},
+  {"id":"11","text":"Same wall."},
+  {"id":"12","text":"Four Meta models. One real painting. Built during this hackathon, and painted by my wife. Judges, it's live. Go try it."}
+]
