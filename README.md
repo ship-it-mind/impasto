@@ -63,6 +63,23 @@ cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to 
 
 Pieces, with their pictures, are kept in `backend/output/impasto.db`, a SQLite file (git-ignored). On first start it imports any older pieces from `backend/output/api/`.
 
+### Relief scan
+
+Recovers a painted canvas's surface from photos lit by a torch moved around it (photometric stereo). It runs from the command line and makes no model calls. It has only been tested on simulated photos so far, not on photos of a real canvas.
+
+1. Darken the room and rest the phone so it can't move. Use the same settings throughout, and turn flash off.
+2. Take 4–6 photos with the torch in a different place around the canvas each time, about 1–2 canvas widths from its center and about a third of the way up from the canvas plane toward straight in front of it.
+
+```sh
+cd backend && uv run python -m impasto.relief_scan photos/*.jpg --corners 20,60 1170,45 1185,1480 95,1495 --out scan/
+```
+
+`--corners` are the canvas's corners in the first photo, and can be left out if the canvas fills the frame. It writes `height.png` (16-bit, for a textured print), `albedo.png` (the paint without the torch's shading), `normals.png`, two relit views and `scan.json`.
+
+In `scan.json`, `prediction` is the check to read: how well the other photos predict each photo, from 0 to 1. Below 0.5 it warns that the relief can't be trusted. It can't tell a relief that's inside out throughout. The torch's position comes from which side of each photo is brighter, so if the relief looks inverted, or the torch's beam was off-center, say where it was with `--azimuths` (one per photo, in degrees: 0 = right, 90 = below, clockwise). The relief's shape is measured, but its absolute depth is an estimate.
+
+`uv run spikes/relief_scan_sim.py` scores the scan on simulated phone photos of a surface with a known shape.
+
 ### Accounts and the private demo
 
 Model calls cost money, so the app is invite-only. Everyone signs in with an email and password, and each account only sees its own pieces.
