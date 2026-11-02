@@ -6,7 +6,7 @@ Format follows the Crossbeam demo (Built with Opus 4.6): hook line → who I am 
 
 Spine: one painting from idea to finished canvas, then two more she made with Impasto.
 
-Status: full first draft. Lines marked **[confirm]** state something about Yara that Sultan checks is true. **[run]** marks numbers that come from the recorded example piece, still to record.
+Status: full first draft. Yara's lines are confirmed as true for her. **[run]** marks numbers that come from the recorded example piece, still to record.
 
 ## 0. Hook (≈ 0:00–0:08)
 
@@ -25,8 +25,8 @@ Status: full first draft. Lines marked **[confirm]** state something about Yara 
 ## 2. Yara, on camera (≈ 0:28–0:40)
 
 > *(Yara, chest up, phone or webcam. Big name card: "Yara / painter".)*
-> **Yara:** "I always see the painting in my head first. **[confirm]**
-> But once I start mixing, I'm guessing. Which colors, how much of each, and will it even look right on the wall?" **[confirm]**
+> **Yara:** "I always see the painting in my head first. 
+> But once I start mixing, I'm guessing. Which colors, how much of each, and will it even look right on the wall?"
 
 She can say it in her own way; the three guesses (colors, amounts, the wall) are what sections 4 and 5 answer.
 
@@ -41,7 +41,7 @@ She can say it in her own way; the three guesses (colors, amounts, the wall) are
 > *(Hard cut to black, then type: "So Impasto doesn't guess.")*
 > "So Impasto doesn't guess. It learns from her own paintings, and it measures."
 
-Visual note: the Day 1 spike outputs, if still on disk in `backend/spikes/output/`, show the empty masks and the generic texture. Use them only if they're there; no reruns.
+Visual: the real Day 1 results from `backend/spikes/output/image/`, `text-only.webp` beside `with-refs.webp`, labeled "Day 1 test". No reruns.
 
 ## 4. On top, it's simple (≈ 1:02–1:32)
 
@@ -84,7 +84,7 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 ## 8. Yara's last word (≈ 2:48–3:00)
 
 > *(Yara on camera, or her voice over the finished canvas.)*
-> **Yara:** "I still mix every color by hand. I just don't have to guess anymore." **[confirm]**
+> **Yara:** "I still mix every color by hand. I just don't have to guess anymore."
 
 ## Rules
 
