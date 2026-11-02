@@ -1,2 +1,5 @@
 # Yara's photos stay out of the public repo
 photos/
+
+# Rendered films stay out too
+*.mp4
