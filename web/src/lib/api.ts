@@ -328,6 +328,14 @@ export async function getMockup(briefId: string): Promise<Mockup | null> {
   return (await request<{ mockup: Mockup | null }>(`/pieces/${briefId}/mockup`)).mockup
 }
 
+// Muse Image's photo of the piece really hung on the wall, from the flat mockup and the painting on its own. Its URL.
+export async function hangOnWall(briefId: string, mockup: Blob, painting: Blob, onPhase?: (phase: string) => void): Promise<string> {
+  const form = new FormData()
+  form.append('mockup', mockup, 'mockup.png')
+  form.append('painting', painting, 'painting.png')
+  return (await poll<{ url: string }>(request(`/pieces/${briefId}/wall/hung`, { method: 'POST', body: form }), onPhase)).url
+}
+
 export async function saveMockup(briefId: string, mockup: Mockup): Promise<Mockup> {
   return (await request<{ mockup: Mockup }>(`/pieces/${briefId}/mockup`, {
     method: 'PUT',

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { Download, Ruler, SquareDashedMousePointer } from 'lucide-react'
+import { Download, LoaderCircle, Ruler, Sparkles, SquareDashedMousePointer, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Point } from '@/lib/checkin'
 import { dragCorner, drawOnQuad, isConvex, keepOnPhoto, moveQuad, orderQuad, pxPerCm, quadCm, quadSides, quadTransform, rectangle, resizeQuad, type Mockup, type Quad, type SizeCm } from '@/lib/wall'
@@ -26,12 +26,15 @@ type WallMockupProps = {
   // The painting to draw on the wall, and its size in px. Without it, an outline.
   art?: { node: ReactNode; px: [number, number]; title: string }
   note?: ReactNode
+  // Muse Image's photo of the painting really hung there, from the flat mockup and the painting on its own: its URL.
+  // Without it, there's no button for one.
+  onHang?: (mockup: Blob, painting: Blob, onPhase: (phase: string) => void) => Promise<string>
 }
 
 // The wall photo with the piece on it at true size. The scale comes from a line marked on something of known
 // length, or Spark's estimate; the piece is dragged to where it hangs. Dragging a corner changes its width and height
 // and keeps it a rectangle; marking 4 corners can fit it to a wall photographed at an angle.
-export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note }: WallMockupProps) {
+export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note, onHang }: WallMockupProps) {
   const img = useRef<HTMLImageElement>(null)
   const painting = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState<Point | null>(null)
@@ -41,9 +44,14 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
   const [length, setLength] = useState('')
   const [marks, setMarks] = useState<Point[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Muse's photo of it hung, for where it is now; and what Muse is doing while it makes one.
+  const [made, setHung] = useState<{ url: string; of: string } | null>(null)
+  const [hanging, setHanging] = useState<string | null>(null)
   const drag = useRef<{ corner: number } | { dx: number; dy: number } | null>(null)
   const latest = useRef(mockup)
   useEffect(() => { latest.current = mockup }, [mockup])
+  // Another painting on the wall: the photo of the last one hung is no longer it.
+  const hung = made && made.of === art?.title ? made.url : null
 
   // The photo's size on screen: the painting is drawn in these pixels. It is 0 while the screen is hidden.
   useLayoutEffect(() => {
@@ -59,6 +67,8 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     Promise.resolve(onCommit(next)).catch((e: unknown) => setError(e instanceof Error ? e.message : "Couldn't save that."))
   }
   const update = (next: Mockup) => {
+    // Moved: the photo of it hung shows it where it was.
+    setHung(null)
     latest.current = next
     onChange(next)
   }
@@ -151,37 +161,80 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     commit(next)
   }
 
-  // The photo with the painting drawn on it, at the photo's full size.
-  const download = () => {
-    const picture = img.current, source = painting.current?.querySelector<HTMLCanvasElement | HTMLImageElement>('canvas, img')
-    if (!picture || !source || !mockup || !photo || !art) return
+  // The painting as drawn, cropped to the canvas's shape as it shows on screen.
+  const paintingSource = () => {
+    const source = painting.current?.querySelector<HTMLCanvasElement | HTMLImageElement>('canvas, img')
+    if (!source || !mockup) return null
+    const { across, down } = quadSides(mockup.corners)
+    const [artW, artH] = source instanceof HTMLImageElement ? [source.naturalWidth, source.naturalHeight] : [source.width, source.height]
+    const cropW = Math.min(artW, artH * (across / down)), cropH = Math.min(artH, artW * (down / across))
+    return { source, crop: { x: (artW - cropW) / 2, y: (artH - cropH) / 2, w: cropW, h: cropH } }
+  }
+
+  // The photo with the painting drawn on it, at the photo's full size. With shadow, a drop shadow behind it.
+  const flatPicture = (shadow: boolean) => {
+    const picture = img.current, drawn = paintingSource()
+    if (!picture || !drawn || !mockup || !photo) return null
     const out = document.createElement('canvas')
     out.width = photo[0]
     out.height = photo[1]
     const ctx = out.getContext('2d')!
     ctx.drawImage(picture, 0, 0)
-    const { across, down } = quadSides(mockup.corners)
-    ctx.save()
-    ctx.shadowColor = 'rgb(0 0 0 / 0.35)'
-    ctx.shadowBlur = down * 0.06
-    ctx.shadowOffsetY = down * 0.025
-    ctx.beginPath()
-    mockup.corners.forEach(([x, y]) => ctx.lineTo(x, y))
-    ctx.closePath()
-    ctx.fill()
-    ctx.restore()
-    // Cropped to the canvas's shape, as it shows on screen.
-    const [artW, artH] = source instanceof HTMLImageElement ? [source.naturalWidth, source.naturalHeight] : [source.width, source.height]
-    const cropW = Math.min(artW, artH * (across / down)), cropH = Math.min(artH, artW * (down / across))
-    drawOnQuad(ctx, source, { x: (artW - cropW) / 2, y: (artH - cropH) / 2, w: cropW, h: cropH }, mockup.corners)
-    out.toBlob(blob => {
+    if (shadow) {
+      const { down } = quadSides(mockup.corners)
+      ctx.save()
+      ctx.shadowColor = 'rgb(0 0 0 / 0.35)'
+      ctx.shadowBlur = down * 0.06
+      ctx.shadowOffsetY = down * 0.025
+      ctx.beginPath()
+      mockup.corners.forEach(([x, y]) => ctx.lineTo(x, y))
+      ctx.closePath()
+      ctx.fill()
+      ctx.restore()
+    }
+    drawOnQuad(ctx, drawn.source, drawn.crop, mockup.corners)
+    return out
+  }
+
+  const save = (href: string) => {
+    const a = document.createElement('a')
+    a.href = href
+    a.download = `${art!.title} on the wall${hung ? '.jpg' : '.png'}`
+    a.click()
+  }
+
+  const download = () => {
+    if (hung) { save(hung); return }
+    flatPicture(true)?.toBlob(blob => {
       if (!blob) return
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `${art.title} on the wall.png`
-      a.click()
-      URL.revokeObjectURL(a.href)
+      const url = URL.createObjectURL(blob)
+      save(url)
+      URL.revokeObjectURL(url)
     }, 'image/png')
+  }
+
+  // Muse gets the mockup flat, as it lights and shadows the painting itself.
+  const hang = async () => {
+    const flat = flatPicture(false), drawn = paintingSource()
+    if (!onHang || !flat || !drawn) return
+    const alone = document.createElement('canvas')
+    alone.width = Math.round(drawn.crop.w)
+    alone.height = Math.round(drawn.crop.h)
+    alone.getContext('2d')!.drawImage(drawn.source, drawn.crop.x, drawn.crop.y, drawn.crop.w, drawn.crop.h, 0, 0, alone.width, alone.height)
+    const asPng = (canvas: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error("Couldn't draw the painting on the wall."))), 'image/png'))
+    const placedAt = latest.current
+    setError(null)
+    setHanging('Starting…')
+    try {
+      const url = await onHang(await asPng(flat), await asPng(alone), setHanging)
+      // Moved while Muse worked: its photo shows it where it was.
+      if (latest.current === placedAt) setHung({ url, of: art!.title })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Muse Image couldn't hang it. Try again.")
+    } finally {
+      setHanging(null)
+    }
   }
 
   const placed = mockup && photo && !measuring && !marks
@@ -236,7 +289,8 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
             />
           </svg>
         )}
-        {placed && onResize && mockup.corners.map((corner, i) => (
+        {placed && hung && <img src={hung} alt={`${art?.title ?? 'The painting'} hung on your wall`} className="pointer-events-none absolute inset-0 size-full" />}
+        {placed && !hung && onResize && mockup.corners.map((corner, i) => (
           <button
             key={CORNERS[i]}
             type="button"
@@ -308,12 +362,21 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
               : `Scale from a ${mockup.length_cm} cm line.`}
           </span>
           <span className="flex flex-wrap gap-1">
-            {onResize && <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); setMarks([]) }}><SquareDashedMousePointer /> Mark the corners</Button>}
-            <Button type="button" variant="ghost" size="sm" onClick={() => setMeasuring(true)}><Ruler /> {mockup.estimated ? 'Set the scale' : 'Re-measure'}</Button>
+            {art && onHang && (hung
+              ? <Button type="button" variant="ghost" size="sm" onClick={() => setHung(null)}><Undo2 /> Back to placing</Button>
+              : (
+                <Button type="button" variant="ghost" size="sm" onClick={hang} disabled={!!hanging}>
+                  {hanging ? <LoaderCircle className="animate-spin" /> : <Sparkles />} Make it look real
+                </Button>
+              ))}
+            {onResize && <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); setHung(null); setMarks([]) }}><SquareDashedMousePointer /> Mark the corners</Button>}
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setHung(null); setMeasuring(true) }}><Ruler /> {mockup.estimated ? 'Set the scale' : 'Re-measure'}</Button>
             {art && <Button type="button" variant="ghost" size="sm" onClick={download}><Download /> Save image</Button>}
           </span>
         </div>
       )}
+      {hanging && <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" aria-hidden />{hanging} It takes about 20 seconds.</p>}
+      {hung && !hanging && <p className="text-xs text-muted-foreground text-pretty">Muse Image's picture of it hung here. It can change the room's light a little. Drag the painting to place it again.</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </div>
   )

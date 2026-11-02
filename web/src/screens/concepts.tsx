@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { ConceptPainting, LightMarker } from '@/components/lit-painting'
 import { ConceptChat, SegmentPicker } from '@/components/concept-chat'
 import { WallMockup } from '@/components/wall-mockup'
-import { getMockup, saveMockup, type ConceptChange } from '@/lib/api'
+import { getMockup, hangOnWall, saveMockup, type ConceptChange } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { reliefSummary, versionsOf, type Concept, type Piece, type Segment } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
@@ -58,6 +58,7 @@ function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }:
         title: concept.title,
       }}
       note={`${piece.widthCm} × ${piece.heightCm} cm. Drag the canvas to where it hangs.`}
+      onHang={(flat, painting, onPhase) => hangOnWall(photo.briefId, flat, painting, onPhase)}
     />
   )
 }
