@@ -5,6 +5,8 @@ import sqlite3
 import time
 import uuid
 
+import cv2
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -239,6 +241,8 @@ def test_another_users_piece_looks_like_it_does_not_exist():
         ("GET", f"/api/pieces/{piece}", {}),
         ("GET", f"/api/pieces/{piece}/wall", {}),
         ("GET", f"/api/pieces/{piece}/mockup", {}),
+        ("POST", f"/api/pieces/{piece}/wall/hung", {"files": {"mockup": ("m.png", b"x", "image/png"), "painting": ("p.png", b"x", "image/png")}}),
+        ("GET", f"/api/pieces/{piece}/wall/hung/hung-0123456789ab.jpg", {}),
         ("PUT", f"/api/pieces/{piece}/mockup", {"json": {"line": [[0, 0], [1, 1]], "length_cm": 10, "corners": [[0, 0], [1, 0], [1, 1], [0, 1]]}}),
         ("PUT", f"/api/pieces/{piece}/choice", {"json": {"run": run, "concept": 0}}),
         ("GET", f"/api/pieces/{piece}/method", {"params": {"run": run, "concept": 0}}),
@@ -271,6 +275,28 @@ def test_a_picture_cant_be_reached_through_your_own_piece():
     assert b.get(f"/api/checkins/{base}/{theirs['checkin']}/progress.png").status_code == 404
     assert b.get(f"/api/checks/{base}/{theirs['check']}/photo.jpg").status_code == 404
     assert b.get(f"/api/checkins/{mine['piece']}/{mine['run']}/1/{mine['checkin']}/progress.png").status_code == 404
+
+
+def test_the_painting_hung_on_the_wall_is_kept_for_its_piece(monkeypatch):
+    """Muse's photo of it hung, made up here, is stored with the piece and only its owner can fetch it."""
+    from impasto import wall
+    a, b = signed_up("a@example.com"), signed_up("b@example.com")
+    piece = seeded_piece(user_id(a))["piece"]
+    monkeypatch.setattr(wall, "hang", lambda flat, painting: np.full((60, 80, 3), 120, np.uint8))
+    png = lambda h, w: ("x.png", cv2.imencode(".png", np.zeros((h, w, 3), np.uint8))[1].tobytes(), "image/png")  # noqa: E731
+    job = a.post(f"/api/pieces/{piece}/wall/hung", files={"mockup": png(60, 80), "painting": png(30, 20)}).json()["job"]
+    for _ in range(100):
+        state = a.get(f"/api/jobs/{job}").json()
+        if state["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert state["status"] == "done", state
+    url = state["result"]["url"]
+    picture = a.get(url)
+    assert picture.status_code == 200 and picture.headers["content-type"] == "image/jpeg"
+    assert b.get(url).status_code == 404
+    unreadable = {"mockup": ("m.png", b"not a picture", "image/png"), "painting": png(30, 20)}
+    assert a.post(f"/api/pieces/{piece}/wall/hung", files=unreadable).status_code == 415
 
 
 def test_a_job_is_only_visible_to_who_started_it():

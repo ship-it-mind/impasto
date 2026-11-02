@@ -76,6 +76,7 @@ CHECKIN_IMAGES = {"progress.png", "rectified.png"}
 # A stored picture never changes, so the browser needn't fetch it again; private, so nothing between keeps someone's pictures.
 CACHE_FOREVER = {"Cache-Control": "private, max-age=31536000, immutable"}
 CONCEPT_FILE = re.compile(r"^concept-\d+-(muse|exact|edit|layout)\.png$")
+HUNG_FILE = re.compile(r"^hung-[0-9a-f]{12}\.jpg$")
 MAX_EDIT_CHARS = 1000
 MAX_QUESTION_CHARS = 1000
 CHECK_IMAGES = {"photo.jpg"}
@@ -782,6 +783,40 @@ def save_mockup(user: CurrentUser, brief_id: str, body: Mockup) -> dict:
     piece_or_404(brief_id, user)
     store.save_mockup(brief_id, mockup)
     return {"mockup": mockup}
+
+
+def readable_image(upload: UploadFile, name: str) -> bytes:
+    data = read_upload(upload)
+    if cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) is None:
+        raise HTTPException(415, f"Couldn't read the {name}. Try again.")
+    return data
+
+
+@api.post("/api/pieces/{brief_id}/wall/hung")
+def hang_on_wall(user: CurrentUser, brief_id: str, mockup: Annotated[UploadFile, File()], painting: Annotated[UploadFile, File()]) -> dict:
+    """Muse Image's photo of the piece really hung on the wall: lit by the room, with its canvas edge and a shadow.
+
+    mockup: the wall photo with the painting drawn flat on it, as the web app shows it. painting: the painting on its own."""
+    piece_or_404(brief_id, user)
+    images = {"flat.png": readable_image(mockup, "wall picture"), "painting.png": readable_image(painting, "painting")}
+
+    def work(phase: Callable[[str], None]) -> dict:
+        phase("Muse Image is hanging it on the wall…")
+        with scratch(images) as folder:
+            hung = walls.hang(folder / "flat.png", folder / "painting.png")
+        name = f"hung-{uuid.uuid4().hex[:12]}.jpg"
+        store.add_piece_images(brief_id, {name: cv2.imencode(".jpg", hung, [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()})
+        return {"url": f"/api/pieces/{brief_id}/wall/hung/{name}"}
+
+    return start(user, work, key=f"hang:{brief_id}")
+
+
+@api.get("/api/pieces/{brief_id}/wall/hung/{name}")
+def hung_on_wall(user: CurrentUser, brief_id: str, name: str) -> Response:
+    piece_or_404(brief_id, user)
+    if not HUNG_FILE.match(name):
+        raise HTTPException(404, "No such image.")
+    return stored_image(brief_id, name)
 
 
 # --- Check-ins ---------------------------------------------------------------

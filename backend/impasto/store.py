@@ -245,6 +245,12 @@ def save_mockup(piece_id: str, mockup: dict) -> None:
         touch(db, piece_id)
 
 
+def add_piece_images(piece_id: str, images: dict[str, bytes]) -> None:
+    """Pictures made for a piece outside a run, such as Muse's photo of it hung on the wall."""
+    with connect() as db:
+        put_images(db, piece_id, images)
+
+
 def choose(piece_id: str, concept: int) -> None:
     with connect() as db:
         db.execute("UPDATE pieces SET chosen = ? WHERE id = ?", (concept, piece_id))
