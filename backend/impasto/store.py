@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS images (
 """
 
 log = logging.getLogger("impasto.store")
+# Pieces with no owner that the first account doesn't get: the example (impasto.example), which is nobody's.
+UNCLAIMED: set[str] = set()
 
 
 @contextmanager
@@ -167,7 +169,10 @@ def add_user(user_id: str, email: str, password_hash: str) -> bool:
                 (user_id, email, password_hash, time.time()),
             )
             if db.execute("SELECT count(*) FROM users").fetchone()[0] == 1:
-                db.execute("UPDATE pieces SET user_id = ? WHERE user_id IS NULL", (user_id,))
+                db.execute(
+                    f"UPDATE pieces SET user_id = ? WHERE user_id IS NULL AND id NOT IN ({','.join('?' * len(UNCLAIMED))})",
+                    (user_id, *UNCLAIMED),
+                )
     except sqlite3.IntegrityError:
         return False
     return True

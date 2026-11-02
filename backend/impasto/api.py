@@ -50,6 +50,7 @@ from impasto import checkin as checkins
 from impasto import coach
 from impasto import concepts
 from impasto import edits
+from impasto import example as examples
 from impasto import exact as exact_pictures
 from impasto import guide as guides
 from impasto import method
@@ -85,6 +86,7 @@ HUNG_FILE = re.compile(r"^hung-[0-9a-f]{12}\.jpg$")
 MAX_EDIT_CHARS = 1000
 MAX_QUESTION_CHARS = 1000
 CHECK_IMAGES = {"photo.jpg"}
+# Set on its own, or the piece kept in the repo's example/ folder, which is loaded on start (see impasto.example).
 EXAMPLE_PIECE = os.environ.get("IMPASTO_EXAMPLE_PIECE", "").strip()
 RECORDED = "This is the example piece, recorded from a real painting, so it can't be changed. Start a piece of your own to try this."
 
@@ -101,6 +103,7 @@ running_lock = threading.Lock()
 
 register_heif_opener()
 store.init()
+EXAMPLE_PIECE = EXAMPLE_PIECE or examples.load() or ""
 
 
 # --- Jobs --------------------------------------------------------------------
@@ -763,6 +766,15 @@ def open_piece(user: CurrentUser, brief_id: str) -> dict:
     with running_lock:
         piece["making"] = running.get(concepts_key(brief_id))
     return piece
+
+
+@api.get("/api/pieces/{brief_id}/export")
+def export_piece(user: CurrentUser, brief_id: str) -> Response:
+    """The piece with everything made for it, as a zip for the repo's example/ folder. Only its owner can have it."""
+    if not BRIEF_ID.match(brief_id) or store.piece(brief_id, user["id"]) is None:
+        raise HTTPException(404, "No such brief. Read the brief again.")
+    return Response(examples.as_zip(brief_id), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="impasto-{brief_id}.zip"'})
 
 
 @api.get("/api/pieces/{brief_id}/wall")

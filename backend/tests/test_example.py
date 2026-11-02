@@ -122,3 +122,35 @@ def test_the_photo_of_it_hung_comes_back_until_it_moves(example, monkeypatch):
     monkeypatch.setattr(api_module, "EXAMPLE_PIECE", "")
     a.put(f"/api/pieces/{piece}/mockup", json={**placed, "corners": [[2, 1], [6, 1], [6, 4], [2, 4]]})
     assert "hung" not in a.get(f"/api/pieces/{piece}/mockup").json()["mockup"]
+
+
+def test_a_piece_goes_to_the_repo_and_comes_back_as_the_example(example, tmp_path, monkeypatch):
+    """Exported by its owner, loaded into another database by the next start: the same piece, nobody's, with its pictures."""
+    import io
+    import zipfile
+
+    from impasto import example as examples
+    monkeypatch.setattr(api_module, "EXAMPLE_PIECE", "")
+    piece = example["piece"]
+    assert example["other"].get(f"/api/pieces/{piece}/export").status_code == 404
+    answer = example["owner"].get(f"/api/pieces/{piece}/export")
+    assert answer.status_code == 200 and answer.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(answer.content)) as archive:
+        examples.write({name: archive.read(name) for name in archive.namelist()}, tmp_path)
+    with pytest.raises(ValueError):
+        examples.write({"../outside.txt": b"x"}, tmp_path)
+
+    with store.connect() as db:
+        db.execute("DELETE FROM pieces")
+        db.execute("DELETE FROM images")
+        db.execute("DELETE FROM users")
+    assert examples.load(tmp_path) == piece
+    assert examples.load(tmp_path) == piece  # loading again adds nothing
+    monkeypatch.setattr(api_module, "EXAMPLE_PIECE", piece)
+    judge = signed_up("judge@example.com")  # the first account, which gets pieces from before accounts, but not this one
+    assert store.any_piece(piece)["mockup"] is None and store.piece(piece, user_id(judge)) is None
+    assert [p["id"] for p in judge.get("/api/pieces").json()["pieces"]] == [piece]
+    assert judge.get(f"/api/concepts/{piece}/{example['run']}/concept-1-muse.png").content == b"painting"
+    assert judge.get(f"/api/checkins/{piece}/{example['run']}/0/{example['checkin']}/progress.png").content == b"secret-progress"
+    assert judge.get("/api/checks", params={"brief_id": piece, "run": example["run"], "concept": 0}).json()["mixes"]
+    assert judge.get(f"/api/pieces/{piece}").json()["recipe"] == RECIPE

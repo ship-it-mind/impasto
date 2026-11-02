@@ -74,7 +74,7 @@ Model calls cost money, so the app is invite-only. Everyone signs in with an ema
 
 ### The example piece
 
-Judges don't have a wall to photograph or a canvas in progress, so the app can show one real piece, recorded from the first brief to the last check-in. Set `IMPASTO_EXAMPLE_PIECE` to that piece's id (the `piece=` in its address). Every account then sees it first in the list. It opens at its brief, and every screen can be looked through. Nobody can change it, its owner included, and it never calls a model: whatever would make something new is turned off in the app and refused by the API.
+Judges don't have a wall to photograph or a canvas in progress, so the app shows one real piece, recorded from the first brief to the last check-in. It's kept in the repo, in [`example/`](example/), and loaded into the database on start, so it shows locally too, with no database to copy and no model key. To put a piece there, download it signed in as its owner from `/api/pieces/PIECE_ID/export` (the id is the `piece=` in its address) and run `uv run python -m impasto.example unpack piece.zip` from `backend/`. `IMPASTO_EXAMPLE_PIECE` overrides it with another piece in the database. Every account sees the example first in the list. It opens at its brief, and every screen can be looked through. Nobody can change it, its owner included, and it never calls a model: whatever would make something new is turned off in the app and refused by the API.
 
 It only holds what was done while it was painted, so in that run:
 

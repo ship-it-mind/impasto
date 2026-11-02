@@ -23,6 +23,8 @@ RUN uv sync --frozen --no-dev --no-cache
 COPY backend/impasto ./impasto
 COPY web/relief /app/web/relief
 COPY --from=web /app/web/dist /app/web/dist
+# The example piece, loaded into the database on start if it isn't there yet.
+COPY example /app/example
 
 # A named volume mounted here starts out owned by the app's user.
 RUN useradd --create-home impasto && mkdir /data && chown impasto /data
