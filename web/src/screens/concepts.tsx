@@ -105,7 +105,7 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
         {selecting && <p className="text-xs text-muted-foreground">Tap a segment of the painting to select it, and more to add them. Tap one again to let it go.</p>}
         {photo && !selecting && (
           <div role="radiogroup" aria-label="Wall" className="flex gap-1 self-start rounded-lg bg-muted p-0.5 text-xs">
-            {[{ v: true, l: "Client's wall" }, { v: false, l: 'Sketch' }].map(o => (
+            {[{ v: true, l: "Your wall" }, { v: false, l: 'Sketch' }].map(o => (
               <button
                 key={o.l}
                 type="button"

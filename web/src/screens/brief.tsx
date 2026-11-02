@@ -272,7 +272,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
 
   return (
     <main className={cn('mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 pb-16', result || phase ? 'pt-6' : 'pt-[14vh]')}>
-      <h1 className="text-center text-3xl font-semibold tracking-tight text-balance">What did the client ask for?</h1>
+      <h1 className="text-center text-3xl font-semibold tracking-tight text-balance">What do you want to paint?</h1>
 
       <form
         onSubmit={e => { e.preventDefault(); read() }}
@@ -293,11 +293,11 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
         )}
         <textarea
           ref={box}
-          aria-label="The client's brief"
+          aria-label="What you want to paint"
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); read() } }}
-          placeholder="Paste the client's message, or dictate it…"
+          placeholder="Describe it, or dictate it…"
           rows={3}
           className="field-sizing-content max-h-60 min-h-20 resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground"
         />

@@ -287,7 +287,7 @@ def new_brief(
     wall: Annotated[UploadFile | None, File()] = None,
 ) -> dict:
     if not text.strip():
-        raise HTTPException(422, "Type or dictate the client's brief first.")
+        raise HTTPException(422, "Type or dictate what you want to paint first.")
     brief_id = uuid.uuid4().hex
     photo = read_image(wall, "wall", shrink=True) if wall else None
     record = {"source": "web", "transcript": text.strip(), "wall_photo": photo[0] if photo else None, "answers": []}

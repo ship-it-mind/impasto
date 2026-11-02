@@ -194,7 +194,7 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
         <img
           ref={img}
           src={wall}
-          alt="The client's wall"
+          alt="Your wall"
           draggable={false}
           onLoad={e => {
             const size: Point = [e.currentTarget.naturalWidth, e.currentTarget.naturalHeight]
