@@ -180,6 +180,8 @@ export type PieceSummary = {
   updated: string
   concepts: boolean
   concept: { title: string; image: string | null; recipe: boolean; checkins: number } | null
+  // The example piece, recorded from a real painting: everyone sees it, nobody can change it.
+  example: boolean
 }
 
 export async function listPieces(): Promise<PieceSummary[]> {
@@ -189,15 +191,16 @@ export async function listPieces(): Promise<PieceSummary[]> {
 // A piece as it was left: the brief, its latest concepts, the chosen concept (its place
 // among the usable ones, as the screens count them) with its saved recipe, and the job
 // making its next concepts, if one is running.
-export type OpenedPiece = { brief: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string }
+export type OpenedPiece = { brief: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string; example?: boolean }
 
 export async function openPiece(id: string): Promise<OpenedPiece> {
-  const saved = await request<{ brief: BriefResult; concepts?: ConceptsRecord; chosen?: number; recipe?: Recipe | null; making: string | null }>(`/pieces/${id}`)
+  const saved = await request<{ brief: BriefResult; concepts?: ConceptsRecord; chosen?: number; recipe?: Recipe | null; making: string | null; example?: boolean }>(`/pieces/${id}`)
   const making = saved.making ?? undefined
-  if (!saved.concepts) return { brief: saved.brief, making }
+  const example = saved.example || undefined
+  if (!saved.concepts) return { brief: saved.brief, making, example }
   const set = conceptSet(saved.concepts, saved.brief)
   const pick = set.concepts.findIndex(c => c.index === saved.chosen)
-  return pick < 0 ? { brief: saved.brief, set, making } : { brief: saved.brief, set, pick, recipe: saved.recipe ?? undefined, making }
+  return pick < 0 ? { brief: saved.brief, set, making, example } : { brief: saved.brief, set, pick, recipe: saved.recipe ?? undefined, making, example }
 }
 
 // Keep the concept (and mixing settings) picked to paint, and get the recipe already made
@@ -329,10 +332,12 @@ export async function getMockup(briefId: string): Promise<Mockup | null> {
 }
 
 // Muse Image's photo of the piece really hung on the wall, from the flat mockup and the painting on its own. Its URL.
-export async function hangOnWall(briefId: string, mockup: Blob, painting: Blob, onPhase?: (phase: string) => void): Promise<string> {
+// It's kept with where the piece hangs, under the painting's title, so reopening the piece shows it.
+export async function hangOnWall(briefId: string, mockup: Blob, painting: Blob, title: string, onPhase?: (phase: string) => void): Promise<string> {
   const form = new FormData()
   form.append('mockup', mockup, 'mockup.png')
   form.append('painting', painting, 'painting.png')
+  form.append('of', title)
   return (await poll<{ url: string }>(request(`/pieces/${briefId}/wall/hung`, { method: 'POST', body: form }), onPhase)).url
 }
 

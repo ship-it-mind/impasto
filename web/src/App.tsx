@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppHeader, type Step } from '@/components/app-header'
 import { editConcept, getPresets, openPiece, type Account, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
+import { ExampleContext } from '@/lib/example'
 import type { Recipe } from '@/lib/recipe'
 import { CheckInsScreen } from '@/screens/checkins'
 import { BriefScreen } from '@/screens/brief'
@@ -9,8 +10,8 @@ import { ConceptsScreen } from '@/screens/concepts'
 import { PaintScreen } from '@/screens/paint'
 import { RecipeScreen } from '@/screens/recipe'
 
-// One piece as far as it has got: its brief, concepts, the chosen one and its recipe.
-type Piece = { brief?: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string }
+// One piece as far as it has got: its brief, concepts, the chosen one and its recipe. example: it's the recorded example piece.
+type Piece = { brief?: BriefResult; set?: ConceptSet; pick?: number; recipe?: Recipe; making?: string; example?: boolean }
 
 const SLUGS: Record<Step, string> = { Brief: 'brief', Concepts: 'concepts', Recipe: 'recipe', Paint: 'paint', 'Check-ins': 'checkins' }
 
@@ -75,7 +76,8 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
       setSession(s => s + 1)
     }
     const steps = reachable(p)
-    const next = wanted && steps.includes(wanted) ? wanted : steps[steps.length - 1]
+    // The example opens at its start, to be looked through in order; a piece of your own, as far as it got.
+    const next = wanted && steps.includes(wanted) ? wanted : p.example ? 'Brief' : steps[steps.length - 1]
     setPiece(p)
     setStep(next)
     if (p.brief) history.replaceState(null, '', `?piece=${p.brief.id}&step=${SLUGS[next]}`)
@@ -91,9 +93,18 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
   const { brief, set, pick, recipe } = piece
   const concept = set && pick !== undefined ? set.concepts[pick] : undefined
 
+  const home = () => { setSession(s => s + 1); go('Brief', {}) }
+
   return (
+    <ExampleContext.Provider value={!!piece.example}>
     <div className="flex min-h-dvh flex-col bg-[oklch(0.985_0.004_80)] text-sm">
-      <AppHeader step={step} reachable={reachable(piece)} email={account.email} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={() => { setSession(s => s + 1); go('Brief', {}) }} />
+      <AppHeader step={step} reachable={reachable(piece)} email={account.email} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={home} />
+      {!opening && piece.example && (
+        <p className="mx-6 mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg bg-muted px-4 py-2.5 text-xs text-muted-foreground lg:mx-10">
+          <span><span className="font-medium text-foreground">Example piece.</span> Recorded from a real painting, start to finish: look through every step. Nothing here can be changed, and nothing asks a model.</span>
+          <button type="button" onClick={home} className="font-medium text-foreground underline decoration-1 underline-offset-4">Start your own piece</button>
+        </p>
+      )}
       {opening && <p className="px-6 py-10 text-center text-muted-foreground lg:px-10">Opening the piece…</p>}
       {!opening && (
         <Kept key={`brief-${session}`} active={step === 'Brief'}>
@@ -119,7 +130,7 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
             initialPick={pick}
             active={step === 'Concepts'}
             photo={brief.wall ? { briefId: brief.id, url: brief.wall } : undefined}
-            onChoose={p => go('Recipe', p === pick ? piece : { brief, set, pick: p })}
+            onChoose={p => go('Recipe', p === pick ? piece : { brief, set, pick: p, example: piece.example })}
             onEdit={async (c, change, onPhase) => {
               const edited = await editConcept(brief, set, c, change, onPhase)
               setPiece(p => (p.set?.run === set.run ? { ...p, set: { ...p.set, concepts: [...p.set.concepts, edited] } } : p))
@@ -174,5 +185,6 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
         </Kept>
       )}
     </div>
+    </ExampleContext.Provider>
   )
 }

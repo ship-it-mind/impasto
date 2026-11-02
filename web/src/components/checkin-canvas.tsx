@@ -11,6 +11,7 @@ import { DONE, MIN_STARTED, percent, when, type BandProgress, type CheckIn, type
 import type { Concept } from '@/lib/concepts'
 import { DEFAULT_LIGHT } from '@/lib/relief'
 import { cn } from '@/lib/utils'
+import { useExample } from '@/lib/example'
 
 function Coverage({ band }: { band: BandProgress }) {
   const state = band.coverage >= DONE ? 'Done' : band.coverage < MIN_STARTED ? 'Not started' : percent(band.coverage)
@@ -140,6 +141,7 @@ export function CanvasSection({ brief, set, concept, planned, seed, history, onC
     }
   }
 
+  const example = useExample()
   const input = usePhotoInput(file => {
     setPhoto({ file, url: URL.createObjectURL(file) })
     setTaps(NO_TAPS)
@@ -171,12 +173,14 @@ export function CanvasSection({ brief, set, concept, planned, seed, history, onC
     <div className="flex flex-col gap-6 pb-6" aria-live="polite">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-[60ch] text-pretty text-muted-foreground">
-          Upload a photo of the whole canvas, taken from the same spot each time. White paper or some bare canvas in the shot makes the colors more exact.
+          {example
+            ? 'The photos of the whole canvas taken while it was painted, and what each one found.'
+            : 'Upload a photo of the whole canvas, taken from the same spot each time. White paper or some bare canvas in the shot makes the colors more exact.'}
         </p>
         {input.element}
-        <Button onClick={input.open} disabled={!!phase || input.preparing} variant="outline">
+        {!example && <Button onClick={input.open} disabled={!!phase || input.preparing} variant="outline">
           {phase || input.preparing ? <LoaderCircle className="animate-spin" /> : <Upload />} {phase ?? 'Upload a photo'}
-        </Button>
+        </Button>}
       </div>
 
       {(error || input.error) && <p role="alert" className="text-destructive">{error ?? input.error}</p>}

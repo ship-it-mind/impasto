@@ -11,6 +11,7 @@ import { byParts, cm2, grams, parts, type MixSettings, type PasteAdvice, type Re
 import { DEFAULT_LIGHT, bandShares } from '@/lib/relief'
 import { shoppingList, type Have, type Supplies } from '@/lib/supplies'
 import { cn } from '@/lib/utils'
+import { RECORDED, useExample } from '@/lib/example'
 
 const RELIEF = { thin: 'Thin', medium: 'Medium', heavy: 'Heavy' }
 
@@ -46,6 +47,7 @@ const SAVE_DELAY_MS = 400
 // and one recipe per band, with the painting, totals and what's left to buy alongside.
 export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, onRecipe, onBack, onPaint }: RecipeProps) {
   const [W, H] = set.canvasPx
+  const example = useExample()
   const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe ?? null)
   // What the recipes on show were made with, and what's picked for the next ones.
   const applied = useMemo<MixSettings | null>(
@@ -68,6 +70,8 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     setPhase('Mixing…')
     try {
       let made = await chooseRecipe(brief, set, concept, s)
+      // The example has only the recipes made when it was painted.
+      if (!made && example) throw new Error(RECORDED)
       if (!made) {
         setPhase('Measuring the bands…')
         const shares = concept.layout?.shares ?? await bandShares(concept, seed, W, H)
@@ -82,7 +86,7 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     } finally {
       setPhase(null)
     }
-  }, [brief, set, concept, seed, W, H, onRecipe])
+  }, [brief, set, concept, seed, W, H, onRecipe, example])
 
   // Once per screen: the recipes this concept last used, if it has any. New ones wait until the paste is decided.
   const started = useRef(!!initialRecipe)
@@ -129,6 +133,8 @@ export function RecipeScreen({ brief, set, concept, seed, tubes, initialRecipe, 
     if (item) have[id] = item
     else delete have[id]
     setSupplies({ ...supplies, have })
+    // On the example, ticking what you have only changes what's left to buy here.
+    if (example) return
     window.clearTimeout(saving.current)
     saving.current = window.setTimeout(() => {
       saveSupplies(brief.id, have).catch(() => setError("Couldn't save what you have. Try changing it again."))

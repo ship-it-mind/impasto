@@ -53,10 +53,12 @@ type PieceSizeProps = {
   onSize: (size: SizeCm) => void
   onMockup: (mockup: Mockup) => void
   onMockupDone: (mockup: Mockup) => void | Promise<void>
+  // Only to look at, as on the example piece.
+  locked?: boolean
 }
 
 // The piece's size: typed, or marked on the wall photo. With a photo it starts at what Spark recommends for that wall, or what the client asked for.
-export function PieceSize({ size, disabled, fit, wall, mockup, wallWidthCm, onTyped, onSize, onMockup, onMockupDone }: PieceSizeProps) {
+export function PieceSize({ size, disabled, fit, wall, mockup, wallWidthCm, onTyped, onSize, onMockup, onMockupDone, locked = false }: PieceSizeProps) {
   const current = sizeFrom(size)
   const fitSize = fit ? { w: fit.width_cm, h: fit.height_cm } : null
   const onFit = !!fitSize && current?.w === fitSize.w && current.h === fitSize.h
@@ -85,8 +87,9 @@ export function PieceSize({ size, disabled, fit, wall, mockup, wallWidthCm, onTy
           wallWidthCm={wallWidthCm}
           onChange={onMockup}
           onCommit={onMockupDone}
-          onResize={onSize}
-          note="Drag the corners to change its width and height, or the middle to move it."
+          onResize={locked ? undefined : onSize}
+          locked={locked}
+          note={locked ? 'Where it hangs on the wall.' : 'Drag the corners to change its width and height, or the middle to move it.'}
         />
       )}
     </section>

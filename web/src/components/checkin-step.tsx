@@ -13,6 +13,7 @@ import type { Recipe } from '@/lib/recipe'
 import { stageJpeg } from '@/lib/stages'
 import { cn } from '@/lib/utils'
 import { StepMaterials } from '@/screens/paint'
+import { useExample } from '@/lib/example'
 
 export const VERDICT: Record<Verdict, { label: string; tone: string }> = {
   on_track: { label: 'On track', tone: 'text-emerald-800' },
@@ -63,6 +64,7 @@ export function StepSection({ brief, set, concept, planned, seed, recipe, step, 
   useEffect(() => () => { if (pending) URL.revokeObjectURL(pending.url) }, [pending?.url]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A photo goes straight off: at the easel there's nothing to mark on it.
+  const example = useExample()
   const photo = usePhotoInput(async file => {
     setError(null)
     setPending({ url: URL.createObjectURL(file), phase: 'Sending the photo…' })
@@ -110,12 +112,12 @@ export function StepSection({ brief, set, concept, planned, seed, recipe, step, 
         )}
 
         <div className="flex flex-col items-start gap-2 pt-1">
-          <p className="max-w-[60ch] text-xs text-pretty text-muted-foreground">{photoHint(step)}</p>
+          <p className="max-w-[60ch] text-xs text-pretty text-muted-foreground">{example ? (checks.length ? 'The photo taken of this step while it was painted, and what Muse Spark said about it.' : 'No photo was taken of this step while it was painted.') : photoHint(step)}</p>
           <div className="flex flex-wrap gap-2">
             {photo.element}
-            <Button variant="outline" onClick={photo.open} disabled={busy}>
+            {!example && <Button variant="outline" onClick={photo.open} disabled={busy}>
               {busy ? <LoaderCircle className="animate-spin" /> : <Camera />} {pending?.phase ?? (checks.length ? 'Check again' : 'Check this step')}
-            </Button>
+            </Button>}
             {step.band !== null && <Button variant="ghost" onClick={() => onCheckMix(step.band!)}>Check the mix</Button>}
           </div>
           {(error || photo.error) && <p role="alert" className="text-destructive">{error ?? photo.error}</p>}

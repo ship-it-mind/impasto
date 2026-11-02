@@ -5,7 +5,8 @@ import type { Point } from './checkin'
 
 export type Quad = [Point, Point, Point, Point]
 // line and length_cm: the scale. estimated: that scale is Spark's guess from the photo, not a line the painter measured.
-export type Mockup = { line: [Point, Point]; length_cm: number; corners: Quad; estimated?: boolean }
+// hung: Muse Image's photos of the piece hung where it is now, by the title of the painting hung. Moving it drops them.
+export type Mockup = { line: [Point, Point]; length_cm: number; corners: Quad; estimated?: boolean; hung?: Record<string, string> }
 export type SizeCm = { w: number; h: number }
 
 const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1])

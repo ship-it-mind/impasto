@@ -29,29 +29,33 @@ type WallMockupProps = {
   // Muse Image's photo of the painting really hung there, from the flat mockup and the painting on its own: its URL.
   // Without it, there's no button for one.
   onHang?: (mockup: Blob, painting: Blob, onPhase: (phase: string) => void) => Promise<string>
+  // Only to look at, as on the example piece: it can't be moved or measured, and only a photo of it hung that's kept shows.
+  locked?: boolean
 }
 
 // The wall photo with the piece on it at true size. The scale comes from a line marked on something of known
 // length, or Spark's estimate; the piece is dragged to where it hangs. Dragging a corner changes its width and height
 // and keeps it a rectangle; marking 4 corners can fit it to a wall photographed at an angle.
-export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note, onHang }: WallMockupProps) {
+export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit, onResize, art, note, onHang, locked = false }: WallMockupProps) {
   const img = useRef<HTMLImageElement>(null)
   const painting = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState<Point | null>(null)
   const [shownWidth, setShownWidth] = useState(0)
-  const [measuring, setMeasuring] = useState(!mockup)
+  const [measuring, setMeasuring] = useState(!mockup && !locked)
   const [line, setLine] = useState<Point[]>([])
   const [length, setLength] = useState('')
   const [marks, setMarks] = useState<Point[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Muse's photo of it hung, for where it is now; and what Muse is doing while it makes one.
-  const [made, setHung] = useState<{ url: string; of: string } | null>(null)
+  // Muse's photos of it hung where it is now, by painting; whether the flat mockup shows instead; and what Muse is doing while it makes one.
+  const [made, setMade] = useState<Record<string, string>>(() => mockup?.hung ?? {})
+  const [flat, setFlat] = useState(false)
   const [hanging, setHanging] = useState<string | null>(null)
   const drag = useRef<{ corner: number } | { dx: number; dy: number } | null>(null)
   const latest = useRef(mockup)
   useEffect(() => { latest.current = mockup }, [mockup])
-  // Another painting on the wall: the photo of the last one hung is no longer it.
-  const hung = made && made.of === art?.title ? made.url : null
+  // Another painting on the wall shows its own photo, if it has one.
+  const kept = art ? made[art.title] ?? null : null
+  const hung = flat ? null : kept
 
   // The photo's size on screen: the painting is drawn in these pixels. It is 0 while the screen is hidden.
   useLayoutEffect(() => {
@@ -67,10 +71,12 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     Promise.resolve(onCommit(next)).catch((e: unknown) => setError(e instanceof Error ? e.message : "Couldn't save that."))
   }
   const update = (next: Mockup) => {
-    // Moved: the photo of it hung shows it where it was.
-    setHung(null)
-    latest.current = next
-    onChange(next)
+    // Moved: the photos of it hung show it where it was.
+    setMade({})
+    setFlat(false)
+    const { hung: _, ...moved } = next
+    latest.current = moved
+    onChange(moved)
   }
 
   // Photo pixels under a pointer.
@@ -121,7 +127,7 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
 
   // Dragging keeps the grab point under the pointer; it is saved on release.
   const grab = (e: PointerEvent<Element>) => {
-    if (!mockup || measuring || marks) return
+    if (!mockup || measuring || marks || locked) return
     const [x, y] = toPhoto(e)
     const [cx, cy] = mockup.corners[0]
     drag.current = { dx: cx - x, dy: cy - y }
@@ -215,8 +221,10 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
 
   // Muse gets the mockup flat, as it lights and shadows the painting itself.
   const hang = async () => {
-    const flat = flatPicture(false), drawn = paintingSource()
-    if (!onHang || !flat || !drawn) return
+    // Already made for where it is: show it again rather than asking Muse twice.
+    if (kept) { setFlat(false); return }
+    const drawnFlat = flatPicture(false), drawn = paintingSource()
+    if (!onHang || !drawnFlat || !drawn || locked) return
     const alone = document.createElement('canvas')
     alone.width = Math.round(drawn.crop.w)
     alone.height = Math.round(drawn.crop.h)
@@ -227,9 +235,9 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
     setError(null)
     setHanging('Starting…')
     try {
-      const url = await onHang(await asPng(flat), await asPng(alone), setHanging)
+      const url = await onHang(await asPng(drawnFlat), await asPng(alone), setHanging)
       // Moved while Muse worked: its photo shows it where it was.
-      if (latest.current === placedAt) setHung({ url, of: art!.title })
+      if (latest.current === placedAt) { setMade(m => ({ ...m, [art!.title]: url })); setFlat(false) }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Muse Image couldn't hang it. Try again.")
     } finally {
@@ -269,7 +277,7 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
             onPointerMove={move}
             onPointerUp={drop}
             onPointerCancel={drop}
-            className="absolute top-0 left-0 origin-top-left cursor-grab touch-none select-none active:cursor-grabbing"
+            className={cn('absolute top-0 left-0 origin-top-left touch-none select-none', !locked && 'cursor-grab active:cursor-grabbing')}
             style={{ width: art.px[0], height: art.px[1], transform: quadTransform(onScreen(mockup.corners), art.px[0], art.px[1]) }}
           >
             {art.node}
@@ -358,25 +366,25 @@ export function WallMockup({ wall, mockup, size, wallWidthCm, onChange, onCommit
           <span className="min-w-0 flex-1 basis-60 text-pretty">
             {note}{' '}
             {mockup.estimated
-              ? `The scale is an estimate from the photo, about ${mockup.length_cm} cm across. Set it for a true fit.`
+              ? `The scale is an estimate from the photo, about ${mockup.length_cm} cm across.${locked ? '' : ' Set it for a true fit.'}`
               : `Scale from a ${mockup.length_cm} cm line.`}
           </span>
           <span className="flex flex-wrap gap-1">
-            {art && onHang && (hung
-              ? <Button type="button" variant="ghost" size="sm" onClick={() => setHung(null)}><Undo2 /> Back to placing</Button>
+            {art && (onHang || kept) && (!locked || kept) && (hung
+              ? <Button type="button" variant="ghost" size="sm" onClick={() => setFlat(true)}><Undo2 /> {locked ? 'Show it flat' : 'Back to placing'}</Button>
               : (
                 <Button type="button" variant="ghost" size="sm" onClick={hang} disabled={!!hanging}>
                   {hanging ? <LoaderCircle className="animate-spin" /> : <Sparkles />} Make it look real
                 </Button>
               ))}
-            {onResize && <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); setHung(null); setMarks([]) }}><SquareDashedMousePointer /> Mark the corners</Button>}
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setHung(null); setMeasuring(true) }}><Ruler /> {mockup.estimated ? 'Set the scale' : 'Re-measure'}</Button>
+            {onResize && !locked && <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); setFlat(true); setMarks([]) }}><SquareDashedMousePointer /> Mark the corners</Button>}
+            {!locked && <Button type="button" variant="ghost" size="sm" onClick={() => { setFlat(true); setMeasuring(true) }}><Ruler /> {mockup.estimated ? 'Set the scale' : 'Re-measure'}</Button>}
             {art && <Button type="button" variant="ghost" size="sm" onClick={download}><Download /> Save image</Button>}
           </span>
         </div>
       )}
       {hanging && <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" aria-hidden />{hanging} It takes about 20 seconds.</p>}
-      {hung && !hanging && <p className="text-xs text-muted-foreground text-pretty">Muse Image's picture of it hung here. It can change the room's light a little. Drag the painting to place it again.</p>}
+      {hung && !hanging && <p className="text-xs text-muted-foreground text-pretty">Muse Image's picture of it hung here. It can change the room's light a little.{!locked && ' Drag the painting to place it again.'}</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </div>
   )

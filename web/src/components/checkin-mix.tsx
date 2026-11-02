@@ -10,6 +10,7 @@ import { latestMixes, type MixCheck, type MixResult, type MixState } from '@/lib
 import type { Concept } from '@/lib/concepts'
 import { recipeLine, type Recipe } from '@/lib/recipe'
 import { cn } from '@/lib/utils'
+import { useExample } from '@/lib/example'
 
 const STATE: Record<MixState, { label: string; tone: string }> = {
   match: { label: 'Matches the mix', tone: 'text-emerald-800' },
@@ -86,6 +87,7 @@ export function MixSection({ brief, set, concept, recipe, checks, focus, onCheck
     }
   }
 
+  const example = useExample()
   const input = usePhotoInput(file => {
     setError(null)
     setPhoto({ file, url: URL.createObjectURL(file) })
@@ -125,12 +127,14 @@ export function MixSection({ brief, set, concept, recipe, checks, focus, onCheck
     <div className="flex flex-col gap-5 pb-6" aria-live="polite">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-[60ch] text-pretty text-muted-foreground">
-          Upload a photo of the {tinted ? 'tinted paste, with the paste already mixed in,' : 'paint'} and pick the color it should be. Anything white in the shot, like a rag or paper, makes the reading more exact. Acrylic dries a little darker than it looks wet.
+          {example
+            ? 'The photos of the mixes in the bowl taken while it was painted, each measured against the color it should be.'
+            : <>Upload a photo of the {tinted ? 'tinted paste, with the paste already mixed in,' : 'paint'} and pick the color it should be. Anything white in the shot, like a rag or paper, makes the reading more exact. Acrylic dries a little darker than it looks wet.</>}
         </p>
         {input.element}
-        <Button variant="outline" onClick={input.open} disabled={input.preparing || !!phase}>
+        {!example && <Button variant="outline" onClick={input.open} disabled={input.preparing || !!phase}>
           {input.preparing ? <LoaderCircle className="animate-spin" /> : <Upload />} {photo ? 'Another photo' : 'Upload a photo'}
-        </Button>
+        </Button>}
       </div>
       {(error || input.error) && <p role="alert" className="text-destructive">{error ?? input.error}</p>}
 

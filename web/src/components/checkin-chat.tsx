@@ -3,6 +3,7 @@ import { ArrowUp, LoaderCircle } from 'lucide-react'
 import { DictateButton } from '@/components/dictate-button'
 import { Button } from '@/components/ui/button'
 import type { Asked } from '@/lib/checks'
+import { RECORDED, useExample } from '@/lib/example'
 
 type CheckInChatProps = {
   questions: Asked[]
@@ -14,6 +15,7 @@ type CheckInChatProps = {
 
 // Questions for Spark at the easel, when the instructions don't help or something else comes up.
 export function CheckInChat({ questions, section, onAsk }: CheckInChatProps) {
+  const example = useExample()
   const [text, setText] = useState('')
   const [pending, setPending] = useState<string | null>(null)
   const [phase, setPhase] = useState('Starting…')
@@ -48,7 +50,8 @@ export function CheckInChat({ questions, section, onAsk }: CheckInChatProps) {
     <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Ask a question">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-medium">Ask a question</h2>
-        {questions.length === 0 && !pending && (
+        {example && <p className="text-xs text-pretty text-muted-foreground">{questions.length ? 'What was asked while it was painted, and Muse Spark\'s answers.' : 'Nothing was asked while this one was painted.'}</p>}
+        {questions.length === 0 && !pending && !example && (
           <p className="text-xs text-pretty text-muted-foreground">If the instructions don't help, or something else comes up. It knows this painting's plan and what your check-ins found.</p>
         )}
       </div>
@@ -72,7 +75,7 @@ export function CheckInChat({ questions, section, onAsk }: CheckInChatProps) {
 
       {error && <p role="alert" className="text-xs text-pretty text-destructive">{error}</p>}
 
-      <form
+      {example ? <p className="text-xs text-pretty text-muted-foreground">{RECORDED}</p> : <form
         onSubmit={e => { e.preventDefault(); send() }}
         className="flex shrink-0 flex-col gap-1 rounded-xl bg-background p-2 shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_3px_rgb(0_0_0/0.05)]"
       >
@@ -93,7 +96,7 @@ export function CheckInChat({ questions, section, onAsk }: CheckInChatProps) {
             {pending ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
           </Button>
         </div>
-      </form>
+      </form>}
     </section>
   )
 }

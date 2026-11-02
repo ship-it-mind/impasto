@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { reliefSummary, versionsOf, type Concept, type Piece, type Segment } from '@/lib/concepts'
 import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
 import type { Mockup } from '@/lib/wall'
+import { useExample } from '@/lib/example'
 
 // Placeholder room, in cm, until the client's wall photo is in (OUR-139).
 const SOFA = { w: 220, h: 82 }
@@ -35,6 +36,7 @@ const SHADOW = 'shadow-[0_2px_3px_rgb(0_0_0/0.25),0_14px_28px_-10px_rgb(0_0_0/0.
 function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }: {
   photo: { briefId: string; url: string }; concept: Concept; seed: number; canvasPx: [number, number]; piece: Piece; light: number; active: boolean
 }) {
+  const example = useExample()
   const [mockup, setMockup] = useState<Mockup | null | undefined>(undefined)
   // The Brief can move it too, so look again on coming back.
   useEffect(() => {
@@ -51,20 +53,22 @@ function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }:
       size={{ w: piece.widthCm, h: piece.heightCm }}
       wallWidthCm={piece.wallWidthCm}
       onChange={setMockup}
-      onCommit={async m => { await saveMockup(photo.briefId, m) }}
+      onCommit={async m => { if (!example) await saveMockup(photo.briefId, m) }}
+      locked={example}
       art={{
         node: <ConceptPainting concept={concept} seed={seed} width={canvasPx[0]} height={canvasPx[1]} light={light} className={SHADOW} />,
         px: canvasPx,
         title: concept.title,
       }}
-      note={`${piece.widthCm} × ${piece.heightCm} cm. Drag the canvas to where it hangs.`}
-      onHang={(flat, painting, onPhase) => hangOnWall(photo.briefId, flat, painting, onPhase)}
+      note={`${piece.widthCm} × ${piece.heightCm} cm.${example ? '' : ' Drag the canvas to where it hangs.'}`}
+      onHang={(flat, painting, onPhase) => hangOnWall(photo.briefId, flat, painting, concept.title, onPhase)}
     />
   )
 }
 
 // The picture hung on the client's wall in the size chosen, changed in the chat until it's the one to paint.
 export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo, active, onEdit }: ConceptsProps) {
+  const example = useExample()
   const [pick, setPick] = useState(initialPick)
   const [onPhoto, setOnPhoto] = useState(!!photo)
   const [light, setLight] = useState(DEFAULT_LIGHT)
@@ -236,7 +240,15 @@ export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, in
           <p className="text-xs text-pretty text-muted-foreground">This concept has only a drawn preview, so there's no painting to change in a chat. Pick another, or make new ones.</p>
         )}
 
-        <Button size="lg" className="self-start" disabled={editing} onClick={() => onChoose(pick)}>Let's start painting</Button>
+        {/* The example has a recipe, steps and check-ins only for the version that was painted. */}
+        {example && pick !== initialPick ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-xs text-pretty text-muted-foreground">This one wasn't painted, so it has no recipe here. {concepts[initialPick]?.title} was.</p>
+            <Button size="lg" variant="outline" onClick={() => show(initialPick)}>Show the one painted</Button>
+          </div>
+        ) : (
+          <Button size="lg" className="self-start" disabled={editing} onClick={() => onChoose(pick)}>Let's start painting</Button>
+        )}
       </aside>
     </div>
   )

@@ -11,6 +11,7 @@ import type { BriefResult } from '@/lib/brief'
 import type { Point } from '@/lib/checkin'
 import { useObjectUrl } from '@/lib/use-object-url'
 import { cn } from '@/lib/utils'
+import { RECORDED, useExample } from '@/lib/example'
 import { cornersRatio, pictureRatio, shapeOff } from '@/lib/picture-shape'
 import { pxPerCm, quadCm, resizeQuad, type Mockup, type SizeCm } from '@/lib/wall'
 
@@ -91,6 +92,7 @@ type BriefProps = {
 // the structured brief comes back below it, to check before making concepts. Under an
 // empty box, the pieces read before, to carry on with one.
 export function BriefScreen({ initial, joining, openError = null, hasConcepts, onShowConcepts, onOpen, onBrief, onConcepts }: BriefProps) {
+  const example = useExample()
   const [text, setText] = useState('')
   const [wall, setWall] = useState<File | null>(null)
   const [refs, setRefs] = useState<File[]>([])
@@ -344,7 +346,8 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
             </div>
             <PieceSize
               size={size}
-              disabled={!!making}
+              disabled={!!making || example}
+              locked={example}
               fit={result.brief.wall_fit}
               wall={result.wall}
               mockup={mockup}
@@ -372,6 +375,12 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
                 {refsOff === 1 && refs.length === 1 ? 'This reference is' : refsOff === refs.length ? 'These references are' : `${refsOff} of the references are`} a very different shape from a {settledSize.w} × {settledSize.h} cm canvas, so they don't match. Try uploading another, or change the size. You can still make concepts with {refsOff === 1 ? 'it' : 'them'}.
               </p>
             )}
+            {example ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {hasConcepts && <Button size="lg" onClick={onShowConcepts}>See the concepts</Button>}
+                <span className="max-w-[50ch] text-xs text-pretty text-muted-foreground">{RECORDED}</span>
+              </div>
+            ) : (
             <div className="flex items-center gap-3">
               {hasConcepts && !making && <Button size="lg" variant={sizeChanged ? 'ghost' : 'default'} onClick={onShowConcepts}>See the concepts</Button>}
               <Button size="lg" variant={hasConcepts && !exact && !sizeChanged ? 'ghost' : 'default'} onClick={make} disabled={!!making || looking || !settledSize || (asIs && !exact) || !!exactOff || (corners.length > 0 && corners.length < 4)}>
@@ -387,6 +396,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
                     : exact ? 'Muse Image cleans it, then it\'s planned as it is. No new concepts.' : `Style: ${refs.length ? `${refs.length} reference${refs.length > 1 ? 's' : ''}` : 'Flowing Bands (default)'}`}
               </span>
             </div>
+            )}
           </article>
         )}
       </section>

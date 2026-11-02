@@ -5,6 +5,7 @@ import { loadLayout } from '@/lib/band-map'
 import type { Concept, Segment } from '@/lib/concepts'
 import { drawSegments, findSegments, labelAt, type SegmentMap } from '@/lib/segments'
 import { cn } from '@/lib/utils'
+import { useExample } from '@/lib/example'
 
 // The painting, large, to tap segments on: small on the wall, they would be hard to hit. map: its band map.
 export function SegmentPicker({ ratio, map, segments, onSegments, children }: { ratio: number; map: string; segments: Segment[]; onSegments: (segments: Segment[]) => void; children: ReactNode }) {
@@ -72,6 +73,7 @@ type ConceptChatProps = {
 // A chat to change the painting, about all of it or selected segments. Each answer is a new
 // version of the painting, and any earlier one can be gone back to.
 export function ConceptChat({ versions, current, onShow, segments, selecting, onSelecting, onClearSegments, onSend, onBusy }: ConceptChatProps) {
+  const example = useExample()
   const [text, setText] = useState('')
   const [pending, setPending] = useState<{ message: string; onPart: boolean } | null>(null)
   const [phase, setPhase] = useState('Starting…')
@@ -102,9 +104,10 @@ export function ConceptChat({ versions, current, onShow, segments, selecting, on
     <section className="flex flex-col gap-3" aria-label="Change the painting">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-medium">Change something</h2>
-        {versions.length === 1 && !pending && (
+        {versions.length === 1 && !pending && !example && (
           <p className="text-xs text-pretty text-muted-foreground">Say what to change in the painting, or select a segment first to change just that part.</p>
         )}
+        {example && <p className="text-xs text-pretty text-muted-foreground">{versions.length > 1 ? 'What was asked when it was painted, and each version Muse Image made. Tap one to see it.' : 'Nothing was changed on this one when it was painted.'}</p>}
       </div>
 
       {(versions.length > 1 || pending) && (
@@ -138,7 +141,7 @@ export function ConceptChat({ versions, current, onShow, segments, selecting, on
 
       {error && <p role="alert" className="text-xs text-pretty text-destructive">{error}</p>}
 
-      <form
+      {!example && <form
         onSubmit={e => { e.preventDefault(); send() }}
         className="flex flex-col gap-1 rounded-xl bg-background p-2 shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_3px_rgb(0_0_0/0.05)]"
       >
@@ -173,7 +176,7 @@ export function ConceptChat({ versions, current, onShow, segments, selecting, on
             {pending ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
           </Button>
         </div>
-      </form>
+      </form>}
     </section>
   )
 }
