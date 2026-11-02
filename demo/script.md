@@ -6,7 +6,7 @@ Format follows the Crossbeam demo (Built with Opus 4.6): hook line → who I am 
 
 Spine: one painting from idea to finished canvas, then two more she made with Impasto.
 
-Status: full first draft. Yara's lines are confirmed as true for her. **[run]** marks numbers that come from the recorded example piece, still to record.
+Status: second draft, telling the whole way from idea to canvas, not only mixing. **[confirm]** marks Yara's lines to check again. **[run]** marks numbers that come from the recorded example piece, still to record.
 
 ## 0. Hook (≈ 0:00–0:08)
 
@@ -22,58 +22,61 @@ Status: full first draft. Yara's lines are confirmed as true for her. **[run]** 
 > *(Photo `stages` 05: close-up of the ridges, slow pan.)*
 > "She paints impasto: thick paint, laid on with a knife, so it stands up off the canvas. Every color is mixed by hand."
 
-## 2. Yara, on camera (≈ 0:28–0:40)
+## 2. Yara, on camera (≈ 0:28–0:42)
 
 > *(Yara, chest up, phone or webcam. Big name card: "Yara / painter".)*
-> **Yara:** "I always see the painting in my head first. 
-> But once I start mixing, I'm guessing. Which colors, how much of each, and will it even look right on the wall?"
+> **Yara:** "I always see the painting in my head first. But getting it onto the canvas is a lot of guessing. **[confirm]**
+> Will it look right on the wall? Which colors do I need, and how do I mix them? Where do I start? And halfway through, am I still on track?" **[confirm]**
 
-She can say it in her own way; the three guesses (colors, amounts, the wall) are what sections 4 and 5 answer.
+She can say it in her own way. Her questions are the stops section 4 walks through, in the same order.
 
-## 3. "I thought this would be easy" (≈ 0:40–1:02)
+## 3. "I thought this would be easy" (≈ 0:42–1:00)
 
 > *(Close-ups of her ridges, `stages` photos.)*
-> **Sultan:** "I thought AI could do this easily. A model looks at a painting and names its colors. I was wrong."
-> *(Animated type over the photo: `"sage" → 0 masks`, `"cream" → 0 masks`.)*
-> "Ask a model to find 'sage' or 'cream' in her painting, and it finds nothing.
-> Ask it to paint something new, and you get generic texture, nothing like hers.
-> And every knife ridge casts a shadow that changes the color you measure."
+> **Sultan:** "I thought AI could do this easily. Models write ideas, paint pictures, name colors. I was wrong."
+> *(Day 1 test: `text-only.webp` beside `with-refs.webp`.)*
+> "Ask one to paint her idea, and you get generic texture, nothing like hers."
+> *(Animated type over a ridge photo: `"sage" → nothing found`, `"cream" → nothing found`.)*
+> "Ask it to find 'sage' or 'cream' in her painting, and it finds nothing.
+> And every knife ridge casts a shadow that changes the color it sees."
 > *(Hard cut to black, then type: "So Impasto doesn't guess.")*
 > "So Impasto doesn't guess. It learns from her own paintings, and it measures."
 
-Visual: the real Day 1 results from `backend/spikes/output/image/`, `text-only.webp` beside `with-refs.webp`, labeled "Day 1 test". No reruns.
+Visual: the real Day 1 results from `backend/spikes/output/image/`, labeled "Day 1 test". No reruns.
 
-## 4. On top, it's simple (≈ 1:02–1:32)
+## 4. On top, it's simple (≈ 1:00–1:45)
+
+A strip of five stops stays on screen the whole section, lighting up one at a time: **Idea · See it · Colors · Steps · Check-ins**. It shows the app covers the whole way from idea to canvas, not one part of it.
 
 > *(Screen recording of the live app, in a soft frame.)*
-> **Sultan:** "Here's how it works for Yara. She says the idea out loud."
-> *(Brief box filling from dictation.)* **[run]**: what she said.
-> "Impasto turns it into a brief, and paints three concepts, steered by her own paintings."
-> *(Concepts screen.)*
-> "She takes a photo of her wall, and there it is, hung at its real size."
+> **Sultan:** "Here's how it works. It starts with the idea. Yara says it out loud, and Impasto paints three concepts, steered by her own paintings."
+> *(Brief from dictation, then the Concepts screen.)* **[run]**: what she said.
+> "She talks to it to change what she doesn't like, the whole thing or one part."
+> *(Concepts chat, a tapped segment repainted.)*
+> "Then she sees it: a photo of her wall, with the painting hung at its real size."
 > *(Wall view, Make it look real.)*
-> "Then the part she used to guess: every color, in grams, mixed from the tubes she already has."
-> *(Recipe screen, a big number on screen.)* **[run]**: e.g. "N colors · N g of paste".
+> "Then the colors: every one she needs, how much to make, and how to mix it from the tubes she has."
+> *(Recipe screen, ticking what she already has.)* **[run]**: e.g. "N colors · N g of paste".
+> "Then the steps: every stage in order, with a picture of how the canvas should look after it."
+> *(How to paint it, scrolling through the stages.)*
 
-## 5. Under the hood (≈ 1:32–1:57)
+## 5. Under the hood (≈ 1:45–2:05)
 
 > *(Animated diagram on a plain background, one node per sentence.)*
-> **Sultan:** "On top, it's simple. Underneath, four Meta models work together.
-> Muse Voice Transcribe turns what she says into text.
-> Muse Spark turns that into a brief, and later writes every step of how to paint it.
-> Muse Image paints the concept, steered by her past work.
-> SAM finds each color band, and each band's area becomes grams of paint and paste."
+> **Sultan:** "Underneath, four Meta models work together.
+> Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.
+> Muse Image paints it, in her style. And SAM finds each color band, so its area becomes grams of paint."
 
-## 6. Proof: a check-in (≈ 1:57–2:22)
+## 6. Check-ins: still on track (≈ 2:05–2:25)
 
 A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05 or 06). It doesn't claim she used check-ins on this painting.
 
-> *(The bowl photo, then the check-in screen.)*
-> **Sultan:** "Does it hold up off the screen? This is her plum mix, from while she was painting.
-> Impasto finds the paint in the bowl, corrects for the light using anything white in the shot, and checks it against the recipe."
+> *(The five-stop strip lights its last stop, then the bowl photo and the check-in screen.)*
+> **Sultan:** "And while she paints, she checks in. A photo of a step, and it's compared with how that step should look.
+> This is her plum mix, from while she was painting. Impasto finds the paint in the bowl and checks it against the recipe."
 > *(The result big on screen, labeled "saved result".)* **[run]**: e.g. "add N g of …".
 
-## 7. Finished, and the callback (≈ 2:22–2:48)
+## 7. Finished, and the callback (≈ 2:25–2:48)
 
 > *(Photo `stages` 12, slow push in.)*
 > **Sultan:** "It started as an idea in her head. Now it's real."
@@ -84,7 +87,7 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 ## 8. Yara's last word (≈ 2:48–3:00)
 
 > *(Yara on camera, or her voice over the finished canvas.)*
-> **Yara:** "I still mix every color by hand. I just don't have to guess anymore."
+> **Yara:** "I still do all the painting myself. But now I know where I'm going, from the first idea to the last layer." **[confirm]**
 
 ## Rules
 
