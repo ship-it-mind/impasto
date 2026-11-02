@@ -92,3 +92,33 @@ def test_without_an_example_nothing_changes(example, monkeypatch):
     monkeypatch.setattr(api_module, "EXAMPLE_PIECE", "")
     assert example["other"].get(f"/api/pieces/{example['piece']}").status_code == 404
     assert example["other"].get("/api/pieces").json()["pieces"] == []
+
+
+def test_the_photo_of_it_hung_comes_back_until_it_moves(example, monkeypatch):
+    """So the example shows the photo Muse made in the real run. Made up here, with no model."""
+    import time
+
+    import cv2
+    import numpy as np
+
+    from impasto import wall
+    monkeypatch.setattr(api_module, "EXAMPLE_PIECE", "")
+    a, piece = example["owner"], example["piece"]
+    placed = {"line": [[0, 0], [10, 0]], "length_cm": 10, "corners": [[1, 1], [5, 1], [5, 4], [1, 4]]}
+    assert a.put(f"/api/pieces/{piece}/mockup", json=placed).status_code == 200
+    monkeypatch.setattr(wall, "hang", lambda flat, painting: np.full((60, 80, 3), 120, np.uint8))
+    png = ("x.png", cv2.imencode(".png", np.zeros((30, 20, 3), np.uint8))[1].tobytes(), "image/png")
+    job = a.post(f"/api/pieces/{piece}/wall/hung", files={"mockup": png, "painting": png}, data={"of": "One"}).json()["job"]
+    for _ in range(100):
+        if a.get(f"/api/jobs/{job}").json()["status"] != "running":
+            break
+        time.sleep(0.05)
+    url = a.get(f"/api/jobs/{job}").json()["result"]["url"]
+    assert a.get(f"/api/pieces/{piece}/mockup").json()["mockup"]["hung"] == {"One": url}
+    monkeypatch.setattr(api_module, "EXAMPLE_PIECE", piece)
+    assert example["other"].get(f"/api/pieces/{piece}/mockup").json()["mockup"]["hung"] == {"One": url}
+    assert example["other"].get(url).status_code == 200
+    # Moved, the photo no longer shows where it hangs.
+    monkeypatch.setattr(api_module, "EXAMPLE_PIECE", "")
+    a.put(f"/api/pieces/{piece}/mockup", json={**placed, "corners": [[2, 1], [6, 1], [6, 4], [2, 4]]})
+    assert "hung" not in a.get(f"/api/pieces/{piece}/mockup").json()["mockup"]

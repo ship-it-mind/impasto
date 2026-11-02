@@ -258,6 +258,17 @@ def add_piece_images(piece_id: str, images: dict[str, bytes]) -> None:
         put_images(db, piece_id, images)
 
 
+def keep_hung(piece_id: str, corners: list, of: str, name: str) -> None:
+    """Keep Muse's photo of the painting titled `of` hung on the wall, if the piece still hangs where it was photographed."""
+    with connect() as db:
+        row = db.execute("SELECT mockup FROM pieces WHERE id = ?", (piece_id,)).fetchone()
+        mockup = json.loads(row["mockup"]) if row and row["mockup"] else None
+        if mockup is None or mockup.get("corners") != corners:
+            return
+        mockup.setdefault("hung", {})[of] = name
+        db.execute("UPDATE pieces SET mockup = ? WHERE id = ?", (dumps(mockup), piece_id))
+
+
 def choose(piece_id: str, concept: int) -> None:
     with connect() as db:
         db.execute("UPDATE pieces SET chosen = ? WHERE id = ?", (concept, piece_id))

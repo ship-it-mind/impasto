@@ -788,8 +788,12 @@ class Mockup(BaseModel):
 
 @api.get("/api/pieces/{brief_id}/mockup")
 def get_mockup(user: CurrentUser, brief_id: str) -> dict:
+    """Where the piece hangs, with Muse's photos of it hung there, by the title of the painting hung."""
     saved = piece_or_404(brief_id, user)
-    return {"mockup": walls.with_corners(saved["mockup"], saved["record"]["brief"]["piece"])}
+    mockup = walls.with_corners(saved["mockup"], saved["record"]["brief"]["piece"])
+    if mockup and "hung" in mockup:
+        mockup = {**mockup, "hung": {of: f"/api/pieces/{brief_id}/wall/hung/{name}" for of, name in mockup["hung"].items()}}
+    return {"mockup": mockup}
 
 
 def checked_mockup(mockup: Mockup) -> dict:
@@ -814,11 +818,18 @@ def readable_image(upload: UploadFile, name: str) -> bytes:
 
 
 @api.post("/api/pieces/{brief_id}/wall/hung")
-def hang_on_wall(user: CurrentUser, brief_id: str, mockup: Annotated[UploadFile, File()], painting: Annotated[UploadFile, File()]) -> dict:
+def hang_on_wall(
+    user: CurrentUser,
+    brief_id: str,
+    mockup: Annotated[UploadFile, File()],
+    painting: Annotated[UploadFile, File()],
+    of: Annotated[str, Form(max_length=200)] = "",
+) -> dict:
     """Muse Image's photo of the piece really hung on the wall: lit by the room, with its canvas edge and a shadow.
 
-    mockup: the wall photo with the painting drawn flat on it, as the web app shows it. painting: the painting on its own."""
-    piece_or_404(brief_id, user, change=True)
+    mockup: the wall photo with the painting drawn flat on it, as the web app shows it. painting: the painting on its own.
+    of: the painting's title. The photo is kept with where the piece hangs, until it's moved, so reopening the piece shows it."""
+    placed = piece_or_404(brief_id, user, change=True)["mockup"]
     images = {"flat.png": readable_image(mockup, "wall picture"), "painting.png": readable_image(painting, "painting")}
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -827,6 +838,8 @@ def hang_on_wall(user: CurrentUser, brief_id: str, mockup: Annotated[UploadFile,
             hung = walls.hang(folder / "flat.png", folder / "painting.png")
         name = f"hung-{uuid.uuid4().hex[:12]}.jpg"
         store.add_piece_images(brief_id, {name: cv2.imencode(".jpg", hung, [cv2.IMWRITE_JPEG_QUALITY, 92])[1].tobytes()})
+        if of and placed:
+            store.keep_hung(brief_id, placed["corners"], of, name)
         return {"url": f"/api/pieces/{brief_id}/wall/hung/{name}"}
 
     return start(user, work, key=f"hang:{brief_id}")
