@@ -6,9 +6,17 @@ Format follows the Crossbeam demo (Built with Opus 4.6): hook line → who I am 
 
 Spine: one painting from idea to finished canvas, then two more she made with Impasto.
 
-## 0. Hook (≈ 0:00–0:08), still to write
+## 0. Hook (≈ 0:00–0:08), idea settled, wording in draft
 
-One flip line in the "Everyone thinks X. It's actually Y." pattern, as animated type on a plain background, then the Impasto wordmark. Section 7 calls it back.
+The hard part isn't the painting. It's turning the idea you have into something real. Animated type on a plain background, then the Impasto wordmark. Section 7 calls it back.
+
+> *(Type, one line at a time.)*
+> "Everyone thinks the hard part of painting is the painting.
+> It's actually turning the idea in your head into something real."
+
+## 2–3. Held
+
+Sections 2 and 3 wait until Sultan has asked Yara what the hard part is for her, so section 3 can lead out of what she actually says.
 
 ## 1. Yara (≈ 0:08–0:30), locked
 
@@ -40,7 +48,7 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 
 ## 7. Finished, and the callback (≈ 2:25–2:50), still to write
 
-Photo `stages` 12, then the two other paintings (`others` 00, 01), both made with Impasto. Sultan calls back the hook line.
+Photo `stages` 12, then the two other paintings (`others` 00, 01), both made with Impasto. Sultan calls back the hook line, draft: "It started as an idea in her head. Now it's on the wall."
 
 ## 8. Yara's last word (≈ 2:50–3:00), she records
 
