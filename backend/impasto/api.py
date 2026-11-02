@@ -8,6 +8,10 @@ Pieces live in SQLite (impasto.store); jobs only in memory.
 
 Everything here needs a signed-in user (impasto.auth), and a user only reaches their own pieces and jobs:
 routes get a piece through piece_or_404 or run_or_404, and pictures also check they belong to what's asked for.
+
+The one exception is the example piece, IMPASTO_EXAMPLE_PIECE: a real piece, recorded from start to finish, that
+every user can open and look through but nobody can change, so it never calls a model. A route that would change
+a piece or call a model asks for it with change=True, and the example piece gets a 403 there.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import json
 import logging
 import math
 import mimetypes
+import os
 import re
 import tempfile
 import threading
@@ -80,6 +85,8 @@ HUNG_FILE = re.compile(r"^hung-[0-9a-f]{12}\.jpg$")
 MAX_EDIT_CHARS = 1000
 MAX_QUESTION_CHARS = 1000
 CHECK_IMAGES = {"photo.jpg"}
+EXAMPLE_PIECE = os.environ.get("IMPASTO_EXAMPLE_PIECE", "").strip()
+RECORDED = "This is the example piece, recorded from a real painting, so it can't be changed. Start a piece of your own to try this."
 
 log = logging.getLogger("impasto.api")
 app = FastAPI(title="Impasto")
@@ -205,16 +212,27 @@ def convert_heic(photo: Annotated[UploadFile, File()]) -> Response:
         raise HTTPException(415, f"{photo.filename}: couldn't read this HEIC photo.") from error
 
 
-def piece_or_404(brief_id: str, user: dict) -> dict:
-    """The piece, if it's this user's. Someone else's gets the same answer as one that doesn't exist."""
-    piece = store.piece(brief_id, user["id"]) if BRIEF_ID.match(brief_id) else None
+def is_example(brief_id: str) -> bool:
+    return bool(EXAMPLE_PIECE) and brief_id == EXAMPLE_PIECE
+
+
+def piece_or_404(brief_id: str, user: dict, change: bool = False) -> dict:
+    """The piece, if it's this user's or the example. Someone else's gets the same answer as one that doesn't exist.
+
+    change: the route changes the piece or calls a model, which the example piece never does."""
+    if is_example(brief_id):
+        if change:
+            raise HTTPException(403, RECORDED)
+        piece = store.any_piece(brief_id)
+    else:
+        piece = store.piece(brief_id, user["id"]) if BRIEF_ID.match(brief_id) else None
     if piece is None:
         raise HTTPException(404, "No such brief. Read the brief again.")
     return piece
 
 
-def run_or_404(brief_id: str, run: str, user: dict) -> dict:
-    piece_or_404(brief_id, user)
+def run_or_404(brief_id: str, run: str, user: dict, change: bool = False) -> dict:
+    piece_or_404(brief_id, user, change)
     drafted = store.run(brief_id, run) if RUN_ID.match(run) else None
     if drafted is None:
         raise HTTPException(404, "No such set of concepts. Make them again.")
@@ -338,7 +356,7 @@ def new_concepts(
     height_cm: Annotated[float | None, Form()] = None,
     mockup: Annotated[str | None, Form()] = None,
 ) -> dict:
-    record = settled(piece_or_404(brief_id, user)["record"], width_cm, height_cm)
+    record = settled(piece_or_404(brief_id, user, change=True)["record"], width_cm, height_cm)
     wall_mockup = parsed_mockup(mockup)
     if len(references) > MAX_REFERENCES:
         raise HTTPException(422, f"Up to {MAX_REFERENCES} style pictures.")
@@ -457,7 +475,7 @@ class EditRequest(BaseModel):
 @api.post("/api/concepts/{brief_id}/{run}/{concept}/edit")
 def edit_concept(user: CurrentUser, brief_id: str, run: str, concept: int, body: EditRequest) -> dict:
     """The painter's change, as a new concept in the run. One edit at a time per run: asking again joins it."""
-    drafted = run_or_404(brief_id, run, user)
+    drafted = run_or_404(brief_id, run, user, change=True)
     source = known_concept(drafted, concept)
     message = body.message.strip()
     if not message:
@@ -518,7 +536,8 @@ def known_concept(drafted: dict, concept: int) -> dict:
 def choose(user: CurrentUser, brief_id: str, body: Choice) -> dict:
     """Keep the choice, and hand back the recipe already made for it, if any: then no model needs asking."""
     known_concept(run_or_404(brief_id, body.run, user), body.concept)
-    store.choose(brief_id, body.concept)
+    if not is_example(brief_id):  # the example keeps the choice it was painted from
+        store.choose(brief_id, body.concept)
     if body.without is None:
         return {"recipe": store.latest_recipe(body.run, body.concept)}
     return {"recipe": store.recipe(body.run, body.concept, body.without, body.paste_in_mix)}
@@ -540,7 +559,7 @@ def new_recipe(user: CurrentUser, body: RecipeRequest) -> dict:
     concept = known_concept(drafted, body.concept)
     if made := store.recipe(body.run, body.concept, body.without, body.paste_in_mix):
         return finished(user, made)
-    piece = piece_or_404(body.brief_id, user)["record"]["brief"]["piece"]
+    piece = piece_or_404(body.brief_id, user, change=True)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
         raise HTTPException(409, "The brief has no piece size yet.")
     if len(body.shares) != len(concept["bands"]) or min(body.shares) < 0 or abs(sum(body.shares) - 1) > 0.02:
@@ -666,7 +685,7 @@ def get_supplies(user: CurrentUser, brief_id: str, run: str, concept: int, paste
 
 @api.put("/api/pieces/{brief_id}/supplies")
 def save_supplies(user: CurrentUser, brief_id: str, body: Supplies) -> dict:
-    piece_or_404(brief_id, user)
+    piece_or_404(brief_id, user, change=True)
     if any(item.qty < 1 or (item.size or 0) < 0 for item in body.have.values()):
         raise HTTPException(422, "Quantities start at 1 and sizes can't be negative; leave out what you don't have.")
     have = body.model_dump()["have"]
@@ -690,10 +709,10 @@ def new_guide(user: CurrentUser, body: GuideRequest) -> dict:
     concept = known_concept(run_or_404(body.brief_id, body.run, user), body.concept)
     if made := store.guide(body.run, body.concept, body.without, body.paste_in_mix):
         return finished(user, made)
+    piece = piece_or_404(body.brief_id, user, change=True)["record"]["brief"]["piece"]
     recipe = store.recipe(body.run, body.concept, body.without, body.paste_in_mix)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
-    piece = piece_or_404(body.brief_id, user)["record"]["brief"]["piece"]
 
     def work(phase: Callable[[str], None]) -> dict:
         phase("Writing how to paint it…")
@@ -708,9 +727,10 @@ def new_guide(user: CurrentUser, body: GuideRequest) -> dict:
 
 @api.get("/api/pieces")
 def list_pieces(user: CurrentUser) -> dict:
-    """Every piece of this user's read so far, latest first: enough to pick one to reopen."""
+    """Every piece of this user's read so far, latest first, after the example piece: enough to pick one to reopen."""
     pieces = []
-    for piece in store.pieces(user["id"]):
+    example = store.any_piece(EXAMPLE_PIECE) if EXAMPLE_PIECE else None
+    for piece in ([example] if example else []) + [p for p in store.pieces(user["id"]) if not is_example(p["id"])]:
         run, chosen = piece["run"], piece["chosen"]
         concept = None
         if run is not None and chosen is not None:
@@ -724,6 +744,7 @@ def list_pieces(user: CurrentUser) -> dict:
             "updated": datetime.fromtimestamp(piece["updated_at"], timezone.utc).isoformat(timespec="seconds"),
             "concepts": run is not None,
             "concept": concept,
+            "example": is_example(piece["id"]),
         })
     return {"pieces": pieces}
 
@@ -732,7 +753,7 @@ def list_pieces(user: CurrentUser) -> dict:
 def open_piece(user: CurrentUser, brief_id: str) -> dict:
     """A piece as the app left it: the brief, its latest concepts, the chosen concept with its recipe, and any concepts still being made."""
     saved = piece_or_404(brief_id, user)
-    piece = {"brief": brief_view(saved["record"], brief_id)}
+    piece = {"brief": brief_view(saved["record"], brief_id), "example": is_example(brief_id)}
     run, chosen = saved["run"], saved["chosen"]
     if run is not None:
         piece["concepts"] = run_view(store.run(brief_id, run), brief_id, run)
@@ -780,7 +801,7 @@ def checked_mockup(mockup: Mockup) -> dict:
 @api.put("/api/pieces/{brief_id}/mockup")
 def save_mockup(user: CurrentUser, brief_id: str, body: Mockup) -> dict:
     mockup = checked_mockup(body)
-    piece_or_404(brief_id, user)
+    piece_or_404(brief_id, user, change=True)
     store.save_mockup(brief_id, mockup)
     return {"mockup": mockup}
 
@@ -797,7 +818,7 @@ def hang_on_wall(user: CurrentUser, brief_id: str, mockup: Annotated[UploadFile,
     """Muse Image's photo of the piece really hung on the wall: lit by the room, with its canvas edge and a shadow.
 
     mockup: the wall photo with the painting drawn flat on it, as the web app shows it. painting: the painting on its own."""
-    piece_or_404(brief_id, user)
+    piece_or_404(brief_id, user, change=True)
     images = {"flat.png": readable_image(mockup, "wall picture"), "painting.png": readable_image(painting, "painting")}
 
     def work(phase: Callable[[str], None]) -> dict:
@@ -853,7 +874,7 @@ def new_checkin(
     corners: Annotated[list[str], Form()] = [],  # noqa: B006 - FastAPI copies defaults
     ground: Annotated[str | None, Form()] = None,
 ) -> dict:
-    drafted = run_or_404(brief_id, run, user)
+    drafted = run_or_404(brief_id, run, user, change=True)
     known_concept(drafted, concept)
     piece = piece_or_404(brief_id, user)["record"]["brief"]["piece"]
     if not (piece["width_cm"] and piece["height_cm"]):
@@ -933,8 +954,8 @@ def upright_jpeg(upload: UploadFile, max_side: int | None = None) -> bytes:
 
 
 def painting_plan(brief_id: str, run: str, concept: int, user: dict) -> tuple[dict, dict, dict, str]:
-    """The concept, its latest recipe and guide, and the plan in words for Spark."""
-    source = known_concept(run_or_404(brief_id, run, user), concept)
+    """The concept, its latest recipe and guide, and the plan in words for Spark. Only for a check or question to come, so not on the example."""
+    source = known_concept(run_or_404(brief_id, run, user, change=True), concept)
     recipe = store.latest_recipe(run, concept)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")
@@ -1010,7 +1031,7 @@ def new_mix_check(
     white: Annotated[str | None, Form()] = None,
 ) -> dict:
     """The paint in the bowl against the recipe: measured, with what to do if it's off."""
-    known_concept(run_or_404(brief_id, run, user), concept)
+    known_concept(run_or_404(brief_id, run, user, change=True), concept)
     recipe = store.latest_recipe(run, concept)
     if recipe is None:
         raise HTTPException(409, "Make the recipes first.")

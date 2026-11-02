@@ -217,6 +217,13 @@ def piece(piece_id: str, user_id: str) -> dict | None:
     return piece_row(row) if row else None
 
 
+def any_piece(piece_id: str) -> dict | None:
+    """A piece whoever's it is: only for the example piece, which everyone can see."""
+    with connect() as db:
+        row = db.execute("SELECT * FROM pieces WHERE id = ?", (piece_id,)).fetchone()
+    return piece_row(row) if row else None
+
+
 def pieces(user_id: str) -> list[dict]:
     """Every piece of this user's, latest first."""
     with connect() as db:
