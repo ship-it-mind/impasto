@@ -72,6 +72,18 @@ Model calls cost money, so the app is invite-only. Everyone signs in with an ema
 - **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>` (the `Dockerfile` does). Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
 - **Not built.** There's no password reset or email verification, because the app doesn't send email.
 
+### The example piece
+
+Judges don't have a wall to photograph or a canvas in progress, so the app can show one real piece, recorded from the first brief to the last check-in. Set `IMPASTO_EXAMPLE_PIECE` to that piece's id (the `piece=` in its address). Every account then sees it first in the list. It opens at its brief, and every screen can be looked through. Nobody can change it, its owner included, and it never calls a model: whatever would make something new is turned off in the app and refused by the API.
+
+It only holds what was done while it was painted, so in that run:
+
+- read the brief with a wall photo, and use references;
+- change a concept in the chat at least once, then press "Make it look real" on the wall. Don't move the painting after that, or the photo is dropped;
+- make the recipes, and open How to paint it;
+- check the steps with photos, check a mix or two, and do a whole-canvas check-in;
+- ask the chat a question or two.
+
 ### Deploying
 
 The `Dockerfile` at the repo root builds the whole app as one service: the API serves the web build on port 8000, with Node and ffmpeg alongside it for the renderers and dictation. Any host that builds a Dockerfile works. The demo runs on Coolify.
