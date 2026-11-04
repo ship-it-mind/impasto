@@ -1,0 +1,8 @@
+Under the hood (2:11, about 20 s): each model's work on this painting, one at a time.
+
+Underneath, four Meta models.
+Muse Voice Transcribe hears the idea.
+Muse Spark plans it, from the brief to every step.
+SAM 3.1 finds the painting, and the canvas in every photo.
+Muse Image cleans it, and repaints what she changes.
+The rest, Impasto measures itself: areas into grams, colors into mixes.
