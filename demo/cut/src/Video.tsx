@@ -1,5 +1,5 @@
 import React from 'react'
-import { AbsoluteFill, Audio, Img, Sequence, staticFile, useCurrentFrame } from 'remotion'
+import { AbsoluteFill, Audio, Img, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion'
 import { App, C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
 import { HookSketch } from './hooks'
 import { IntroFull, type Shot } from './intro-clips'
@@ -114,8 +114,20 @@ const Callback: React.FC = () => {
   )
 }
 
+// The music's level through the film: low under the voiceover, lower under Yara's own voice, up a little at the end.
+const MUSIC = { voice: 0.1, yara: 0.05, end: 0.3 }
+const musicLevel = (f: number) => {
+  const keys: [number, number][] = [[0, MUSIC.voice]]
+  for (const k of ['yara', 'last'] as const) keys.push([T[k][0] - 12, MUSIC.voice], [T[k][0] + 8, MUSIC.yara], [T[k][0] + T[k][1] - 8, MUSIC.yara], [T[k][0] + T[k][1] + 12, MUSIC.voice])
+  keys.push([T.end[0] - 4, MUSIC.voice], [T.end[0] + 10, MUSIC.end], [TOTAL, MUSIC.end])
+  keys.sort((a, b) => a[0] - b[0])
+  return interpolate(f, keys.map(k => k[0]), keys.map(k => k[1]), { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
+}
+
 export const Video: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
+    {/* Background music, made by scripts/music.py */}
+    <Audio src={staticFile('music.wav')} volume={musicLevel} />
     <S t={T.hook}><HookSketch /><Voice part="hook" at={6} /></S>
 
     {/* 1. Who I am, and Yara */}
