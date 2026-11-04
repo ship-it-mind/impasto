@@ -14,6 +14,7 @@ Status: second draft, telling the whole way from idea to canvas, not only mixing
 
 - **Narration** is shown as subtitles, because no voiceover is recorded yet. A recorded voice can go on top later, and the subtitles can stay.
 - **Yara's two parts** (§2 and §8) are placeholder cards for now. To add her clips, put them in `demo/cut/public/` and name them in `YARA` at the top of `src/Video.tsx`.
+- **The idea scene** (box, dictation, brief) comes from the user's own recording of the live app on 2026-11-05, `demo/video/new-video/`, cut by `demo/cut/scripts/idea-clip.sh`. It's a fresh run with the same wall, reference and words, so the brief reads "Paint the shared reference exactly as-is for the office wall." and Colors and Mood & style show "From the picture". The rest of the app footage is unchanged.
 - **App footage** comes from the example piece, recorded again locally with `make example`. That version says "What do you want to paint?", not "client", and shows no email or example banner. Two shots come from the cropped screen recording, `demo/video/recording-cropped.mp4`, because the example doesn't save them: the "make it warmer" change (0:39–0:48, cropped past the "Client's wall" toggle) and the plum bowl check (a still at 1:40.85).
 - **Lines changed** so they match this run, where she asked for an exact copy of a painting she loved:
   - §3: "It learns from her own paintings" became "It works from the pictures she gives it, and it measures."

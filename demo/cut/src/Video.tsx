@@ -22,7 +22,7 @@ const YARA_SAY_2: [number, number, string][] = [
 // Every scene's length in frames, in order. Start frames follow from them. 30 fps.
 const LEN = {
   hook: 270, intro: 600, yara: 498, easy: 540,
-  idea: 300, change: 240, see: 150, colors: 330, steps: 330, bowl: 270, step: 330,
+  idea: 360, change: 240, see: 150, colors: 330, steps: 330, bowl: 270, step: 330,
   hood: 570, done: 690, last: 645,
 }
 type Key = keyof typeof LEN
@@ -120,11 +120,12 @@ export const Video: React.FC = () => (
 
     {/* 4. On top, it's simple */}
     <S t={T.idea}>
-      <App stop={0} len={300} say={[
-        [10, 140, "Here's how it works. It starts with the idea. Yara says it out loud: this wall, and a painting she loves."],
-        [150, 290, 'Impasto turns what she said into a brief, and sizes the canvas to the wall.'],
+      {/* From the user's recording of the live app (scripts/idea-clip.sh): the box filling, then the brief. */}
+      <App stop={0} len={LEN.idea} say={[
+        [10, 160, "Here's how it works. It starts with the idea. Yara says it out loud: this wall, and a painting she loves."],
+        [172, 350, 'Impasto turns what she said into a brief, and sizes the canvas to the wall.'],
       ]}>
-        <Screen src="clips/01-brief.mp4" rate={1.3} len={300} zoom={[1, 1.06]} focus={[40, 30]} />
+        <Screen src="clips/01-idea-live.mp4" len={LEN.idea} zoom={[1, 1.03]} focus={[50, 30]} />
       </App>
     </S>
     <S t={T.change}>
