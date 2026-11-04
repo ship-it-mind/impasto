@@ -10,8 +10,8 @@ export const EASY_SAY: [number, number, string][] = [
   [118, 172, 'I was wrong.'],
 ]
 // When each claim is said, and when "I was wrong." lands.
-const CLAIMS: [number, string][] = [[30, 'writes ideas'], [48, 'paints pictures'], [66, 'names colors']]
-const WRONG = 103  // on "I was wrong" in the voiceover
+const CLAIMS: [number, string][] = [[24, 'writes ideas'], [40, 'paints pictures'], [56, 'names colors']]
+const WRONG = 84  // on "I was wrong" in the voiceover
 
 // Her white paste texture, the handheld pass over it, slowed to fill 6 s (it's 4.7 s).
 const Texture: React.FC<{ grey?: number }> = ({ grey = 0 }) => (
@@ -130,7 +130,7 @@ const thumb = (src: string, w: number, h: number) => <Img src={staticFile(src)} 
 // Day 1: her three paintings in, generic texture out.
 const ChatDayOne: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
-    <Turn len={137}>
+    <Turn len={127}>
       <Me a={0} style={{ maxWidth: 1080 }}>
         <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           {thumb('easy/ref-2.jpg', 160, 200)}{thumb('easy/ref-3.jpg', 160, 200)}
@@ -152,7 +152,7 @@ const ChatDayOne: React.FC = () => (
 const LIT = '#e5dccb', SHADE = '#a39b8b'
 const ChatNothing: React.FC = () => {
   const f = useCurrentFrame()
-  const why = ease(f, 127, 143)  // on "Every ridge's shadow changes the color"
+  const why = ease(f, 118, 134)  // on "Every ridge's shadow changes the color"
   const row = (a: number, word: string) => (
     <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', opacity: ease(f, a, a + 10) }}>
       <span>“{word}”</span><span style={{ color: C.soft }}>→</span>
@@ -181,10 +181,10 @@ const ChatNothing: React.FC = () => {
       <div style={{ position: 'absolute', left: 510, top: 100, width: 900, height: 632, borderRadius: 24, overflow: 'hidden', opacity: why, transform: `translateY(${(1 - why) * 30}px) scale(${0.96 + 0.04 * why})`,
         boxShadow: '0 40px 90px -30px rgba(40,25,15,.65)' }}>
         <Img src={staticFile('easy/shadow.jpg')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        {dot(0.347, 0.445, SHADE, 'in shadow', 145)}
-        {dot(0.642, 0.55, LIT, 'in light', 153)}
+        {dot(0.347, 0.445, SHADE, 'in shadow', 136)}
+        {dot(0.642, 0.55, LIT, 'in light', 144)}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 30px', display: 'flex', alignItems: 'center', gap: 22, background: 'rgba(15,13,12,.78)',
-          fontFamily: SANS, fontSize: 34, color: '#fff', opacity: ease(f, 161, 173) }}>
+          fontFamily: SANS, fontSize: 34, color: '#fff', opacity: ease(f, 152, 164) }}>
           <span style={{ fontFamily: SERIF, fontSize: 42 }}>The same cream:</span>
           {[[LIT, 'in light'], [SHADE, 'in shadow']].map(([hex, n]) => (
             <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -210,14 +210,14 @@ export const DontGuess: React.FC = () => {
 
 // The whole of §3, 540 frames: chat (0–180), Day 1 (180–330), sage and cream (330–450), then "doesn't guess".
 // Timed to the voiceover (public/vo/easy.wav, from frame 8): each turn of the chat starts on its line.
-export const EASY_ALL_LEN = 568
-const CUTS = [138, 275, 480]  // "Ask it to paint", "Ask it to find", "So Impasto doesn't guess"
+export const EASY_ALL_LEN = 525
+const CUTS = [117, 244, 441]  // "Ask it to paint", "Ask it to find", "So Impasto doesn't guess"
 export const EASY_ALL_SAY: [number, number, string][] = [
-  [12, 92, 'I thought AI could do this easily.'],
-  [103, 130, 'I was wrong.'],
-  [138, 262, 'Ask it to paint her idea: generic texture, nothing like hers.'],
-  [275, 392, 'Ask it to find “sage” or “cream” in her painting: nothing.'],
-  [402, 470, "Every ridge's shadow changes the color."],
+  [8, 76, 'I thought AI could do this easily.'],
+  [84, 110, 'I was wrong.'],
+  [117, 232, 'Ask it to paint her idea: generic texture, nothing like hers.'],
+  [244, 352, 'Ask it to find “sage” or “cream” in her painting: nothing.'],
+  [362, 432, "Every ridge's shadow changes the color."],
 ]
 export const EasyChatAll: React.FC<{ say?: boolean }> = ({ say = true }) => (
   <AbsoluteFill style={{ background: C.paper }}>

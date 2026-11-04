@@ -13,9 +13,9 @@ import numpy as np
 
 SR, PAD, MAX_PAUSE = 48000, 0.12, 0.5
 TAKES = {  # the take used for each part of the film
-    'hook': 'hook', 'intro': 'intro-2', 'easy': 'would-be-easy', 'idea': 'app-tour-idea', 'change': 'app-tour-the-change',
+    'hook': 'hook', 'intro': 'intro', 'easy': 'would-be-easy', 'idea': 'app-tour-idea', 'change': 'app-tour-change',
     'see': 'app-tour-see-it', 'colors': 'app-tour-colors', 'steps': 'app-tour-steps', 'bowl': 'check-ins-bowl',
-    'step': 'check-ins-canvas', 'hood': 'under-the-hood-2', 'back': 'callback',
+    'step': 'check-ins-canvas', 'hood': 'under-the-hood', 'back': 'callback',
 }
 root = Path(__file__).resolve().parent.parent
 words = json.load(open(sys.argv[1]))
@@ -40,6 +40,13 @@ for part, take in TAKES.items():
         mapped += [(w[0], round(t + w[1] - a, 3), round(t + w[2] - a, 3)) for w in r]
         t += len(seg) / SR
     joined = np.concatenate(pieces)
+    # Trim the silence before the voice starts (the transcriber puts a first word at 0 when it can't tell).
+    hop = int(0.01 * SR)
+    rms = np.sqrt(np.convolve(joined ** 2, np.ones(hop) / hop, 'same'))[::hop]
+    onset = max(0.0, int(np.argmax(rms > 0.08 * rms.max())) * 0.01 - 0.08)
+    joined = joined[int(onset * SR):]
+    t -= onset
+    mapped = [(w, round(max(0.0, a - onset), 3), round(max(0.0, b - onset), 3)) for w, a, b in mapped]
     tmp = root / 'public' / 'vo' / f'{part}.raw.wav'
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', '-', str(tmp)], input=joined.tobytes(), check=True)
     chain = 'highpass=f=80,afftdn=nf=-28'
