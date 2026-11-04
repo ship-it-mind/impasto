@@ -1,8 +1,8 @@
 // §3's first shot, three ways, instead of a pan over a still photo. 6 s each, under
 // "I thought AI could do this easily. Models write ideas, paint pictures, name colors." / "I was wrong."
 import React from 'react'
-import { AbsoluteFill, Img, OffthreadVideo, staticFile, useCurrentFrame } from 'remotion'
-import { C, SANS, SERIF, Say, ease } from './kit'
+import { AbsoluteFill, Img, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from 'remotion'
+import { C, SANS, SERIF, Say, Tag, ease } from './kit'
 
 export const EASY_LEN = 180
 export const EASY_SAY: [number, number, string][] = [
@@ -61,10 +61,11 @@ export const EasyClaims: React.FC = () => {
 }
 
 // ─── 3. A chat that answers confidently, then goes grey ─────────────────────
-const PROMPT = 'Paint a thick knife texture in sage and cream, like her canvas.'
+// The prompt behind the Day 1 'words alone' picture, shortened from backend/spikes/output/image/text-only.json.
+const PROMPT = 'A palette-knife impasto painting: broad flowing bands of color, a muted palette, thick paste with visible ridges.'
 export const EasyChat: React.FC = () => {
   const f = useCurrentFrame()
-  const typed = PROMPT.slice(0, Math.round(PROMPT.length * Math.min(1, Math.max(0, (f - 8) / 40))))
+  const typed = PROMPT.slice(0, Math.round(PROMPT.length * Math.min(1, Math.max(0, (f - 8) / 44))))
   const w = ease(f, WRONG, WRONG + 14)
   const reply = (a: number, children: React.ReactNode) => (
     <div style={{ opacity: ease(f, a, a + 10), transform: `translateY(${(1 - ease(f, a, a + 16)) * 16}px)`, alignSelf: 'flex-start', background: '#fff', borderRadius: 22,
@@ -98,6 +99,135 @@ export const EasyChat: React.FC = () => {
     </AbsoluteFill>
   )
 }
+
+// ─── 4. All of §3 as one chat ───────────────────────────────────────────────
+// The opening chat, then the Day 1 test and the sage-and-cream test as the next turns of the same chat.
+// Both are what really happened: Muse Image was given these three paintings of hers
+// (backend/spikes/output/image/with-refs.json), and SAM looked for "cream paint band" and
+// "sage green paint band" in the first of them and found nothing (output/sam/…5.54.40 PM/summary.json).
+const BUBBLE: React.CSSProperties = { borderRadius: 26, padding: '24px 32px', fontFamily: SANS, fontSize: 40, lineHeight: 1.3 }
+const Me: React.FC<{ a: number; children: React.ReactNode; style?: React.CSSProperties }> = ({ a, children, style }) => {
+  const f = useCurrentFrame()
+  return <div style={{ ...BUBBLE, alignSelf: 'flex-end', background: C.ink, color: '#fff', opacity: ease(f, a, a + 10), transform: `translateY(${(1 - ease(f, a, a + 16)) * 16}px)`, ...style }}>{children}</div>
+}
+const It: React.FC<{ a: number; children: React.ReactNode; style?: React.CSSProperties }> = ({ a, children, style }) => {
+  const f = useCurrentFrame()
+  return <div style={{ ...BUBBLE, alignSelf: 'flex-start', background: '#fff', color: C.ink, boxShadow: '0 1px 2px rgba(0,0,0,.06), 0 10px 30px -18px rgba(60,40,30,.35)',
+    opacity: ease(f, a, a + 10), transform: `translateY(${(1 - ease(f, a, a + 16)) * 16}px)`, ...style }}>{children}</div>
+}
+// A chat screen that slides in from below and out the top, like the chat scrolling on.
+const Turn: React.FC<{ len: number; children: React.ReactNode; last?: boolean }> = ({ len, children, last }) => {
+  const f = useCurrentFrame()
+  const inn = ease(f, 0, 16), out = last ? 0 : ease(f, len - 10, len)
+  return (
+    <div style={{ position: 'absolute', left: 230, right: 230, top: 120, display: 'flex', flexDirection: 'column', gap: 26,
+      opacity: inn * (1 - out), transform: `translateY(${(1 - inn) * 70 - out * 70}px)` }}>{children}</div>
+  )
+}
+const thumb = (src: string, w: number, h: number) => <Img src={staticFile(src)} style={{ width: w, height: h, objectFit: 'cover', borderRadius: 12 }} />
+
+// Day 1: her three paintings in, generic texture out.
+const ChatDayOne: React.FC = () => (
+  <AbsoluteFill style={{ background: C.paper }}>
+    <Turn len={150}>
+      <Me a={0} style={{ maxWidth: 1080 }}>
+        <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
+          {thumb('easy/ref-1.jpg', 160, 200)}{thumb('easy/ref-2.jpg', 160, 200)}{thumb('easy/ref-3.jpg', 160, 200)}
+        </div>
+        These are her paintings. Make a new one in the same style, palette and knife texture.
+      </Me>
+      <It a={34}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
+          {thumb('with-refs.webp', 480, 320)}
+          <span>Here's a new one,<br />in her style.</span>
+        </div>
+      </It>
+    </Turn>
+    <Tag at={30}>Day 1 test</Tag>
+  </AbsoluteFill>
+)
+
+// Sage and cream: asked to find them in her painting, it finds nothing; then why, the same cream in light and in shadow.
+const LIT = '#e5dccb', SHADE = '#a39b8b'
+const ChatNothing: React.FC = () => {
+  const f = useCurrentFrame()
+  const why = ease(f, 62, 78)
+  const row = (a: number, word: string) => (
+    <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', opacity: ease(f, a, a + 10) }}>
+      <span>“{word}”</span><span style={{ color: C.soft }}>→</span>
+      <span style={{ fontWeight: 650, color: '#c9604f', opacity: ease(f, a + 10, a + 20) }}>nothing found</span>
+    </div>
+  )
+  const dot = (x: number, y: number, hex: string, label: string, a: number) => (
+    <div style={{ position: 'absolute', left: `${x * 100}%`, top: `${y * 100}%`, transform: 'translate(-50%, -50%)', opacity: ease(f, a, a + 10) }}>
+      <div style={{ width: 64, height: 64, borderRadius: 64, border: '6px solid #fff', background: hex, boxShadow: '0 4px 16px rgba(0,0,0,.45)' }} />
+      <div style={{ position: 'absolute', top: 74, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontFamily: SANS, fontSize: 28, fontWeight: 600, color: '#fff',
+        background: 'rgba(15,13,12,.72)', padding: '6px 14px', borderRadius: 999 }}>{label}</div>
+    </div>
+  )
+  return (
+    <AbsoluteFill style={{ background: C.paper }}>
+      <Turn len={120} last>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 26, opacity: 1 - 0.8 * why, filter: `grayscale(${why}) blur(${why * 3}px)` }}>
+          <Me a={0} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            {thumb('easy/ref-1.jpg', 150, 200)}
+            <span>Find the sage green band<br />and the cream band.</span>
+          </Me>
+          <It a={14} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {row(14, 'sage green')}
+            {row(30, 'cream')}
+          </It>
+        </div>
+      </Turn>
+      {/* Why: one cream, two colors. The two points are measured from the photo. */}
+      <div style={{ position: 'absolute', left: 510, top: 100, width: 900, height: 632, borderRadius: 24, overflow: 'hidden', opacity: why, transform: `translateY(${(1 - why) * 30}px) scale(${0.96 + 0.04 * why})`,
+        boxShadow: '0 40px 90px -30px rgba(40,25,15,.65)' }}>
+        <Img src={staticFile('easy/shadow.jpg')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {dot(0.347, 0.445, SHADE, 'in shadow', 80)}
+        {dot(0.642, 0.55, LIT, 'in light', 88)}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 30px', display: 'flex', alignItems: 'center', gap: 22, background: 'rgba(15,13,12,.78)',
+          fontFamily: SANS, fontSize: 34, color: '#fff', opacity: ease(f, 96, 108) }}>
+          <span style={{ fontFamily: SERIF, fontSize: 42 }}>The same cream:</span>
+          {[[LIT, 'in light'], [SHADE, 'in shadow']].map(([hex, n]) => (
+            <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ width: 54, height: 54, borderRadius: 12, background: hex, boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.5)' }} />{n}
+            </span>
+          ))}
+        </div>
+      </div>
+    </AbsoluteFill>
+  )
+}
+
+export const DontGuess: React.FC = () => {
+  const f = useCurrentFrame()
+  return (
+    <AbsoluteFill style={{ background: C.black, justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ fontFamily: SERIF, fontSize: 110, color: '#fff', letterSpacing: -2, opacity: ease(f, 4, 16), transform: `scale(${1.03 - 0.03 * ease(f, 4, 40)})`, paddingBottom: 120 }}>
+        So Impasto doesn't guess.
+      </div>
+    </AbsoluteFill>
+  )
+}
+
+// The whole of §3, 540 frames: chat (0–180), Day 1 (180–330), sage and cream (330–450), then "doesn't guess".
+export const EASY_ALL_LEN = 540
+export const EASY_ALL_SAY: [number, number, string][] = [
+  ...EASY_SAY,
+  [186, 320, 'Ask one to paint her idea, and you get generic texture, nothing like hers.'],
+  [334, 388, 'Ask it to find “sage” or “cream” in her painting, and it finds nothing.'],
+  [392, 442, 'And every knife ridge casts a shadow that changes the color it sees.'],
+]
+export const EasyChatAll: React.FC<{ say?: boolean }> = ({ say = true }) => (
+  <AbsoluteFill style={{ background: C.paper }}>
+    <Sequence durationInFrames={180}><EasyChat /></Sequence>
+    <Sequence from={180} durationInFrames={150}><ChatDayOne /></Sequence>
+    <Sequence from={330} durationInFrames={120}><ChatNothing /></Sequence>
+    <Sequence from={450}><DontGuess /></Sequence>
+    {say && <Sequence durationInFrames={450}><Say lines={EASY_ALL_SAY} dark={false} bottom={40} /></Sequence>}
+    {say && <Sequence from={450}><Say lines={[[14, 86, 'It works from the pictures she gives it, and it measures.']]} /></Sequence>}
+  </AbsoluteFill>
+)
 
 // Previews with the narration, to choose from.
 export const EasyPreview: React.FC<{ v: 1 | 2 | 3 }> = ({ v }) => (
