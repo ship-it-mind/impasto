@@ -3,3 +3,6 @@ photos/
 
 # Rendered films stay out too
 *.mp4
+
+# Submission answers, with the invite code
+submission.md
