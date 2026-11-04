@@ -2,7 +2,7 @@ import '@fontsource-variable/fraunces/full.css'
 import '@fontsource-variable/archivo'
 import React from 'react'
 import { Composition } from 'remotion'
-import { TOTAL, Video } from './Video'
+import { Idea, TOTAL, Video } from './Video'
 import { INTRO_LEN, IntroClips, IntroCuts, IntroLift, IntroType, IntroWall } from './intros'
 import { EASY_ALL_LEN, EASY_LEN, EasyChatAll, EasyPreview } from './easy'
 import { IntroBlur, IntroFull, IntroNear, IntroPanels, IntroStrip } from './intro-clips'
@@ -33,5 +33,7 @@ export const Root: React.FC = () => (
     <Composition id="Easy2-Claims" component={EasyPreview} {...opt} durationInFrames={EASY_LEN} defaultProps={{ v: 2 as const }} />
     <Composition id="Easy3-Chat" component={EasyPreview} {...opt} durationInFrames={EASY_LEN} defaultProps={{ v: 3 as const }} />
     <Composition id="Easy4-ChatAll" component={EasyChatAll} {...opt} durationInFrames={EASY_ALL_LEN} />
+    <Composition id="Idea-Fix" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'fix' as const }} />
+    <Composition id="Idea-Hide" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'hide' as const }} />
   </>
 )

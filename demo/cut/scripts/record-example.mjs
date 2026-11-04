@@ -1,10 +1,13 @@
 // Records the app clips from the example piece. Run `make example PORT=8011` first, then:
 //   CH=/path/to/chrome node scripts/record-example.mjs /abs/out/dir && python3 scripts/cfr.py <out>/<clip>_frames <out>/<clip>.mp4
 // Needs playwright (npm i playwright). The page is zoomed 1.5x so the text reads at 1080p.
+// ONLY=01a-box,01-brief records just those clips. HIDE_ROWS=1 hides the brief's Colors and Mood & style rows.
 import { chromium } from 'playwright'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { execFileSync } from 'child_process'
 const OUT = process.argv[2]
+const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null
+const EX = process.env.EX || new URL('../../../example/images/', import.meta.url).pathname
 const BASE = 'http://localhost:8011/?piece=7b5c367705db4c798dcf00593c0d1756&step='
 const b = await chromium.launch({ executablePath: process.env.CH })
 const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 } })
@@ -12,8 +15,9 @@ const p = await ctx.newPage()
 const cdp = await ctx.newCDPSession(p)
 
 const tidy = async () => {
-  await p.evaluate(() => {
+  await p.evaluate((hideRows) => {
     document.documentElement.style.zoom = '1.5'
+    if (hideRows) for (const dt of document.querySelectorAll('dt')) if (['Colors', 'Mood & style'].includes((dt.textContent || '').trim())) dt.parentElement.style.display = 'none'
     for (const el of document.querySelectorAll('body *')) {
       const t = (el.textContent || '').trim()
       if (el.children.length < 6 && (t.startsWith('Example piece.') || t === 'Example only' || t.startsWith('This is the example piece'))) el.style.visibility = 'hidden'
@@ -26,7 +30,7 @@ const tidy = async () => {
       document.body.appendChild(c)
       addEventListener('mousemove', e => { c.style.transform = `translate(${e.clientX / 1.5 - 3}px,${e.clientY / 1.5 - 1}px)` }, true)
     }
-  })
+  }, !!process.env.HIDE_ROWS)
 }
 const ease = async (y, ms = 1600) => p.evaluate(([y, ms]) => new Promise(r => {
   const s = scrollY, t0 = performance.now(), d = y - s
@@ -46,9 +50,12 @@ const clickText = async (text) => {
   await glide(bb.x + Math.min(bb.width / 2, 80), bb.y + bb.height / 2); await p.waitForTimeout(250); await l.click(); 
 }
 const wait = ms => p.waitForTimeout(ms)
+const glideTo = async (l) => { const bb = await l.boundingBox(); await glide(bb.x + bb.width / 2, bb.y + bb.height / 2) }
 
-async function clip(name, step, body) {
+async function clip(name, step, body, before) {
+  if (ONLY && !ONLY.includes(name)) return
   await p.goto(BASE + step); await p.waitForLoadState('networkidle'); await wait(1200); await tidy()
+  if (before) await before()
   await p.mouse.move(...mouse)
   const dir = `${OUT}/${name}_frames`; rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true })
   const frames = []
@@ -68,6 +75,21 @@ async function clip(name, step, body) {
   console.log(name, frames.length, 'frames', (t1 - t0).toFixed(1), 's')
 }
 
+// The box as she filled it, before sending: her wall photo, her reference, and what she dictated.
+// The brief below is hidden, as it isn't there yet. Nothing is sent.
+const TRANSCRIPT = 'This is the wall of my office room. I wanna paint this exact reference I shared with you, can you help with that?'
+await clip('01a-box', 'brief', async () => {
+  await wait(700)
+  await glideTo(p.getByRole('button', { name: 'Wall photo' })); await wait(300)
+  await p.locator('input[type=file]').nth(0).setInputFiles(EX + '7b5c367705db4c798dcf00593c0d1756/wall.jpg'); await wait(1100)
+  await glideTo(p.getByRole('button', { name: 'References' })); await wait(300)
+  await p.locator('input[type=file]').nth(1).setInputFiles(EX + 'concepts-1098fb52/exact.jpg'); await wait(1100)
+  await glideTo(p.getByRole('button', { name: /Dictate/ })); await wait(600)
+  await p.getByLabel('What you want to paint').fill(TRANSCRIPT); await wait(1400)
+  await glideTo(p.getByRole('button', { name: 'Read the brief' })); await wait(1500)
+}, async () => {
+  await p.evaluate(() => { const s = document.querySelector('section[aria-live]'); if (s) s.style.visibility = 'hidden'; scrollTo(0, 0) })
+})
 await clip('01-brief', 'brief', async () => {
   await wait(1500)
   await ease(await yOf('The brief', 60), 1800); await wait(1800)

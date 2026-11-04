@@ -94,6 +94,21 @@ const App: React.FC<{ stop: number; len: number; children: React.ReactNode; say:
   </Fade>
 )
 
+// 4. The idea: the box as she filled it, then the brief Impasto read from it.
+// `brief` is which recording of the brief: 'fix' with the app's "From the picture" rows, 'hide' with those rows hidden.
+export const IDEA_SAY: [number, number, string][] = [
+  [10, 140, "Here's how it works. It starts with the idea. Yara says it out loud: this wall, and a painting she loves."],
+  [150, 290, 'Impasto turns what she said into a brief, and sizes the canvas to the wall.'],
+]
+export const Idea: React.FC<{ brief: 'fix' | 'hide' }> = ({ brief }) => (
+  <AbsoluteFill style={{ background: C.paper }}>
+    <App stop={0} len={300} say={IDEA_SAY}>
+      <Sequence durationInFrames={145}><Screen src="clips/01a-box.mp4" start={1} rate={1.5} len={145} zoom={[1, 1.04]} focus={[50, 20]} /></Sequence>
+      <Sequence from={145}><Screen src={`clips/01-brief-${brief}.mp4`} rate={1.6} len={155} /></Sequence>
+    </App>
+  </AbsoluteFill>
+)
+
 export const Video: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
     <S t={T.hook}><HookSketch /></S>
