@@ -161,3 +161,26 @@ export const IntroStrip: React.FC = () => {
     </Frame>
   )
 }
+
+// ─── e. Near full frame ────────────────────────────────────────────────────
+// Like the full-frame version, but each upright clip is blown up about 2× instead of 2.7×:
+// it fills the height and 1440 px of the width, and fades at its sides into a blurred copy of itself.
+const NW = 1440
+export const IntroNear: React.FC = () => (
+  <Frame dim>
+    {SHOTS.map((s, i) => {
+      const land = LAND.has(s.src)
+      const w = land ? 1920 : NW
+      const fadeEdge = 'linear-gradient(90deg, transparent 0, #000 140px, #000 calc(100% - 140px), transparent 100%)'
+      return (
+        <Sequence key={i} from={s.a} durationInFrames={s.b - s.a}>
+          {!land && <Media src={s.src} rate={s.rate} pos={s.pos} style={{ filter: 'blur(40px) brightness(.5) saturate(1.1)', transform: 'scale(1.15)' }} />}
+          <div style={{ position: 'absolute', top: 0, height: 1080, left: (1920 - w) / 2, width: w, overflow: 'hidden',
+            WebkitMaskImage: land ? undefined : fadeEdge, maskImage: land ? undefined : fadeEdge }}>
+            <Media src={s.src} rate={s.rate} pos={s.pos} />
+          </div>
+        </Sequence>
+      )
+    })}
+  </Frame>
+)
