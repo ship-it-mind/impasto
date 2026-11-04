@@ -22,13 +22,16 @@ Status: second draft, telling the whole way from idea to canvas, not only mixing
   - §6: The check-ins are labeled "Saved result", and the narration says the photos were taken while she painted, not that she checked in at the time.
   - §7: "It started as an idea in her head" became "It started as a picture she loved and an empty wall."
 
-## 0. Hook (≈ 0:00–0:08)
+## 0. Hook (≈ 0:00–0:09), chosen 2026-11-04
 
-> *(Animated type on a plain background, one line at a time. Then the Impasto wordmark.)*
-> "Everyone thinks the hard part of painting is the painting.
-> It's actually turning the idea in your head into something real."
+`HookSketch` in `demo/cut/src/hooks.tsx`, picked from seven. The plan's own pencil lines draw themselves on a blank canvas, the bands fill with flat color in the order she paints them, then it dissolves into the plan's painting ("The plan") and then into her real finished canvas, straightened to the same frame ("Her canvas"). Then the Impasto wordmark.
 
-## 1. Yara (≈ 0:08–0:28), locked
+> "Every painting starts in your head.
+> Getting it onto the canvas is the hard part."
+
+The hook is a second longer than before, so §5 (under the hood) is a second shorter to keep the film at 3:00.
+
+## 1. Yara (≈ 0:09–0:29), locked
 
 > *(Photo `stages` 00: the blank canvas, slow push in.)*
 > "Hi, I'm Sultan. I've been building Impasto, a co-pilot for painters, to help my wife, Yara.

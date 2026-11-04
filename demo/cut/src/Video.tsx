@@ -1,37 +1,20 @@
 import React from 'react'
 import { AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame } from 'remotion'
 import { C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
+import { HookSketch } from './hooks'
 
 // Yara's clips. Put her files in public/ and name them here, then render again.
 export const YARA = { intro: null as string | null, last: null as string | null }
 
 // Every scene, in order, as [start frame, length]. 30 fps, 5400 frames = 3:00.
 const T = {
-  hook: [0, 240], intro: [240, 600], yara: [840, 420], easy: [1260, 540],
-  idea: [1800, 300], change: [2100, 240], see: [2340, 150], colors: [2490, 330], steps: [2820, 330],
-  hood: [3150, 600], bowl: [3750, 270], step: [4020, 330], done: [4350, 690], last: [5040, 360],
+  hook: [0, 270], intro: [270, 600], yara: [870, 420], easy: [1290, 540],
+  idea: [1830, 300], change: [2130, 240], see: [2370, 150], colors: [2520, 330], steps: [2850, 330],
+  hood: [3180, 570], bowl: [3750, 270], step: [4020, 330], done: [4350, 690], last: [5040, 360],
 } as const
 const S: React.FC<{ t: readonly [number, number]; children: React.ReactNode }> = ({ t, children }) => (
   <Sequence from={t[0]} durationInFrames={t[1]}>{children}</Sequence>
 )
-
-// 0. Hook: two lines of type, then the wordmark.
-const Hook: React.FC = () => {
-  const f = useCurrentFrame()
-  const line = (a: number, text: React.ReactNode, size = 76) => (
-    <div style={{ opacity: Math.min(ease(f, a, a + 16), 1 - ease(f, 176, 192)), transform: `translateY(${(1 - ease(f, a, a + 22)) * 26}px)`,
-      fontFamily: SERIF, fontSize: size, lineHeight: 1.1, letterSpacing: -1.5, color: C.ink, textAlign: 'center', maxWidth: 1500, textWrap: 'balance' }}>{text}</div>
-  )
-  return (
-    <AbsoluteFill style={{ background: C.paper }}>
-      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 46 }}>
-        {line(8, <>Everyone thinks the hard part of painting is <i>the painting.</i></>)}
-        {line(78, <>It's actually turning the idea in your head into <span style={{ color: C.plum }}>something real.</span></>)}
-      </AbsoluteFill>
-      <Sequence from={192}><Wordmark len={48} /></Sequence>
-    </AbsoluteFill>
-  )
-}
 
 // 3. The "nothing found" type over a ridge photo.
 const NothingFound: React.FC = () => {
@@ -147,7 +130,7 @@ const App: React.FC<{ stop: number; len: number; children: React.ReactNode; say:
 
 export const Video: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
-    <S t={T.hook}><Hook /></S>
+    <S t={T.hook}><HookSketch /></S>
 
     {/* 1. Who I am, and Yara */}
     <S t={T.intro}>
@@ -215,13 +198,13 @@ export const Video: React.FC = () => (
 
     {/* 5. Under the hood */}
     <S t={T.hood}>
-      <Fade len={600} inF={12} outF={12}>
+      <Fade len={570} inF={12} outF={12}>
         <Hood />
         <Say dark={false} bottom={110} lines={[
           [10, 64, 'Underneath, four Meta models work together.'],
           [70, 182, 'Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.'],
           [320, 420, 'Muse Image paints it.'],
-          [430, 588, 'And SAM finds each color band, so its area becomes grams of paint.'],
+          [430, 558, 'And SAM finds each color band, so its area becomes grams of paint.'],
         ]} />
       </Fade>
     </S>
