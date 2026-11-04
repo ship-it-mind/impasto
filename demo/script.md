@@ -109,13 +109,13 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 
 SAM comes before Muse Image because that's the app's order: SAM finds the painting, then Muse Image cleans it. The old line "SAM finds each color band" was wrong for this run: the bands are read by Impasto's own code from the cleaned picture's colors.
 
-## 7. Finished, and the callback (≈ 2:25–2:48)
+## 7. The callback (4 s), changed 2026-11-05
 
-> *(Photo `stages` 12, slow push in.)*
-> **Sultan:** "It started as an idea in her head. Now it's real."
-> *(The two other paintings, `others` 00 and 01, one after the other.)*
-> "And two more she's made with Impasto."
-> *(Impasto wordmark.)*
+The finished section with the two other paintings is cut: Yara's last clip already shows her finished canvas behind her, and the other two paintings never appear anywhere else. In its place, a 4 s callback to the hook: the picture she loved and her empty wall come together into her finished canvas.
+
+> **Sultan:** "It started as a picture she loved and an empty wall. Now it's real."
+
+The Impasto wordmark moved to the very end, after Yara's last word. The film is 2:58.
 
 ## 8. Yara's last word (≈ 2:48–3:00)
 

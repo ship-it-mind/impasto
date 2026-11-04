@@ -1,5 +1,5 @@
 import React from 'react'
-import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion'
+import { AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame } from 'remotion'
 import { App, C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
 import { HookSketch } from './hooks'
 import { IntroFull } from './intro-clips'
@@ -24,7 +24,7 @@ const YARA_SAY_2: [number, number, string][] = [
 const LEN = {
   hook: 270, intro: 600, yara: 498, easy: 540,
   idea: 360, change: 240, see: 150, colors: 330, steps: 330, bowl: 270, step: 330,
-  hood: 590, done: 690, last: 645,
+  hood: 590, back: 120, last: 645, end: 75,
 }
 type Key = keyof typeof LEN
 const T = {} as Record<Key, readonly [number, number]>
@@ -66,6 +66,31 @@ export const Idea: React.FC<{ brief: 'fix' | 'hide' }> = ({ brief }) => (
     </App>
   </AbsoluteFill>
 )
+
+// 7. "It started as a picture she loved and an empty wall. Now it's real." The two come together into her finished canvas.
+const Callback: React.FC = () => {
+  const f = useCurrentFrame()
+  const join = ease(f, 52, 78)
+  const card = (src: string, label: string, x: number, a: number) => (
+    <div style={{ position: 'absolute', left: x + (960 - x - 210) * join, top: 170, width: 420, opacity: ease(f, a, a + 12) * (1 - ease(f, 60, 80)), transform: `translateY(${(1 - ease(f, a, a + 18)) * 24}px) scale(${1 - 0.1 * join})` }}>
+      <Img src={staticFile(src)} style={{ width: 420, height: 560, objectFit: 'cover', borderRadius: 18, boxShadow: '0 30px 70px -30px rgba(0,0,0,.7)' }} />
+      <div style={{ fontFamily: SANS, fontSize: 24, color: 'rgba(255,255,255,.7)', marginTop: 14, letterSpacing: 2, textTransform: 'uppercase' }}>{label}</div>
+    </div>
+  )
+  const W = 520, H = W * 2000 / 1704
+  return (
+    <AbsoluteFill style={{ background: C.black }}>
+      <Fade len={120} inF={10} outF={10}>
+        {card('app/to-paint.jpg', 'A picture she loved', 420, 2)}
+        {card('app/wall.jpg', 'An empty wall', 1080, 10)}
+        <div style={{ position: 'absolute', left: (1920 - W) / 2, top: 130, width: W, height: H, opacity: ease(f, 62, 84), transform: `scale(${0.94 + 0.06 * ease(f, 62, 100)})` }}>
+          <Img src={staticFile('hook/finished-straight.jpg')} style={{ width: W, height: H, borderRadius: 6, boxShadow: '0 40px 90px -30px rgba(0,0,0,.8)' }} />
+        </div>
+        <Say lines={[[6, 58, 'It started as a picture she loved and an empty wall.'], [70, 116, "Now it's real."]]} />
+      </Fade>
+    </AbsoluteFill>
+  )
+}
 
 export const Video: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
@@ -136,22 +161,13 @@ export const Video: React.FC = () => (
       </App>
     </S>
 
-    {/* 7. Finished */}
-    <S t={T.done}>
-      <Fade len={690} inF={14} outF={1}>
-        <Sequence durationInFrames={300}><Photo src="photos/stage-12.jpg" len={300} from={0.9} to={0.96} dim={0.5} whole /></Sequence>
-        <Sequence from={300} durationInFrames={150}><Photo src="photos/other-00.jpg" len={150} from={1.02} to={1.08} dim={0.45} /></Sequence>
-        <Sequence from={450} durationInFrames={150}><Photo src="photos/other-01.jpg" len={150} from={1.08} to={1.02} dim={0.45} /></Sequence>
-        <Say lines={[
-          [12, 150, 'It started as a picture she loved and an empty wall.'],
-          [160, 290, "Now it's real."],
-          [310, 590, "And two more she's made with Impasto."],
-        ]} />
-        <Sequence from={600}><Wordmark len={90} dark sub="A co-pilot for painters" /></Sequence>
-      </Fade>
-    </S>
+    {/* 7. The callback: the picture she loved and her empty wall, then her canvas */}
+    <S t={T.back}><Callback /></S>
 
     {/* 8. Yara's last word */}
     <S t={T.last}><YaraSlot file={YARA.last} len={LEN.last} say={YARA_SAY_2} card={false} note="Her last word: she still does all the painting herself." /></S>
+
+    {/* The end: the name */}
+    <S t={T.end}><Wordmark len={LEN.end} dark sub="A co-pilot for painters" /></S>
   </AbsoluteFill>
 )
