@@ -4,15 +4,31 @@ import { C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlo
 import { HookSketch } from './hooks'
 import { IntroFull } from './intro-clips'
 
-// Yara's clips. Put her files in public/ and name them here, then render again.
-export const YARA = { intro: null as string | null, last: null as string | null }
+// Yara's clips, cut by scripts/yara-clips.sh, with her words as subtitles (frames within each clip).
+export const YARA = { intro: 'yara/yara-1.mp4' as string | null, last: 'yara/yara-2.mp4' as string | null }
+const YARA_SAY_1: [number, number, string][] = [
+  [5, 162, 'I find so many paintings I love and think, I want to make something like that for my home.'],
+  [164, 327, 'But then come all the questions: what size, what material, how do I get the colors right?'],
+  [337, 487, "And even when I start, things don't always turn out how I imagined."],
+]
+const YARA_SAY_2: [number, number, string][] = [
+  [0, 154, "I genuinely love painting. It's my kind of meditation, my chance to slow down."],
+  [170, 354, 'But I used to overthink everything: the colors, the materials, the fear of messing up.'],
+  [377, 518, 'Now I can just enjoy creating, knowing I have guidance when I need it,'],
+  [527, 632, "and make something I'm actually proud to hang in my house."],
+]
 
-// Every scene, in order, as [start frame, length]. 30 fps, 5400 frames = 3:00.
-const T = {
-  hook: [0, 270], intro: [270, 600], yara: [870, 420], easy: [1290, 540],
-  idea: [1830, 300], change: [2130, 240], see: [2370, 150], colors: [2520, 330], steps: [2850, 330],
-  hood: [3180, 570], bowl: [3750, 270], step: [4020, 330], done: [4350, 690], last: [5040, 360],
-} as const
+// Every scene's length in frames, in order. Start frames follow from them. 30 fps.
+const LEN = {
+  hook: 270, intro: 600, yara: 498, easy: 540,
+  idea: 300, change: 240, see: 150, colors: 330, steps: 330,
+  hood: 570, bowl: 270, step: 330, done: 690, last: 645,
+}
+type Key = keyof typeof LEN
+const T = {} as Record<Key, readonly [number, number]>
+let at = 0
+for (const k of Object.keys(LEN) as Key[]) { T[k] = [at, LEN[k]]; at += LEN[k] }
+export const TOTAL = at
 const S: React.FC<{ t: readonly [number, number]; children: React.ReactNode }> = ({ t, children }) => (
   <Sequence from={t[0]} durationInFrames={t[1]}>{children}</Sequence>
 )
@@ -139,7 +155,7 @@ export const Video: React.FC = () => (
     </S>
 
     {/* 2. Yara, in her own words */}
-    <S t={T.yara}><YaraSlot file={YARA.intro} len={420} note="Seeing the painting in her head, and the guessing it takes to get it onto the canvas." /></S>
+    <S t={T.yara}><YaraSlot file={YARA.intro} len={LEN.yara} say={YARA_SAY_1} note="Seeing the painting in her head, and the guessing it takes to get it onto the canvas." /></S>
 
     {/* 3. "I thought this would be easy" */}
     <S t={T.easy}>
@@ -235,6 +251,6 @@ export const Video: React.FC = () => (
     </S>
 
     {/* 8. Yara's last word */}
-    <S t={T.last}><YaraSlot file={YARA.last} len={360} note="Her last word: she still does all the painting herself." /></S>
+    <S t={T.last}><YaraSlot file={YARA.last} len={LEN.last} say={YARA_SAY_2} card={false} note="Her last word: she still does all the painting herself." /></S>
   </AbsoluteFill>
 )

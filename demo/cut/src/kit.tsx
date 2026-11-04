@@ -128,12 +128,16 @@ export const Wordmark: React.FC<{ len: number; dark?: boolean; sub?: string }> =
 }
 
 // Where Yara's own clip goes. With no file yet, a card says so.
-export const YaraSlot: React.FC<{ file: string | null; len: number; note: string }> = ({ file, len, note }) => {
+// With a file, it plays with her own sound, her words as subtitles, and the name card if `card`.
+export const YaraSlot: React.FC<{ file: string | null; len: number; note: string; say?: [number, number, string][]; card?: boolean }> = ({ file, len, note, say = [], card = true }) => {
   const f = useCurrentFrame()
   if (file) return (
     <AbsoluteFill style={{ background: C.black }}>
-      <OffthreadVideo src={staticFile(file)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      <NameCard />
+      <Fade len={len} inF={10} outF={10}>
+        <OffthreadVideo src={staticFile(file)} volume={(v: number) => Math.min(ease(v, 0, 3), 1 - ease(v, len - 8, len))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <Say lines={say} />
+        {card && <NameCard />}
+      </Fade>
     </AbsoluteFill>
   )
   return (
