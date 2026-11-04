@@ -3,7 +3,7 @@ import '@fontsource-variable/archivo'
 import React from 'react'
 import { Composition } from 'remotion'
 import { Video } from './Video'
-import { HOOK_LEN, HookDeal, HookKnife, HookNoise, HookSketch } from './hooks'
+import { HOOK_LEN, HookBowl, HookDeal, HookDecisions, HookKnife, HookNoise, HookSketch, HookSplit } from './hooks'
 
 const opt = { fps: 30, width: 1920, height: 1080, durationInFrames: HOOK_LEN }
 export const Root: React.FC = () => (
@@ -13,5 +13,8 @@ export const Root: React.FC = () => (
     <Composition id="Hook2-Deal" component={HookDeal} {...opt} />
     <Composition id="Hook3-Knife" component={HookKnife} {...opt} />
     <Composition id="Hook4-Noise" component={HookNoise} {...opt} />
+    <Composition id="Hook5-Split" component={HookSplit} {...opt} />
+    <Composition id="Hook6-Decisions" component={HookDecisions} {...opt} />
+    <Composition id="Hook7-Bowl" component={HookBowl} {...opt} />
   </>
 )

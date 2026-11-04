@@ -324,3 +324,123 @@ export const HookNoise: React.FC = () => {
     </AbsoluteFill>
   )
 }
+
+// ─── 5. The inspiration and the blank canvas ────────────────────────────────
+// The picture she loved on one side, her real blank canvas on the other.
+export const HookSplit: React.FC = () => {
+  const f = useCurrentFrame()
+  const open = ease(f, 0, 34)
+  const half = (src: string, side: 0 | 1, label: string, z: [number, number]) => (
+    <div style={{ position: 'absolute', top: 0, bottom: 0, left: side ? 960 : 0, width: 960, overflow: 'hidden',
+      clipPath: side ? `inset(0 0 0 ${(1 - open) * 100}%)` : `inset(0 ${(1 - open) * 100}% 0 0)` }}>
+      <Img src={staticFile(src)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${interpolate(f, [0, 222], z)})` }} />
+      <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.0) 50%, rgba(0,0,0,.55) 100%)' }} />
+      <div style={{ position: 'absolute', left: 48, top: 44, fontFamily: SANS, fontSize: 24, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', color: '#fff',
+        opacity: ease(f, 26 + side * 10, 40 + side * 10), textShadow: '0 1px 8px rgba(0,0,0,.4)' }}>{label}</div>
+    </div>
+  )
+  return (
+    <AbsoluteFill style={{ background: C.black }}>
+      <AbsoluteFill style={{ opacity: 1 - ease(f, 214, 226) }}>
+        {half('hook/reference.jpg', 0, 'The inspiration', [1.06, 1.14])}
+        {half('photos/stage-07.jpg', 1, 'Her canvas', [1.14, 1.06])}
+        <div style={{ position: 'absolute', left: 959, top: 0, bottom: 0, width: 2, background: 'rgba(255,255,255,.85)', transform: `scaleY(${open})` }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 96, display: 'flex', justifyContent: 'space-around', fontFamily: SERIF, fontSize: 62, letterSpacing: -1.2, color: '#fff', textShadow: '0 2px 20px rgba(0,0,0,.5)' }}>
+          <span style={{ width: 860, textAlign: 'center', opacity: ease(f, 56, 72), transform: `translateY(${(1 - ease(f, 56, 78)) * 20}px)` }}>The inspiration is easy.</span>
+          <span style={{ width: 860, textAlign: 'center', opacity: ease(f, 116, 132), transform: `translateY(${(1 - ease(f, 116, 138)) * 20}px)` }}>Making it real is the hard part.</span>
+        </div>
+      </AbsoluteFill>
+      <Sequence from={222}><Wordmark len={48} dark /></Sequence>
+    </AbsoluteFill>
+  )
+}
+
+// ─── 6. One idea, a hundred decisions ───────────────────────────────────────
+// Her empty wall, and the questions it raises, faster and faster.
+const QS: { t: string; x: number; y: number; at: number }[] = [
+  { t: 'What size?', x: 960, y: 250, at: 22 }, { t: 'Which colors?', x: 1430, y: 420, at: 48 }, { t: 'How much paint?', x: 520, y: 470, at: 70 },
+  { t: 'Which tubes?', x: 1330, y: 700, at: 88 }, { t: 'Where do I start?', x: 640, y: 760, at: 102 }, { t: 'Will it look right?', x: 1000, y: 560, at: 114 },
+  { t: 'Thick or thin?', x: 1560, y: 230, at: 123 }, { t: 'What goes on first?', x: 380, y: 260, at: 130 }, { t: 'Is it drying too fast?', x: 1500, y: 900, at: 136 },
+  { t: 'Too dark?', x: 420, y: 640, at: 141 }, { t: 'Which knife?', x: 1180, y: 330, at: 145 }, { t: 'How many layers?', x: 760, y: 360, at: 149 },
+  { t: 'Is the mix right?', x: 1240, y: 860, at: 152 }, { t: 'Enough paste?', x: 300, y: 880, at: 155 }, { t: 'Where does it hang?', x: 1640, y: 610, at: 158 },
+]
+const SIZES = [[60, 80], [90, 120], [115, 135], [80, 100]]
+export const HookDecisions: React.FC = () => {
+  const f = useCurrentFrame()
+  const CUT = 166
+  // A canvas outline on the wall that can't settle on a size. About 300 cm of wall fills the frame.
+  const s = SIZES[Math.min(SIZES.length - 1, Math.floor(Math.max(0, f - 24) / 26)) % SIZES.length]
+  const px = 1920 / 300 * 1.15
+  return (
+    <AbsoluteFill style={{ background: C.black }}>
+      {f < CUT && (
+        <AbsoluteFill>
+          <Img src={staticFile('hook/wall.jpg')} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 38%', transform: `scale(${1.04 + 0.08 * (f / CUT)})`, filter: `brightness(${1 - 0.25 * ease(f, 100, CUT)})` }} />
+          <div style={{ position: 'absolute', left: 960 - (s[0] * px) / 2, top: 430 - (s[1] * px) / 2, width: s[0] * px, height: s[1] * px, border: '3px dashed rgba(255,255,255,.9)', borderRadius: 4,
+            opacity: ease(f, 20, 30) * (1 - ease(f, 110, 130)), transition: 'none', boxShadow: '0 0 0 9999px rgba(0,0,0,.08)' }} />
+          {QS.map((q, i) => {
+            if (f < q.at) return null
+            const k = ease(f, q.at, q.at + 8)
+            const big = i < 6
+            return (
+              <div key={i} style={{ position: 'absolute', left: q.x, top: q.y, transform: `translate(-50%,-50%) scale(${0.8 + 0.2 * k})`, opacity: k * (i < 6 ? 1 : 0.92),
+                background: big ? '#fff' : 'rgba(255,255,255,.88)', color: C.ink, borderRadius: 999, padding: big ? '14px 28px' : '10px 20px',
+                fontFamily: SANS, fontSize: big ? 40 : 28, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 18px 40px -18px rgba(0,0,0,.6)' }}>{q.t}</div>
+            )
+          })}
+        </AbsoluteFill>
+      )}
+      {f >= CUT && (
+        <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 110, color: '#fff', letterSpacing: -2, opacity: ease(f, CUT + 4, CUT + 16) * (1 - ease(f, 214, 224)) }}>One idea.</div>
+          <div style={{ fontFamily: SERIF, fontSize: 110, color: '#e7b7a9', letterSpacing: -2, opacity: ease(f, CUT + 18, CUT + 30) * (1 - ease(f, 214, 224)) }}>A hundred decisions.</div>
+        </AbsoluteFill>
+      )}
+      <Sequence from={222}><Wordmark len={48} dark /></Sequence>
+    </AbsoluteFill>
+  )
+}
+
+// ─── 7. The bowl disagrees ──────────────────────────────────────────────────
+// Her Muted Plum mix, read where the check read it, against the color the plan wanted.
+const BOWL = { w: 1280, h: 1144, at: [560, 550], white: [1136, 979], planned: '#ba86a1', measured: '#9c6f7d', de: 10.1, drift: 'darker and warmer' }
+export const HookBowl: React.FC = () => {
+  const f = useCurrentFrame()
+  // The photo fills the frame's height, centered at x = 620.
+  const sc = 1080 / BOWL.h * 1.05, ox = 620 - (BOWL.w * sc) / 2, oy = 540 - (BOWL.h * sc) / 2
+  const dot = (p: number[], color: string, at: number, ring = false) => (
+    <div style={{ position: 'absolute', left: ox + p[0] * sc, top: oy + p[1] * sc, width: 34, height: 34, marginLeft: -17, marginTop: -17, borderRadius: 34,
+      background: ring ? 'transparent' : color, border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,.4)', opacity: ease(f, at, at + 8), transform: `scale(${0.6 + 0.4 * ease(f, at, at + 12)})` }} />
+  )
+  const swatch = (label: string, hex: string, at: number, y: number) => (
+    <div style={{ position: 'absolute', left: 1290, top: y, display: 'flex', alignItems: 'center', gap: 30, opacity: ease(f, at, at + 12), transform: `translateX(${(1 - ease(f, at, at + 18)) * 40}px)` }}>
+      <div style={{ width: 170, height: 170, borderRadius: 24, background: hex, boxShadow: '0 20px 40px -20px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.12)' }} />
+      <div style={{ fontFamily: SANS, color: '#fff' }}>
+        <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', opacity: 0.65 }}>{label}</div>
+        <div style={{ fontSize: 40, fontWeight: 600, marginTop: 6 }}>{hex}</div>
+      </div>
+    </div>
+  )
+  return (
+    <AbsoluteFill style={{ background: C.black }}>
+      <AbsoluteFill style={{ opacity: 1 - ease(f, 214, 226) }}>
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', width: 1240 }}>
+          <Img src={staticFile('hook/bowl-plum.jpg')} style={{ position: 'absolute', left: ox, top: oy, width: BOWL.w * sc, height: BOWL.h * sc, transform: `scale(${1 + 0.04 * (f / 222)})`, transformOrigin: `${BOWL.at[0] / BOWL.w * 100}% ${BOWL.at[1] / BOWL.h * 100}%` }} />
+          <AbsoluteFill style={{ background: 'linear-gradient(90deg, rgba(15,13,12,0) 70%, rgba(15,13,12,1) 100%)' }} />
+          {dot(BOWL.white, '#fff', 64, true)}
+          {dot(BOWL.at, BOWL.measured, 70)}
+        </div>
+        <div style={{ position: 'absolute', left: 1290, top: 150, width: 560, fontFamily: SERIF, fontSize: 58, lineHeight: 1.1, color: '#fff', letterSpacing: -1, opacity: ease(f, 10, 24) }}>
+          You mix the color you see in your head.
+        </div>
+        {swatch('The plan', BOWL.planned, 84, 400)}
+        {swatch('In the bowl', BOWL.measured, 104, 610)}
+        <div style={{ position: 'absolute', left: 1290, top: 820, fontFamily: SANS, fontSize: 30, fontWeight: 600, color: '#f2b8a8', opacity: ease(f, 128, 140) }}>
+          ΔE {BOWL.de} · {BOWL.drift}
+        </div>
+        <div style={{ position: 'absolute', left: 1290, top: 900, fontFamily: SERIF, fontSize: 58, color: '#fff', letterSpacing: -1, opacity: ease(f, 150, 166) }}>The bowl disagrees.</div>
+      </AbsoluteFill>
+      <Sequence from={222}><Wordmark len={48} dark /></Sequence>
+    </AbsoluteFill>
+  )
+}
