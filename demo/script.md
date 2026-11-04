@@ -96,12 +96,18 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 > This is her plum mix, from while she was painting. Impasto finds the paint in the bowl and checks it against the recipe."
 > *(The result big on screen, labeled "saved result".)* **[run]**: e.g. "add N g of …".
 
-## 6. Under the hood, after the check-ins (moved 2026-11-04)
+## 6. Under the hood, after the check-ins (chosen 2026-11-05)
 
-> *(Animated diagram on a plain background, one node per sentence.)*
+`HoodMeasured` in `demo/cut/src/hood.tsx`: each model's real work on this piece, one at a time, then what Impasto measures itself (19.7 s).
+
 > **Sultan:** "Underneath, four Meta models work together.
-> Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.
-> Muse Image paints it, in her style. And SAM finds each color band, so its area becomes grams of paint."
+> Muse Voice Transcribe hears the idea. *(her voice as a waveform, turning into her words)*
+> Muse Spark plans it, from the brief to every step. *(the brief card, then the eight steps)*
+> SAM 3.1 finds the painting in her picture, and the canvas in every check-in photo. *(the painting's corners drawn on her picture, as SAM found them in the live run)*
+> Muse Image cleans the picture, and repaints any part she wants changed. *(her picture wiping into the cleaned one)*
+> The rest, Impasto measures itself: band areas become grams, and every color is mixed from her tubes." *(the band map, grams per band, 2.98 kg paint · 6.96 kg paste, one mix)*
+
+SAM comes before Muse Image because that's the app's order: SAM finds the painting, then Muse Image cleans it. The old line "SAM finds each color band" was wrong for this run: the bands are read by Impasto's own code from the cleaned picture's colors.
 
 ## 7. Finished, and the callback (≈ 2:25–2:48)
 

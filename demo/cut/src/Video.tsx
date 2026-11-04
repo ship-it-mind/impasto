@@ -4,6 +4,7 @@ import { App, C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, Ya
 import { HookSketch } from './hooks'
 import { IntroFull } from './intro-clips'
 import { EasyChatAll } from './easy'
+import { HoodMeasured } from './hood'
 
 // Yara's clips, cut by scripts/yara-clips.sh, with her words as subtitles (frames within each clip).
 export const YARA = { intro: 'yara/yara-1.mp4' as string | null, last: 'yara/yara-2.mp4' as string | null }
@@ -23,7 +24,7 @@ const YARA_SAY_2: [number, number, string][] = [
 const LEN = {
   hook: 270, intro: 600, yara: 498, easy: 540,
   idea: 360, change: 240, see: 150, colors: 330, steps: 330, bowl: 270, step: 330,
-  hood: 570, done: 690, last: 645,
+  hood: 590, done: 690, last: 645,
 }
 type Key = keyof typeof LEN
 const T = {} as Record<Key, readonly [number, number]>
@@ -34,41 +35,6 @@ const S: React.FC<{ t: readonly [number, number]; children: React.ReactNode }> =
   <Sequence from={t[0]} durationInFrames={t[1]}>{children}</Sequence>
 )
 
-// 5. Four models, one node per sentence.
-const NODES = [
-  { name: 'Muse Voice Transcribe', job: 'hears the idea' },
-  { name: 'Muse Spark', job: 'plans it, from the brief to every step' },
-  { name: 'Muse Image', job: 'paints it' },
-  { name: 'SAM 3.1', job: 'finds each band, so its area becomes grams of paint' },
-]
-const Hood: React.FC = () => {
-  const f = useCurrentFrame()
-  const at = [70, 190, 320, 430]
-  return (
-    <AbsoluteFill style={{ background: C.paper }}>
-      <div style={{ position: 'absolute', top: 120, width: '100%', textAlign: 'center', fontFamily: SANS, fontSize: 28, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', color: C.soft, opacity: ease(f, 0, 14) }}>
-        Under the hood · four Meta models
-      </div>
-      <div style={{ position: 'absolute', top: 330, left: 120, right: 120, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        {NODES.map((n, i) => {
-          const a = at[i]
-          const lit = f >= a
-          return (
-            <React.Fragment key={n.name}>
-              {i > 0 && <div style={{ flex: 1, height: 3, marginTop: 64, background: `linear-gradient(90deg, ${C.plum} ${ease(f, a - 20, a) * 100}%, rgba(31,26,23,.12) 0)`, borderRadius: 3 }} />}
-              <div style={{ width: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, opacity: 0.25 + 0.75 * ease(f, a, a + 14) }}>
-                <div style={{ width: 130, height: 130, borderRadius: 130, background: lit ? C.ink : 'transparent', border: `3px solid ${lit ? C.ink : 'rgba(31,26,23,.2)'}`,
-                  display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: SERIF, fontSize: 54, color: lit ? '#fff' : C.soft, transform: `scale(${0.9 + 0.1 * ease(f, a, a + 18)})` }}>{i + 1}</div>
-                <div style={{ fontFamily: SERIF, fontSize: 40, color: C.ink, textAlign: 'center', lineHeight: 1.1 }}>{n.name}</div>
-                <div style={{ fontFamily: SANS, fontSize: 26, color: C.soft, textAlign: 'center', lineHeight: 1.3, textWrap: 'balance', opacity: ease(f, a + 8, a + 22) }}>{n.job}</div>
-              </div>
-            </React.Fragment>
-          )
-        })}
-      </div>
-    </AbsoluteFill>
-  )
-}
 
 // A strip of numbers from the run.
 const Stat: React.FC<{ at: number; items: [string, string][] }> = ({ at, items }) => {
@@ -149,18 +115,8 @@ export const Video: React.FC = () => (
       </App>
     </S>
 
-    {/* 5. Under the hood */}
-    <S t={T.hood}>
-      <Fade len={570} inF={12} outF={12}>
-        <Hood />
-        <Say dark={false} bottom={110} lines={[
-          [10, 64, 'Underneath, four Meta models work together.'],
-          [70, 182, 'Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.'],
-          [320, 420, 'Muse Image paints it.'],
-          [430, 558, 'And SAM 3.1 finds each color band, so its area becomes grams of paint.'],
-        ]} />
-      </Fade>
-    </S>
+    {/* 5. Under the hood: each model's real work on this piece, then what Impasto measures itself */}
+    <S t={T.hood}><HoodMeasured /></S>
 
     {/* 6. Check-ins */}
     <S t={T.bowl}>
