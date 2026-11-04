@@ -57,7 +57,7 @@ type PieceSizeProps = {
   locked?: boolean
 }
 
-// The piece's size: typed, or marked on the wall photo. With a photo it starts at what Spark recommends for that wall, or what the client asked for.
+// The piece's size: typed, or marked on the wall photo. With a photo it starts at what Spark recommends for that wall, or what the painter asked for.
 export function PieceSize({ size, disabled, fit, wall, mockup, wallWidthCm, onTyped, onSize, onMockup, onMockupDone, locked = false }: PieceSizeProps) {
   const current = sizeFrom(size)
   const fitSize = fit ? { w: fit.width_cm, h: fit.height_cm } : null

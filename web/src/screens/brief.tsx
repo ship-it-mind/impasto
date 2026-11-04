@@ -88,7 +88,7 @@ type BriefProps = {
   onConcepts: (set: ConceptSet, brief: BriefResult) => void
 }
 
-// One box takes the client's brief (typed or dictated), the wall photo and the style pictures;
+// One box takes the painter's brief (typed or dictated), the wall photo and the style pictures;
 // the structured brief comes back below it, to check before making concepts. Under an
 // empty box, the pieces read before, to carry on with one.
 export function BriefScreen({ initial, joining, openError = null, hasConcepts, onShowConcepts, onOpen, onBrief, onConcepts }: BriefProps) {
@@ -136,7 +136,7 @@ export function BriefScreen({ initial, joining, openError = null, hasConcepts, o
     return () => { stop = true }
   }, [joining, initial])
 
-  // A brief that's been read: the size starts as the client's, else what was marked on the wall, else
+  // A brief that's been read: the size starts as the painter's, else what was marked on the wall, else
   // what Spark recommends for it. What hangs on the wall is drawn at that size.
   const briefId = result?.id
   const hasWall = !!result?.wall

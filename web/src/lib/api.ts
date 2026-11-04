@@ -326,7 +326,7 @@ export function askQuestion(result: BriefResult, set: ConceptSet, concept: Conce
   }), onPhase)
 }
 
-// How the piece hangs on the client's wall photo.
+// How the piece hangs on the wall photo.
 export async function getMockup(briefId: string): Promise<Mockup | null> {
   return (await request<{ mockup: Mockup | null }>(`/pieces/${briefId}/mockup`)).mockup
 }

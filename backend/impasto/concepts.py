@@ -107,7 +107,7 @@ SOURCE_REFERENCES = (
     "stripes or bands, neither should you. If the brief asks for a particular arrangement, that comes first."
 )
 SOURCE_BRIEF = (
-    "Recommend the compositions that best fit what the client asks for: what they said about shapes, then the mood "
+    "Recommend the compositions that best fit what the painter asks for: what they said about shapes, then the mood "
     "and the room. Choose freely among any arrangement that can be laid with a knife; stripes and waves are only a few of them."
 )
 SOURCE_NONE = "Choose any arrangements that can be laid with a knife, and make them varied."
@@ -184,7 +184,7 @@ def palette_text(brief: dict | None, has_references: bool, preset: dict | None) 
     palette = brief["palette"] if brief else None
     if palette and palette["colors"]:
         colors = ", ".join(f"{c['name']} ({c['approx_hex']})" for c in palette["colors"])
-        text = (f"build every band from the client's colors: {colors}. Add lighter, darker or more "
+        text = (f"build every band from the painter's colors: {colors}. Add lighter, darker or more "
                 f"neutral versions of them to reach the band count, keeping the palette "
                 f"{palette['temperature']} and {palette['intensity']}.")
         if palette["avoid"]:
@@ -193,7 +193,7 @@ def palette_text(brief: dict | None, has_references: bool, preset: dict | None) 
     if has_references:
         return "take the colors from the reference photos."
     if brief and not preset:
-        return "the client named no colors; choose the ones that best suit the brief."
+        return "the painter named no colors; choose the ones that best suit the brief."
     preset = preset or PRESETS[DEFAULT_PRESET]
     colors = ", ".join(f"{name} ({hex_})" for name, hex_ in preset["fallback_palette"])
     return f"no colors were given; use these: {colors}."
@@ -202,7 +202,7 @@ def palette_text(brief: dict | None, has_references: bool, preset: dict | None) 
 def brief_text(brief: dict | None) -> str:
     if not brief:
         return ""
-    lines = [f"Client brief: {brief['summary']}"]
+    lines = [f"The painter's brief: {brief['summary']}"]
     if brief["mood"]:
         lines.append(f"Mood: {', '.join(brief['mood'])}.")
     if brief["style"]:

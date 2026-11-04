@@ -10,7 +10,7 @@ import { DEFAULT_LIGHT, lightName, useLightDrag } from '@/lib/relief'
 import type { Mockup } from '@/lib/wall'
 import { useExample } from '@/lib/example'
 
-// Placeholder room, in cm, until the client's wall photo is in (OUR-139).
+// Placeholder room, in cm, until the wall photo is in (OUR-139).
 const SOFA = { w: 220, h: 82 }
 const HANG_GAP = 22  // between the sofa back and the bottom of the canvas
 const SKIRTING = 6
@@ -22,7 +22,7 @@ type ConceptsProps = {
   piece: Piece
   onChoose: (index: number) => void
   initialPick?: number
-  // The client's wall photo, when the brief came with one: the concepts hang on it.
+  // The wall photo, when the brief came with one: the concepts hang on it.
   photo?: { briefId: string; url: string }
   // This screen is the one showing, rather than kept hidden.
   active: boolean
@@ -32,7 +32,7 @@ type ConceptsProps = {
 
 const SHADOW = 'shadow-[0_2px_3px_rgb(0_0_0/0.25),0_14px_28px_-10px_rgb(0_0_0/0.4)]'
 
-// The concept on the client's wall photo, where the Brief left it. Here it only moves: its size is settled on the Brief.
+// The concept on the wall photo, where the Brief left it. Here it only moves: its size is settled on the Brief.
 function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }: {
   photo: { briefId: string; url: string }; concept: Concept; seed: number; canvasPx: [number, number]; piece: Piece; light: number; active: boolean
 }) {
@@ -66,7 +66,7 @@ function ConceptOnWall({ photo, concept, seed, canvasPx, piece, light, active }:
   )
 }
 
-// The picture hung on the client's wall in the size chosen, changed in the chat until it's the one to paint.
+// The picture hung on the wall in the size chosen, changed in the chat until it's the one to paint.
 export function ConceptsScreen({ concepts, canvasPx: [W, H], piece, onChoose, initialPick = 0, photo, active, onEdit }: ConceptsProps) {
   const example = useExample()
   const [pick, setPick] = useState(initialPick)

@@ -1,4 +1,4 @@
-"""Client brief: a voice note or typed brief (+ a wall photo) → structured brief.
+"""The brief: a voice note or typed brief (+ a wall photo) → structured brief.
 
     uv run python -m impasto.brief --audio spikes/inputs/brief.ogg [--wall wall.jpg]
     uv run python -m impasto.brief --text spikes/inputs/brief.txt
@@ -6,7 +6,7 @@
 
 Muse Voice Transcribe turns the note into a transcript; Muse Spark reads it
 (and the wall photo, if given) into brief.json, which the concept generator
-consumes. Spark only records what the client said or the photo shows. If the
+consumes. Spark only records what the painter said or the photo shows. If the
 piece size is missing it asks one clarifying question; answer it with
 --answer on the same folder, which re-reads the brief without asking again.
 """
@@ -23,16 +23,16 @@ from impasto.voice import transcribe
 MODEL = "muse-spark-1.3"
 OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "output" / "brief"
 
-PROMPT = """You are the studio assistant of a palette-knife / impasto painter. A client has
-described the piece they want. Turn it into a structured brief for the painter.
+PROMPT = """You are the studio assistant of a palette-knife / impasto painter. The painter has
+described the piece they want to paint. Turn it into a structured brief for them.
 
 Rules:
-- Record only what the client said{photo_rule}. Do not invent sizes or colors.
+- Record only what the painter said{photo_rule}. Do not invent sizes or colors.
   Use null or an empty list when something was not mentioned.
 - Spoken numbers become digits: "one twenty by eighty centimeters" is width 120, height 80;
   "two meters eighty" is 280 cm. Width is the horizontal side.
-- palette.colors: every color the client wants, with an approximate hex for that color as a
-  painter would mix it (muted if the client wants muted). palette.avoid: colors they ruled out.
+- palette.colors: every color the painter wants, with an approximate hex for that color as a
+  painter would mix it (muted if they want muted). palette.avoid: colors they ruled out.
 - style: what they said about texture, shapes, composition or a past piece they liked, in short phrases.
 - paint_as_is: true only if they explicitly ask for a picture to be painted as it is, as an exact copy or match
   ("paint this exactly", "copy this picture", "exactly like the photo"). Otherwise false, also when a picture is
@@ -40,7 +40,7 @@ Rules:
 - summary: one sentence a painter could read at a glance.
 - clarifying_question: {question_rule}
 {wall_fit_rule}
-Client brief:
+The painter's brief:
 {transcript}
 """
 
@@ -48,7 +48,7 @@ QUESTION_RULE = (
     "if the piece's width or height is missing (and cannot be read from what they said), "
     "one short, friendly question asking for the size. Otherwise null. Never ask about anything else."
 )
-NO_QUESTION_RULE = "null. The client has already answered a follow-up question."
+NO_QUESTION_RULE = "null. The painter has already answered a follow-up question."
 PHOTO_RULE = (
     " or what the wall photo clearly shows. From the photo, fill in room.wall_color_hex, "
     "room.lighting and room.notes (furniture, style, what hangs nearby); do not estimate "
@@ -58,7 +58,7 @@ WALL_FIT_RULE = """- wall_fit: your own recommendation from the wall photo, and 
   - visible_width_cm: how wide the wall is across the whole width of the photo, at the wall's distance,
     judged from things of known size (a door is about 200 cm tall, a sofa about 200 cm wide, a socket 8 cm).
   - width_cm, height_cm: the painting that would suit this wall best, in multiples of 5 cm. Keep to any shape
-    the client asked for. Over furniture, about two thirds of its width usually looks right.
+    the painter asked for. Over furniture, about two thirds of its width usually looks right.
   - center_x, center_y: where the painting's center should hang, from 0 at the photo's top left to 1 at its bottom right.
   - reason: one short sentence saying why this size, naming what you judged the scale from.
 """
@@ -119,7 +119,7 @@ WALL_FIT = strict_object({
 
 def brief_schema(wall: bool) -> dict:
     properties = {**BRIEF_PROPERTIES, "wall_fit": WALL_FIT} if wall else BRIEF_PROPERTIES
-    return {"type": "json_schema", "json_schema": {"name": "client_brief", "schema": strict_object(properties)}}
+    return {"type": "json_schema", "json_schema": {"name": "brief", "schema": strict_object(properties)}}
 
 
 def usable_fit(fit: dict | None) -> dict | None:
@@ -140,7 +140,7 @@ def set_size(brief: dict, width: float, height: float) -> dict:
 def with_answers(transcript: str, answers: list[dict]) -> str:
     lines = [transcript]
     for qa in answers:
-        lines += ["", f"Follow-up question: {qa['question']}", f"Client's answer: {qa['answer']}"]
+        lines += ["", f"Follow-up question: {qa['question']}", f"The painter's answer: {qa['answer']}"]
     return "\n".join(lines)
 
 
@@ -165,7 +165,7 @@ def structure(transcript: str, wall: Path | None = None, answers: list[dict] = (
 
     piece = brief["piece"]
     if piece["width_cm"] and piece["height_cm"]:
-        # The size decides orientation, whatever word the client used.
+        # The size decides orientation, whatever word the painter used.
         width, height = piece["width_cm"], piece["height_cm"]
         piece["orientation"] = "square" if width == height else "landscape" if width > height else "portrait"
     if answers:
@@ -208,17 +208,17 @@ def print_brief(record: dict) -> None:
     for warning in record["warnings"]:
         print(f"⚠️  {warning}")
     if brief["clarifying_question"]:
-        print(f"\nQuestion for the client: {brief['clarifying_question']}")
+        print(f"\nQuestion for the painter: {brief['clarifying_question']}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--audio", type=Path, help="client voice note")
+    source.add_argument("--audio", type=Path, help="the painter's voice note")
     source.add_argument("--text", type=Path, help="typed brief (.txt)")
     source.add_argument("--answer", nargs=2, metavar=("ANSWER", "FOLDER"),
-                        help="the client's answer to the clarifying question in FOLDER/brief.json")
-    parser.add_argument("--wall", type=Path, help="photo of the client's wall")
+                        help="the painter's answer to the clarifying question in FOLDER/brief.json")
+    parser.add_argument("--wall", type=Path, help="photo of the wall")
     parser.add_argument("--out", type=Path, help="output folder")
     args = parser.parse_args()
 

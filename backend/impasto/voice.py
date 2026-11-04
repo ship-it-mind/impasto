@@ -19,7 +19,7 @@ from impasto.meta import BASE_URL, api_key
 MODEL = "muse-voice-transcribe-1.0"
 TRANSCRIBE_URL = f"{BASE_URL}/asr/transcribe"
 NATIVE_RATES = (16000, 24000)
-# Painting terms a client is likely to say. Day 1 got these right unbiased,
+# Painting terms a painter is likely to say. Day 1 got these right unbiased,
 # but color names like "terracotta" or "ochre" are rarer words.
 KEYWORDS = [
     "impasto", "palette knife", "canvas", "terracotta", "sage", "ochre",

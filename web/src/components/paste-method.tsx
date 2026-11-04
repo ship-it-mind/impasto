@@ -74,12 +74,7 @@ export function PasteMethod({ advice, value, onChange, applied, busy, onApply }:
                   onChange={() => onChange(way.pasteInMix)}
                   className="mt-0.5 size-4 shrink-0 accent-foreground"
                 />
-                <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                  <span className="font-medium">{way.title}</span>
-                  {advice?.recommended === way.key && (
-                    <span className="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-medium text-background">Recommended</span>
-                  )}
-                </span>
+                <span className="min-w-0 flex-1 font-medium">{way.title}</span>
               </span>
               <span className="text-pretty text-muted-foreground">{way.what} {way.wait}.</span>
               {bands && <ColorStrip bands={bands} />}

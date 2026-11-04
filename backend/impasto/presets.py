@@ -2,7 +2,7 @@
 
 A preset is text only: no bundled images. It sets the composition (which
 flows Spark may pick, how many bands), the default relief per band, and a
-prompt fragment for Muse Image. The palette comes from the client's brief;
+prompt fragment for Muse Image. The palette comes from the painter's brief;
 a preset's palette is only a fallback for briefs that name no colors.
 
 When references are given as well, both are used: the references steer the

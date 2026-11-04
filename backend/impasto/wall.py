@@ -39,7 +39,7 @@ def rectangle(center: Point, width_px: float, height_px: float) -> list[Point]:
 
 
 def from_fit(fit: dict, piece: dict, photo: tuple[int, int]) -> dict:
-    """Where Spark recommends hanging the piece, at its size if the client gave one, else the size it recommends.
+    """Where Spark recommends hanging the piece, at its size if the painter gave one, else the size it recommends.
 
     The photo's width at Spark's estimate of it is the scale. The painting stays inside the photo if it fits."""
     photo_w, photo_h = photo

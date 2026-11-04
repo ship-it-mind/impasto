@@ -10,7 +10,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-// What Spark read from the client's brief, field by field.
+// What Spark read from the painter's brief, field by field.
 export function BriefDetails({ brief }: { brief: Brief }) {
   const { palette, room } = brief
   const tone = [palette.temperature, palette.intensity].filter(Boolean).join(', ')
