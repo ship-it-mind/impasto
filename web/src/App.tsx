@@ -109,12 +109,12 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
   return (
     <ExampleContext.Provider value={!!piece.example}>
     <div className="flex min-h-dvh flex-col bg-[oklch(0.985_0.004_80)] text-sm">
-      <AppHeader step={step} reachable={reachable(piece)} email={account.email} guest={guest} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={home} />
+      <AppHeader step={step} reachable={reachable(piece)} email={account.email} guest={guest} local={!!account.local} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={home} />
       {!opening && piece.example && (
         <p className="mx-6 mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg bg-muted px-4 py-2.5 text-xs text-muted-foreground lg:mx-10">
           <span><span className="font-medium text-foreground">Example piece.</span> Recorded from a real painting, start to finish: look through every step. Nothing here can be changed, and nothing asks a model.</span>
           {guest
-            ? <span>To start a piece of your own, run Impasto with a model key: see the README.</span>
+            ? <span>To start a piece of your own, put a model key in .env and run <code>make run</code>.</span>
             : <button type="button" onClick={home} className="font-medium text-foreground underline decoration-1 underline-offset-4">Start your own piece</button>}
         </p>
       )}

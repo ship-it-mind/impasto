@@ -159,9 +159,10 @@ def test_a_piece_goes_to_the_repo_and_comes_back_as_the_example(example, tmp_pat
 @pytest.fixture
 def fresh_clone(example, monkeypatch):
     """Run as a judge runs a fresh clone: no model key and no invite code, so nobody can sign up or pay for a call."""
+    other = user_id(example["other"])  # asked before: example only, everyone is the guest
     monkeypatch.delenv("IMPASTO_INVITE_CODE")
     monkeypatch.setenv("MODEL_API_KEY", "")
-    return example
+    return {**example, "other_id": other}
 
 
 def test_a_fresh_clone_shows_the_example_without_signing_in(fresh_clone):
@@ -179,7 +180,7 @@ def test_a_fresh_clone_shows_the_example_without_signing_in(fresh_clone):
 def test_a_fresh_clone_starts_nothing_and_reaches_no_one_elses_piece(fresh_clone):
     from tests.test_auth import client
     guest = client()
-    other = seeded_piece(user_id(fresh_clone["other"]))["piece"]
+    other = seeded_piece(fresh_clone["other_id"])["piece"]
     assert guest.get(f"/api/pieces/{other}").status_code == 404
     audio = {"audio": ("a.m4a", b"x", "audio/mp4")}
     for path, options in [("/api/brief", {"data": {"text": "A sea"}}), ("/api/transcribe", {"files": audio}),
@@ -197,3 +198,35 @@ def test_with_a_key_or_an_invite_code_everyone_signs_in(example, monkeypatch, ke
     monkeypatch.setenv("IMPASTO_INVITE_CODE", invite)
     assert client().get("/api/auth/me").json() == {"user": None}
     assert client().get("/api/pieces").status_code == 401
+
+
+def test_asked_for_by_the_makefile_example_mode_ignores_a_model_key(example, monkeypatch):
+    from tests.test_auth import client
+    monkeypatch.setenv("MODEL_API_KEY", "a-key")
+    monkeypatch.setenv("IMPASTO_MODE", "example")
+    assert client().get("/api/auth/me").json()["user"]["guest"] is True
+    assert client().post("/api/brief", data={"text": "A sea"}).status_code == 403
+
+
+def here():
+    from fastapi.testclient import TestClient
+    return TestClient(api_module.app, client=("127.0.0.1", 50000))
+
+
+def test_local_mode_needs_no_sign_in_and_keeps_its_own_pieces(example, monkeypatch):
+    from impasto import auth
+    monkeypatch.setenv("IMPASTO_MODE", "local")
+    me = here().get("/api/auth/me").json()["user"]
+    assert me["local"] is True
+    mine = seeded_piece(auth.LOCAL["id"])["piece"]
+    listed = [(p["id"], p["example"]) for p in here().get("/api/pieces").json()["pieces"]]
+    assert listed == [(example["piece"], True), (mine, False)]
+    # Still nobody changes the example.
+    assert here().put(f"/api/pieces/{example['piece']}/supplies", json={"have": {}}).status_code == 403
+
+
+def test_local_mode_only_answers_this_computer(example, monkeypatch):
+    from tests.test_auth import client
+    monkeypatch.setenv("IMPASTO_MODE", "local")
+    assert client().get("/api/pieces").status_code == 403
+    assert client().get("/api/auth/me").status_code == 403

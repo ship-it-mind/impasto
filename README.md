@@ -34,26 +34,28 @@ We tested each model on a photo of one of the artist's finished pieces before de
 | Muse Image | Cleans a picture to paint as it is, taking out what's in front of the painting; paints each concept from Spark's written composition and colors, steered by the user's reference photos when given; its painting is what the app shows for the concept, and the band layout read off it drives the recipe's band areas and the check-ins |
 | Muse Voice Transcribe | Turns dictation into text in the brief box, to check and edit before the brief is read |
 
-## Look through the example, with no keys
+## Run it
 
-The repo holds one real piece, recorded from the first brief to the last check-in. Run with no `.env`, the app needs no sign-in and no model key: it opens straight at that piece, and every screen can be looked through. Needs [uv](https://docs.astral.sh/uv/) and Node 22+.
+Needs [uv](https://docs.astral.sh/uv/), Node 22+, and ffmpeg for dictation. Run on your own computer, nobody signs in: accounts are only for the hosted demo.
 
 ```sh
 git clone https://github.com/ship-it-mind/impasto.git && cd impasto
-(cd web && npm install && npm run build)
-cd backend && uv sync && uv run uvicorn impasto.api:app --port 8000
+make install
+make example   # look through the example piece: no keys needed
 ```
 
-Then open http://localhost:8000. Nothing on the example calls a model, so nothing is spent. Starting a piece of your own needs a model key: see Setup below.
+Then open http://localhost:8000. The repo holds one real piece, recorded from the first brief to the last check-in, and `make example` opens straight at it. Every screen can be looked through, and nothing calls a model, even with a key in `.env`.
 
-## Setup
-
-Requires [uv](https://docs.astral.sh/uv/) and a Meta Model API key.
+To start pieces of your own, you need a Meta Model API key:
 
 ```sh
 cp .env.example .env   # then fill in MODEL_API_KEY
-cd backend && uv sync
+make run               # http://localhost:8000
+make dev               # the same, reloading as you edit: http://localhost:5173
+make test              # the backend tests, with no keys and a throwaway database
 ```
+
+`make run` and `make dev` keep everything you make in `backend/output/impasto.db`, with the example piece listed first. `PORT=8001 make run` picks another port.
 
 ### Model spikes
 
@@ -68,12 +70,7 @@ uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inpu
 
 ### Web app
 
-Needs Node 22+ and ffmpeg (for dictation). Run the API and the web app side by side:
-
-```sh
-cd backend && uv run uvicorn impasto.api:app --port 8000
-cd web && npm install && npm run dev   # http://localhost:5173, proxies /api to :8000
-```
+`make dev` runs the API on port 8000 and the web app's dev server beside it, which sends `/api` there.
 
 Pieces, with their pictures, are kept in `backend/output/impasto.db`, a SQLite file (git-ignored). On first start it imports any older pieces from `backend/output/api/`.
 
@@ -84,7 +81,7 @@ Model calls cost money, so the app is invite-only. Everyone signs in with an ema
 - **Invite code.** Signing up takes the code in `IMPASTO_INVITE_CODE` in `.env`. With none set, nobody can sign up. Keep it out of the repo. A link like `https://your-host/?invite=CODE` opens sign-up with the code filled in.
 - **Existing pieces.** The first account to sign up gets every piece made before accounts existed, so create yours before sharing the code.
 - **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>` (the `Dockerfile` does). Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
-- **Example only.** With neither `MODEL_API_KEY` nor `IMPASTO_INVITE_CODE` set, as in a fresh clone, nobody signs in: every visitor is a guest who can only look through the example piece, and anything that would start a piece or call a model is refused. Set either one and sign-in is back.
+- **On one computer, no accounts.** The Makefile sets `IMPASTO_MODE`. With `example`, every visitor is a guest who can only look through the example piece, and anything that would start a piece or call a model is refused. With `local`, every visitor is one local user who owns everything made there, and only requests from that computer are answered. Left unset, as on the hosted demo, everyone signs in. The exception is a copy with neither `MODEL_API_KEY` nor `IMPASTO_INVITE_CODE`, which is example only.
 - **Not built.** There's no password reset or email verification, because the app doesn't send email.
 
 ### The example piece
@@ -112,7 +109,7 @@ The `Dockerfile` at the repo root builds the whole app as one service: the API s
 Tests use a throwaway database and no model keys:
 
 ```sh
-cd backend && uv run pytest
+make test
 ```
 
 ## Credits

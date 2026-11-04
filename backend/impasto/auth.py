@@ -7,9 +7,16 @@ passwords only as Argon2 hashes, so a copy of the database signs nobody in.
 Model calls cost money and this is a private demo, so signing up takes the invite code in
 IMPASTO_INVITE_CODE, and without one set nobody can.
 
-A copy run with neither a model key nor an invite code, like a fresh clone, is example only:
-nobody signs in, every visitor is the guest, and the guest can look through the example piece
-and start nothing new.
+IMPASTO_MODE, set by the Makefile, runs it on one computer with no sign-in at all:
+
+- example: every visitor is the guest, who can look through the example piece and start nothing
+  new, so no model is ever called, even with a key in .env.
+- local: every visitor is the one local user, who owns everything made here. Only requests
+  from this computer are answered, so setting it on a server by mistake opens nothing.
+
+Unset, it's accounts, except that a copy with neither a model key nor an invite code, like a
+fresh clone run without the Makefile, is example only: nothing could be paid for and nobody
+could sign up anyway.
 """
 
 from __future__ import annotations
@@ -98,22 +105,44 @@ def signed_in(token: str | None) -> dict | None:
 
 
 SessionCookie = Annotated[str | None, Cookie(alias=COOKIE)]
+MODES = ("accounts", "example", "local")
 # Owns nothing, so it only reaches the example piece, which nobody can change.
 GUEST = {"id": "guest", "email": "", "guest": True}
-GUEST_REFUSED = "This copy runs without a model key, so it only shows the example piece. See the README to run it with one."
+GUEST_REFUSED = "This copy only shows the example piece. To start your own, run it with a model key: see the README."
+# Not an email, so no account can take it, and a hash nothing matches, so nobody signs in as it.
+LOCAL = {"id": "local", "email": "local", "local": True}
+LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 
-def example_only() -> bool:
-    """No model key and no invite code: nothing could be paid for and nobody could sign up, so show the example to anyone."""
-    return not os.environ.get(meta.KEY_VARIABLE, "").strip() and not os.environ.get("IMPASTO_INVITE_CODE", "").strip()
+def mode() -> str:
+    chosen = os.environ.get("IMPASTO_MODE", "").strip().lower()
+    if chosen:
+        return chosen
+    no_key = not os.environ.get(meta.KEY_VARIABLE, "").strip()
+    return "example" if no_key and not os.environ.get("IMPASTO_INVITE_CODE", "").strip() else "accounts"
 
 
-def current_user(token: SessionCookie = None) -> dict:
+if mode() not in MODES:
+    raise RuntimeError(f"IMPASTO_MODE is {mode()!r}; use one of {', '.join(MODES)}.")
+
+
+def local_user(request: Request) -> dict:
+    if client(request) not in LOOPBACK:
+        raise HTTPException(403, "This copy runs in local mode, which only answers the computer it runs on.")
+    if store.user_by_email(LOCAL["email"]) is None:
+        store.add_user(LOCAL["id"], LOCAL["email"], "!")
+    return LOCAL
+
+
+def current_user(request: Request, token: SessionCookie = None) -> dict:
     """Who's asking. Every route outside this module goes through it."""
+    match mode():
+        case "example":
+            return GUEST
+        case "local":
+            return local_user(request)
     user = signed_in(token)
     if user is None:
-        if example_only():
-            return GUEST
         raise HTTPException(401, "Sign in first.")
     return user
 
@@ -161,11 +190,11 @@ def invited(code: str) -> bool:
 
 
 @router.get("/me")
-def me(token: SessionCookie = None) -> dict:
-    """Who's signed in, if anyone: not being signed in is a normal answer here."""
+def me(request: Request, token: SessionCookie = None) -> dict:
+    """Who's signed in, if anyone: not being signed in is a normal answer here. Run on one computer, it's nobody's to sign into."""
+    if mode() != "accounts":
+        return {"user": current_user(request, token)}
     user = signed_in(token)
-    if user is None and example_only():
-        return {"user": GUEST}
     return {"user": public(user) if user else None}
 
 
