@@ -4,6 +4,7 @@ import React from 'react'
 import { Composition } from 'remotion'
 import { TOTAL, Video } from './Video'
 import { INTRO_LEN, IntroClips, IntroCuts, IntroLift, IntroType, IntroWall } from './intros'
+import { EASY_LEN, EasyPreview } from './easy'
 import { IntroBlur, IntroFull, IntroNear, IntroPanels, IntroStrip } from './intro-clips'
 import { HOOK_LEN, HookBowl, HookDeal, HookDecisions, HookKnife, HookNoise, HookSketch, HookSplit } from './hooks'
 
@@ -28,5 +29,8 @@ export const Root: React.FC = () => (
     <Composition id="Intro1c-Full" component={IntroFull} {...opt} durationInFrames={INTRO_LEN} />
     <Composition id="Intro1d-Strip" component={IntroStrip} {...opt} durationInFrames={INTRO_LEN} />
     <Composition id="Intro1e-Near" component={IntroNear} {...opt} durationInFrames={INTRO_LEN} />
+    <Composition id="Easy1-Clip" component={EasyPreview} {...opt} durationInFrames={EASY_LEN} defaultProps={{ v: 1 as const }} />
+    <Composition id="Easy2-Claims" component={EasyPreview} {...opt} durationInFrames={EASY_LEN} defaultProps={{ v: 2 as const }} />
+    <Composition id="Easy3-Chat" component={EasyPreview} {...opt} durationInFrames={EASY_LEN} defaultProps={{ v: 3 as const }} />
   </>
 )

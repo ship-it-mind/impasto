@@ -1,0 +1,108 @@
+// §3's first shot, three ways, instead of a pan over a still photo. 6 s each, under
+// "I thought AI could do this easily. Models write ideas, paint pictures, name colors." / "I was wrong."
+import React from 'react'
+import { AbsoluteFill, Img, OffthreadVideo, staticFile, useCurrentFrame } from 'remotion'
+import { C, SANS, SERIF, Say, ease } from './kit'
+
+export const EASY_LEN = 180
+export const EASY_SAY: [number, number, string][] = [
+  [6, 110, 'I thought AI could do this easily. Models write ideas, paint pictures, name colors.'],
+  [118, 172, 'I was wrong.'],
+]
+// When each claim is said, and when "I was wrong." lands.
+const CLAIMS: [number, string][] = [[58, 'writes ideas'], [76, 'paints pictures'], [94, 'names colors']]
+const WRONG = 118
+
+// Her white paste texture, the handheld pass over it, slowed to fill 6 s (it's 4.7 s).
+const Texture: React.FC<{ grey?: number }> = ({ grey = 0 }) => (
+  <OffthreadVideo src={staticFile('intro/texture.mp4')} playbackRate={0.78} muted
+    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 55%', transform: 'scale(1.14)', transformOrigin: '78% 50%', filter: `grayscale(${grey}) brightness(${1 - 0.25 * grey})` }} />
+)
+
+// ─── 1. Her clip, full frame ────────────────────────────────────────────────
+export const EasyClip: React.FC = () => (
+  <AbsoluteFill style={{ background: C.black }}>
+    <Texture />
+    <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,.5) 100%)' }} />
+  </AbsoluteFill>
+)
+
+// ─── 2. The three claims, ticked, then crossed out ──────────────────────────
+export const EasyClaims: React.FC = () => {
+  const f = useCurrentFrame()
+  const w = ease(f, WRONG, WRONG + 10)
+  return (
+    <AbsoluteFill style={{ background: C.black }}>
+      <Texture grey={w} />
+      <AbsoluteFill style={{ background: `rgba(15,13,12,${0.42 + 0.2 * w})` }} />
+      <AbsoluteFill style={{ justifyContent: 'center', paddingLeft: 220, paddingBottom: 150, flexDirection: 'column', gap: 30 }}>
+        <div style={{ fontFamily: SANS, fontSize: 28, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(255,255,255,.6)', opacity: ease(f, 40, 54), marginBottom: 6 }}>
+          AI models
+        </div>
+        {CLAIMS.map(([a, t], i) => {
+          const o = ease(f, a, a + 10)
+          const strike = ease(f, WRONG + i * 4, WRONG + 14 + i * 4)
+          return (
+            <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 30, opacity: o, transform: `translateX(${(1 - ease(f, a, a + 16)) * -30}px)` }}>
+              <div style={{ width: 70, height: 70, borderRadius: 70, display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: SANS, fontSize: 40, fontWeight: 700,
+                background: strike > 0.5 ? '#c9604f' : '#7d8f6a', color: '#fff', transform: `scale(${1 + 0.15 * Math.sin(Math.PI * strike)})` }}>
+                {strike > 0.5 ? '✕' : '✓'}
+              </div>
+              <div style={{ position: 'relative', fontFamily: SERIF, fontSize: 92, color: `rgba(255,255,255,${1 - 0.45 * strike})`, letterSpacing: -1.5 }}>
+                {t}
+                <div style={{ position: 'absolute', left: -6, top: '54%', height: 6, borderRadius: 6, background: '#e07a66', width: `calc(${strike * 100}% + 12px)`, opacity: strike > 0 ? 1 : 0 }} />
+              </div>
+            </div>
+          )
+        })}
+      </AbsoluteFill>
+    </AbsoluteFill>
+  )
+}
+
+// ─── 3. A chat that answers confidently, then goes grey ─────────────────────
+const PROMPT = 'Paint a thick knife texture in sage and cream, like her canvas.'
+export const EasyChat: React.FC = () => {
+  const f = useCurrentFrame()
+  const typed = PROMPT.slice(0, Math.round(PROMPT.length * Math.min(1, Math.max(0, (f - 8) / 40))))
+  const w = ease(f, WRONG, WRONG + 14)
+  const reply = (a: number, children: React.ReactNode) => (
+    <div style={{ opacity: ease(f, a, a + 10), transform: `translateY(${(1 - ease(f, a, a + 16)) * 16}px)`, alignSelf: 'flex-start', background: '#fff', borderRadius: 22,
+      padding: '24px 32px', maxWidth: 1300, boxShadow: '0 1px 2px rgba(0,0,0,.06), 0 10px 30px -18px rgba(60,40,30,.35)', fontFamily: SANS, fontSize: 40, color: C.ink, lineHeight: 1.3 }}>{children}</div>
+  )
+  return (
+    <AbsoluteFill style={{ background: C.paper }}>
+      <div style={{ position: 'absolute', left: 230, right: 230, top: 90, display: 'flex', flexDirection: 'column', gap: 26,
+        filter: `grayscale(${w})`, opacity: 1 - 0.55 * w, transform: `scale(${1 - 0.03 * w})`, transformOrigin: '50% 30%' }}>
+        <div style={{ alignSelf: 'flex-end', maxWidth: 1200, background: C.ink, color: '#fff', borderRadius: 26, padding: '24px 32px', fontFamily: SANS, fontSize: 40, lineHeight: 1.3, opacity: ease(f, 2, 10) }}>
+          {typed}<span style={{ opacity: f < 50 && Math.floor(f / 8) % 2 === 0 ? 1 : 0 }}>▍</span>
+        </div>
+        {reply(CLAIMS[0][0], <><b>Idea:</b> “Sage Drift”, soft waves of cream rising through sage, built up with a palette knife.</>)}
+        {reply(CLAIMS[1][0], (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+            <Img src={staticFile('text-only.webp')} style={{ width: 330, height: 220, objectFit: 'cover', borderRadius: 14 }} />
+            <span>Here's your painting.</span>
+          </div>
+        ))}
+        {reply(CLAIMS[2][0], (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <b>Colors:</b>
+            {[['#9ca58b', 'Sage'], ['#efe4cc', 'Cream'], ['#b9a48d', 'Taupe']].map(([hex, n]) => (
+              <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '6px 14px 6px 8px', borderRadius: 999, background: C.paperDeep }}>
+                <span style={{ width: 38, height: 38, borderRadius: 38, background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.12)' }} />{n}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </AbsoluteFill>
+  )
+}
+
+// Previews with the narration, to choose from.
+export const EasyPreview: React.FC<{ v: 1 | 2 | 3 }> = ({ v }) => (
+  <AbsoluteFill>
+    {v === 1 ? <EasyClip /> : v === 2 ? <EasyClaims /> : <EasyChat />}
+    <Say lines={EASY_SAY} dark={v !== 3} bottom={v === 3 ? 40 : 86} />
+  </AbsoluteFill>
+)
