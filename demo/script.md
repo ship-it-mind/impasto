@@ -33,11 +33,18 @@ The hook is a second longer than before, so §5 (under the hood) is a second sho
 
 ## 1. Yara (≈ 0:09–0:29), locked
 
-> *(Photo `stages` 00: the blank canvas, slow push in.)*
+`IntroFull` in `demo/cut/src/intro-clips.tsx`, chosen 2026-11-04 from ten versions. Yara's own phone clips, full frame, cut on the words. They're cut from `demo/cut/intro/` (git-ignored) by `scripts/intro-clips.sh`. WhatsApp shrank them to 720p, so they're soft at full frame; the originals, sent as a Document, would make them sharp with one rerun of the script.
+
+> *(Her fine brush on the gold band of the purple painting.)*
 > "Hi, I'm Sultan. I've been building Impasto, a co-pilot for painters, to help my wife, Yara.
+> *(The blank canvas and her supplies, the cat walking past; then the purple and gold painting finished, on the wall.)*
 > About a year ago, Yara started painting, and it's become the thing she loves most."
-> *(Photo `stages` 05: close-up of the ridges, slow pan.)*
-> "She paints impasto: thick paint, laid on with a knife, so it stands up off the canvas. Every color is mixed by hand."
+> *(The knife laying white paste, the knife on the purple, the dark ridges up close.)*
+> "She paints impasto: thick paint, laid on with a knife, so it stands up off the canvas.
+> *(Black, red and white squeezed into the pink palette, then stirred, sped up.)*
+> Every color is mixed by hand."
+
+These clips are from her other paintings, not the one the rest of the film follows.
 
 ## 2. Yara, on camera (≈ 0:28–0:42)
 

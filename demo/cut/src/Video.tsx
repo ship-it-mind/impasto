@@ -2,6 +2,7 @@ import React from 'react'
 import { AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame } from 'remotion'
 import { C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
 import { HookSketch } from './hooks'
+import { IntroFull } from './intro-clips'
 
 // Yara's clips. Put her files in public/ and name them here, then render again.
 export const YARA = { intro: null as string | null, last: null as string | null }
@@ -134,16 +135,7 @@ export const Video: React.FC = () => (
 
     {/* 1. Who I am, and Yara */}
     <S t={T.intro}>
-      <Fade len={600} inF={16} outF={14}>
-        <Sequence durationInFrames={300}><Photo src="photos/stage-00.jpg" len={300} from={1.02} to={1.12} dim={0.55} /></Sequence>
-        <Sequence from={300}><Photo src="photos/stage-05.jpg" len={300} from={1.15} to={1.25} x={[2, -2]} dim={0.55} /></Sequence>
-        <Say lines={[
-          [8, 165, "Hi, I'm Sultan. I've been building Impasto, a co-pilot for painters, to help my wife, Yara."],
-          [175, 292, "About a year ago, Yara started painting, and it's become the thing she loves most."],
-          [305, 470, 'She paints impasto: thick paint, laid on with a knife, so it stands up off the canvas.'],
-          [478, 590, 'Every color is mixed by hand.'],
-        ]} />
-      </Fade>
+      <IntroFull />
     </S>
 
     {/* 2. Yara, in her own words */}
