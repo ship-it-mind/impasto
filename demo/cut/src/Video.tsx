@@ -22,8 +22,8 @@ const YARA_SAY_2: [number, number, string][] = [
 // Every scene's length in frames, in order. Start frames follow from them. 30 fps.
 const LEN = {
   hook: 270, intro: 600, yara: 498, easy: 540,
-  idea: 300, change: 240, see: 150, colors: 330, steps: 330,
-  hood: 570, bowl: 270, step: 330, done: 690, last: 645,
+  idea: 300, change: 240, see: 150, colors: 330, steps: 330, bowl: 270, step: 330,
+  hood: 570, done: 690, last: 645,
 }
 type Key = keyof typeof LEN
 const T = {} as Record<Key, readonly [number, number]>

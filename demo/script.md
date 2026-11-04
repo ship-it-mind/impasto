@@ -86,14 +86,7 @@ A strip of five stops stays on screen the whole section, lighting up one at a ti
 > "Then the steps: every stage in order, with a picture of how the canvas should look after it."
 > *(How to paint it, scrolling through the stages.)*
 
-## 5. Under the hood (≈ 1:45–2:05)
-
-> *(Animated diagram on a plain background, one node per sentence.)*
-> **Sultan:** "Underneath, four Meta models work together.
-> Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.
-> Muse Image paints it, in her style. And SAM finds each color band, so its area becomes grams of paint."
-
-## 6. Check-ins: still on track (≈ 2:05–2:25)
+## 5. Check-ins: still on track, right after the steps (moved 2026-11-04)
 
 A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05 or 06). It doesn't claim she used check-ins on this painting.
 
@@ -101,6 +94,13 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 > **Sultan:** "And while she paints, she checks in. A photo of a step, and it's compared with how that step should look.
 > This is her plum mix, from while she was painting. Impasto finds the paint in the bowl and checks it against the recipe."
 > *(The result big on screen, labeled "saved result".)* **[run]**: e.g. "add N g of …".
+
+## 6. Under the hood, after the check-ins (moved 2026-11-04)
+
+> *(Animated diagram on a plain background, one node per sentence.)*
+> **Sultan:** "Underneath, four Meta models work together.
+> Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.
+> Muse Image paints it, in her style. And SAM finds each color band, so its area becomes grams of paint."
 
 ## 7. Finished, and the callback (≈ 2:25–2:48)
 
