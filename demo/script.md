@@ -89,6 +89,35 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 > *(Yara on camera, or her voice over the finished canvas.)*
 > **Yara:** "I still do all the painting myself. But now I know where I'm going, from the first idea to the last layer." **[confirm]**
 
+## Screen recording
+
+`demo/video/WhatsApp Video 2026-11-04 at 4.31.29 PM.mp4`: 2:13, 1920×1080, no sound. Yara's account, one piece from brief to check-ins (piece `7b5c3677…`, "Curved bands in neutral earth tones", 115 × 135 cm, 6 bands). It is the same painting as the `stages` photos. Times are ±2 s.
+
+| Time | What's on screen | Script use |
+|---|---|---|
+| 0:00–0:12 | Brief: wall photo and one Style reference attached, she dictates "This is the wall of my office room. I wanna paint this exact reference I shared with you, can you help with that?" | §4 Idea. **Live site still says "What did the client ask for?"** |
+| 0:12–0:28 | Brief read back ("Exact copy of the shared reference for the office wall"), size asked, the canvas placed on the wall | §4 Idea |
+| 0:28–0:34 | "The picture to paint": corners found on the reference photo | §4 Idea |
+| 0:36–0:40 | Concepts: the painting hung on her wall at size. Toggle says **"Client's wall"** | §4 See it |
+| 0:40–0:48 | One part selected, "make it warmer", Version 2 | §4 change one part |
+| 0:52–0:56 | Modeling paste: underneath, or mixed into the color | §4 Colors |
+| 0:56–1:12 | What you'll need: ticking what she has. **2.98 kg paint to mix, 6.96 kg modeling paste**, 7 tubes, 15% spare | §4 Colors, fills **[run]** |
+| 1:12–1:16 | Mix each band, e.g. Deep Burgundy Brown: 2 Quinacridone Magenta : 1 Ultramarine Blue : 6 paste, 552 g + 1.29 kg paste | §4 Colors |
+| 1:16–1:28 | How to paint it: 8 steps, a picture of the canvas after each | §4 Steps |
+| 1:28–1:36 | Check-ins list | §6 |
+| 1:36–1:40 | Rose paste checked as Olive Taupe, "Doesn't match ΔE 10.9". Looks like the wrong color was picked. **Skip** | — |
+| 1:40–1:44 | Plum bowl checked as Deep Burgundy Brown: **"Doesn't match · ΔE 25.2, darker and duller than the mix. Mix in about 1 part Titanium White to 2 parts of it."** | §6, fills **[run]** |
+| 1:44–1:56 | Step 06 Deep Burgundy Brown, her canvas photo: **"Needs work: Burgundy center band is in place but its right side sits on bare canvas where beige should be."** | §6 |
+| 1:56–2:04 | Step 07 Dusty Rose: **"On track: Dusty Rose band is in place upper-middle with correct overlap over burgundy."** | §6 |
+| 2:04–2:13 | Ask a question: she types "should i lay it vertical or ho…". No answer shown | maybe cut |
+
+All check-in results are from Wed 4 Nov, 15:51–15:57, so they're labeled "saved result". The canvas photos are from after she painted, so the film must not say she checked in while painting.
+
+Before using it:
+- Hide her email (top right) and the browser bar ("Relaunch to update"). Cropping the top 90 px removes both.
+- The brief and concepts parts (0:00–0:48) show "client" in four places: the heading, the placeholder, the "Client's wall" toggle, and older briefs in "Carry on with a piece". The code changed on Nov 2 (`256362f`), so the live deploy is older than that.
+- What the recording shows doesn't match the script in §4: she asks for an exact copy of a reference photo, and she gets one picture, not "three concepts, steered by her own paintings". The hook and §7 ("an idea in her head") also don't fit.
+
 ## Rules
 
 - Yara paints for love of it. No clients or commissions.
