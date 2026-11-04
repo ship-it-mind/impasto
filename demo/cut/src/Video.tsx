@@ -39,7 +39,7 @@ const NODES = [
   { name: 'Muse Voice Transcribe', job: 'hears the idea' },
   { name: 'Muse Spark', job: 'plans it, from the brief to every step' },
   { name: 'Muse Image', job: 'paints it' },
-  { name: 'SAM', job: 'finds each band, so its area becomes grams of paint' },
+  { name: 'SAM 3.1', job: 'finds each band, so its area becomes grams of paint' },
 ]
 const Hood: React.FC = () => {
   const f = useCurrentFrame()
@@ -157,7 +157,7 @@ export const Video: React.FC = () => (
           [10, 64, 'Underneath, four Meta models work together.'],
           [70, 182, 'Muse Voice Transcribe hears the idea. Muse Spark plans it, from the brief to every step.'],
           [320, 420, 'Muse Image paints it.'],
-          [430, 558, 'And SAM finds each color band, so its area becomes grams of paint.'],
+          [430, 558, 'And SAM 3.1 finds each color band, so its area becomes grams of paint.'],
         ]} />
       </Fade>
     </S>
