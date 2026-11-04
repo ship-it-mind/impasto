@@ -102,9 +102,10 @@ export const EasyChat: React.FC = () => {
 
 // ─── 4. All of §3 as one chat ───────────────────────────────────────────────
 // The opening chat, then the Day 1 test and the sage-and-cream test as the next turns of the same chat.
-// Both are what really happened: Muse Image was given these three paintings of hers
+// Both are what really happened: Muse Image was given three paintings of hers
 // (backend/spikes/output/image/with-refs.json), and SAM looked for "cream paint band" and
 // "sage green paint band" in the first of them and found nothing (output/sam/…5.54.40 PM/summary.json).
+// That first painting isn't shown: she painted it after the app was done.
 const BUBBLE: React.CSSProperties = { borderRadius: 26, padding: '24px 32px', fontFamily: SANS, fontSize: 40, lineHeight: 1.3 }
 const Me: React.FC<{ a: number; children: React.ReactNode; style?: React.CSSProperties }> = ({ a, children, style }) => {
   const f = useCurrentFrame()
@@ -132,7 +133,7 @@ const ChatDayOne: React.FC = () => (
     <Turn len={150}>
       <Me a={0} style={{ maxWidth: 1080 }}>
         <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
-          {thumb('easy/ref-1.jpg', 160, 200)}{thumb('easy/ref-2.jpg', 160, 200)}{thumb('easy/ref-3.jpg', 160, 200)}
+          {thumb('easy/ref-2.jpg', 160, 200)}{thumb('easy/ref-3.jpg', 160, 200)}
         </div>
         These are her paintings. Make a new one in the same style, palette and knife texture.
       </Me>
@@ -169,10 +170,7 @@ const ChatNothing: React.FC = () => {
     <AbsoluteFill style={{ background: C.paper }}>
       <Turn len={120} last>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 26, opacity: 1 - 0.8 * why, filter: `grayscale(${why}) blur(${why * 3}px)` }}>
-          <Me a={0} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-            {thumb('easy/ref-1.jpg', 150, 200)}
-            <span>Find the sage green band<br />and the cream band.</span>
-          </Me>
+          <Me a={0}>Find the sage green band and the cream band in her painting.</Me>
           <It a={14} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {row(14, 'sage green')}
             {row(30, 'cream')}
