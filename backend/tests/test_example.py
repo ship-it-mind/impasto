@@ -154,3 +154,46 @@ def test_a_piece_goes_to_the_repo_and_comes_back_as_the_example(example, tmp_pat
     assert judge.get(f"/api/checkins/{piece}/{example['run']}/0/{example['checkin']}/progress.png").content == b"secret-progress"
     assert judge.get("/api/checks", params={"brief_id": piece, "run": example["run"], "concept": 0}).json()["mixes"]
     assert judge.get(f"/api/pieces/{piece}").json()["recipe"] == RECIPE
+
+
+@pytest.fixture
+def fresh_clone(example, monkeypatch):
+    """Run as a judge runs a fresh clone: no model key and no invite code, so nobody can sign up or pay for a call."""
+    monkeypatch.delenv("IMPASTO_INVITE_CODE")
+    monkeypatch.setenv("MODEL_API_KEY", "")
+    return example
+
+
+def test_a_fresh_clone_shows_the_example_without_signing_in(fresh_clone):
+    from tests.test_auth import client
+    guest, piece, run = client(), fresh_clone["piece"], fresh_clone["run"]
+    ids = {"brief_id": piece, "run": run, "concept": 0}
+    assert guest.get("/api/auth/me").json()["user"]["guest"] is True
+    assert [p["id"] for p in guest.get("/api/pieces").json()["pieces"]] == [piece]
+    assert guest.get(f"/api/pieces/{piece}").json()["recipe"] == RECIPE
+    assert guest.get(f"/api/concepts/{piece}/{run}/concept-1-muse.png").content == b"painting"
+    assert result(guest, guest.post("/api/recipe", json={**ids, "shares": [1.0]})) == RECIPE
+    assert result(guest, guest.post("/api/guide", json=ids)) == GUIDE
+
+
+def test_a_fresh_clone_starts_nothing_and_reaches_no_one_elses_piece(fresh_clone):
+    from tests.test_auth import client
+    guest = client()
+    other = seeded_piece(user_id(fresh_clone["other"]))["piece"]
+    assert guest.get(f"/api/pieces/{other}").status_code == 404
+    audio = {"audio": ("a.m4a", b"x", "audio/mp4")}
+    for path, options in [("/api/brief", {"data": {"text": "A sea"}}), ("/api/transcribe", {"files": audio}),
+                          ("/api/images/painting", {"files": {"picture": ("p.jpg", b"x", "image/jpeg")}})]:
+        answer = guest.post(path, **options)
+        assert answer.status_code == 403 and "README" in answer.json()["detail"], path
+    assert guest.post("/api/questions", json={"brief_id": fresh_clone["piece"], "run": fresh_clone["run"], "concept": 0, "question": "Why?"}).status_code == 403
+    assert api_module.jobs == {}
+
+
+@pytest.mark.parametrize("key, invite", [("a-key", ""), ("", "a-code")])
+def test_with_a_key_or_an_invite_code_everyone_signs_in(example, monkeypatch, key, invite):
+    from tests.test_auth import client
+    monkeypatch.setenv("MODEL_API_KEY", key)
+    monkeypatch.setenv("IMPASTO_INVITE_CODE", invite)
+    assert client().get("/api/auth/me").json() == {"user": None}
+    assert client().get("/api/pieces").status_code == 401

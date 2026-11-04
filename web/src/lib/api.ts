@@ -18,7 +18,8 @@ export type StyleInput = { references: File[]; without?: string[]; exact?: File;
 export type ConceptSet = { run: string; concepts: Concept[]; canvasPx: [number, number]; piece: Piece }
 export type Presets = { tubes: string[] }
 
-export type Account = { id: string; email: string }
+// guest: a copy run without a model key or invite code, where nobody signs in and only the example can be looked through.
+export type Account = { id: string; email: string; guest?: boolean }
 
 const POLL_MS = 700
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppHeader, type Step } from '@/components/app-header'
-import { editConcept, getPresets, openPiece, type Account, type ConceptSet } from '@/lib/api'
+import { editConcept, getPresets, listPieces, openPiece, type Account, type ConceptSet } from '@/lib/api'
 import type { BriefResult } from '@/lib/brief'
 import { ExampleContext } from '@/lib/example'
 import type { Recipe } from '@/lib/recipe'
@@ -40,6 +40,7 @@ function Kept({ active, children }: { active: boolean; children: ReactNode }) {
 }
 
 export default function App({ account, onSignOut }: { account: Account; onSignOut: () => void }) {
+  const guest = !!account.guest
   const [piece, setPiece] = useState<Piece>({})
   const [step, setStep] = useState<Step>('Brief')
   // Goes up when another piece opens, which starts every screen afresh.
@@ -59,7 +60,15 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
 
   // Open the piece the address names, at its step, or as far as it got.
   const fromUrl = useCallback(async (loaded: Piece) => {
-    const { id, step: wanted } = readUrl()
+    let { id } = readUrl()
+    const { step: wanted } = readUrl()
+    // Without a model key there's nothing to make, only the example to look through, so it opens straight away.
+    if (!id && guest) {
+      setOpening(true)
+      id = (await listPieces().catch(() => [])).find(p => p.example)?.id ?? null
+      setOpening(false)
+      if (id) history.replaceState(null, '', `?piece=${id}`)
+    }
     if (!id) { setPiece({}); setStep('Brief'); setSession(s => s + 1); return }
     let p = loaded
     if (loaded.brief?.id !== id) {
@@ -81,7 +90,7 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
     setPiece(p)
     setStep(next)
     if (p.brief) history.replaceState(null, '', `?piece=${p.brief.id}&step=${SLUGS[next]}`)
-  }, [])
+  }, [guest])
 
   useEffect(() => { fromUrl({}) }, [fromUrl])
   useEffect(() => {
@@ -93,16 +102,20 @@ export default function App({ account, onSignOut }: { account: Account; onSignOu
   const { brief, set, pick, recipe } = piece
   const concept = set && pick !== undefined ? set.concepts[pick] : undefined
 
-  const home = () => { setSession(s => s + 1); go('Brief', {}) }
+  const home = guest
+    ? () => { history.pushState(null, '', location.pathname); fromUrl(piece) }
+    : () => { setSession(s => s + 1); go('Brief', {}) }
 
   return (
     <ExampleContext.Provider value={!!piece.example}>
     <div className="flex min-h-dvh flex-col bg-[oklch(0.985_0.004_80)] text-sm">
-      <AppHeader step={step} reachable={reachable(piece)} email={account.email} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={home} />
+      <AppHeader step={step} reachable={reachable(piece)} email={account.email} guest={guest} onSignOut={onSignOut} onStep={s => go(s, piece)} onHome={home} />
       {!opening && piece.example && (
         <p className="mx-6 mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg bg-muted px-4 py-2.5 text-xs text-muted-foreground lg:mx-10">
           <span><span className="font-medium text-foreground">Example piece.</span> Recorded from a real painting, start to finish: look through every step. Nothing here can be changed, and nothing asks a model.</span>
-          <button type="button" onClick={home} className="font-medium text-foreground underline decoration-1 underline-offset-4">Start your own piece</button>
+          {guest
+            ? <span>To start a piece of your own, run Impasto with a model key: see the README.</span>
+            : <button type="button" onClick={home} className="font-medium text-foreground underline decoration-1 underline-offset-4">Start your own piece</button>}
         </p>
       )}
       {opening && <p className="px-6 py-10 text-center text-muted-foreground lg:px-10">Opening the piece…</p>}

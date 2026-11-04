@@ -285,7 +285,7 @@ def brief_view(record: dict, brief_id: str) -> dict:
 
 
 @api.post("/api/transcribe")
-def new_transcript(user: CurrentUser, audio: Annotated[UploadFile, File()]) -> dict:
+def new_transcript(user: auth.Member, audio: Annotated[UploadFile, File()]) -> dict:
     """Dictation: speech to text for the brief box, to check and edit before the brief is read."""
     if not (audio.content_type or "").startswith(("audio/", "video/")):
         raise HTTPException(415, f"{audio.filename}: that doesn't look like audio.")
@@ -304,7 +304,7 @@ def new_transcript(user: CurrentUser, audio: Annotated[UploadFile, File()]) -> d
 
 @api.post("/api/brief")
 def new_brief(
-    user: CurrentUser,
+    user: auth.Member,
     text: Annotated[str, Form(max_length=5000)] = "",
     wall: Annotated[UploadFile | None, File()] = None,
 ) -> dict:
@@ -410,7 +410,7 @@ def exact_picture(upload: UploadFile) -> bytes:
 
 
 @api.post("/api/images/painting")
-def find_painting(user: CurrentUser, picture: Annotated[UploadFile, File()]) -> dict:
+def find_painting(user: auth.Member, picture: Annotated[UploadFile, File()]) -> dict:
     """Where the painting is in a picture to paint, so only it gets planned. Corners are in the pixels a browser shows."""
     data = exact_picture(picture)
     size = photo_size(data)

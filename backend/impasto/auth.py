@@ -6,6 +6,10 @@ passwords only as Argon2 hashes, so a copy of the database signs nobody in.
 
 Model calls cost money and this is a private demo, so signing up takes the invite code in
 IMPASTO_INVITE_CODE, and without one set nobody can.
+
+A copy run with neither a model key nor an invite code, like a fresh clone, is example only:
+nobody signs in, every visitor is the guest, and the guest can look through the example piece
+and start nothing new.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from impasto import store
+from impasto import meta, store  # meta loads .env
 
 COOKIE = "impasto_session"
 SESSION_SECONDS = 30 * 24 * 3600
@@ -94,17 +98,37 @@ def signed_in(token: str | None) -> dict | None:
 
 
 SessionCookie = Annotated[str | None, Cookie(alias=COOKIE)]
+# Owns nothing, so it only reaches the example piece, which nobody can change.
+GUEST = {"id": "guest", "email": "", "guest": True}
+GUEST_REFUSED = "This copy runs without a model key, so it only shows the example piece. See the README to run it with one."
+
+
+def example_only() -> bool:
+    """No model key and no invite code: nothing could be paid for and nobody could sign up, so show the example to anyone."""
+    return not os.environ.get(meta.KEY_VARIABLE, "").strip() and not os.environ.get("IMPASTO_INVITE_CODE", "").strip()
 
 
 def current_user(token: SessionCookie = None) -> dict:
     """Who's asking. Every route outside this module goes through it."""
     user = signed_in(token)
     if user is None:
+        if example_only():
+            return GUEST
         raise HTTPException(401, "Sign in first.")
     return user
 
 
 CurrentUser = Annotated[dict, Depends(current_user)]
+
+
+def member(user: CurrentUser) -> dict:
+    """Someone with an account: the routes that start a new piece or call a model on new pictures need one."""
+    if user.get("guest"):
+        raise HTTPException(403, GUEST_REFUSED)
+    return user
+
+
+Member = Annotated[dict, Depends(member)]
 
 
 def start_session(request: Request, response: Response, user_id: str) -> None:
@@ -140,6 +164,8 @@ def invited(code: str) -> bool:
 def me(token: SessionCookie = None) -> dict:
     """Who's signed in, if anyone: not being signed in is a normal answer here."""
     user = signed_in(token)
+    if user is None and example_only():
+        return {"user": GUEST}
     return {"user": public(user) if user else None}
 
 

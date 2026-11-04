@@ -34,6 +34,18 @@ We tested each model on a photo of one of the artist's finished pieces before de
 | Muse Image | Cleans a picture to paint as it is, taking out what's in front of the painting; paints each concept from Spark's written composition and colors, steered by the user's reference photos when given; its painting is what the app shows for the concept, and the band layout read off it drives the recipe's band areas and the check-ins |
 | Muse Voice Transcribe | Turns dictation into text in the brief box, to check and edit before the brief is read |
 
+## Look through the example, with no keys
+
+The repo holds one real piece, recorded from the first brief to the last check-in. Run with no `.env`, the app needs no sign-in and no model key: it opens straight at that piece, and every screen can be looked through. Needs [uv](https://docs.astral.sh/uv/) and Node 22+.
+
+```sh
+git clone https://github.com/ship-it-mind/impasto.git && cd impasto
+(cd web && npm install && npm run build)
+cd backend && uv sync && uv run uvicorn impasto.api:app --port 8000
+```
+
+Then open http://localhost:8000. Nothing on the example calls a model, so nothing is spent. Starting a piece of your own needs a model key: see Setup below.
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and a Meta Model API key.
@@ -72,6 +84,7 @@ Model calls cost money, so the app is invite-only. Everyone signs in with an ema
 - **Invite code.** Signing up takes the code in `IMPASTO_INVITE_CODE` in `.env`. With none set, nobody can sign up. Keep it out of the repo. A link like `https://your-host/?invite=CODE` opens sign-up with the code filled in.
 - **Existing pieces.** The first account to sign up gets every piece made before accounts existed, so create yours before sharing the code.
 - **Behind a proxy.** Sign-up and sign-in attempts are limited per client address, so run uvicorn with `--proxy-headers --forwarded-allow-ips <proxy address>` (the `Dockerfile` does). Otherwise all visitors count as one client and an outsider's guesses can block sign-ups for up to an hour.
+- **Example only.** With neither `MODEL_API_KEY` nor `IMPASTO_INVITE_CODE` set, as in a fresh clone, nobody signs in: every visitor is a guest who can only look through the example piece, and anything that would start a piece or call a model is refused. Set either one and sign-in is back.
 - **Not built.** There's no password reset or email verification, because the app doesn't send email.
 
 ### The example piece

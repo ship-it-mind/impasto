@@ -16,8 +16,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(REPO_ROOT / ".env")
 
 
+KEY_VARIABLE = "MODEL_API_KEY"
+
+
 def api_key() -> str:
-    key = os.environ.get("MODEL_API_KEY")
+    key = os.environ.get(KEY_VARIABLE)
     if not key:
         raise RuntimeError(f"Set MODEL_API_KEY in {REPO_ROOT / '.env'}.")
     return key
