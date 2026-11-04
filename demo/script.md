@@ -8,6 +8,20 @@ Spine: one painting from idea to finished canvas, then two more she made with Im
 
 Status: second draft, telling the whole way from idea to canvas, not only mixing. **[confirm]** marks Yara's lines to check again. **[run]** marks numbers that come from the recorded example piece, still to record.
 
+## First cut (2026-11-04)
+
+`demo/cut/` is a Remotion project that renders the whole 3:00 to `demo/cut/out/impasto-demo.mp4` (`npm install`, then `npm run render`). Its `public/` folder holds copies of the photos and footage, and git ignores it, like `out/`.
+
+- **Narration** is shown as subtitles, because no voiceover is recorded yet. A recorded voice can go on top later, and the subtitles can stay.
+- **Yara's two parts** (§2 and §8) are placeholder cards for now. To add her clips, put them in `demo/cut/public/` and name them in `YARA` at the top of `src/Video.tsx`.
+- **App footage** comes from the example piece, recorded again locally with `make example`. That version says "What do you want to paint?", not "client", and shows no email or example banner. Two shots come from the cropped screen recording, `demo/video/recording-cropped.mp4`, because the example doesn't save them: the "make it warmer" change (0:39–0:48, cropped past the "Client's wall" toggle) and the plum bowl check (a still at 1:40.85).
+- **Lines changed** so they match this run, where she asked for an exact copy of a painting she loved:
+  - §3: "It learns from her own paintings" became "It works from the pictures she gives it, and it measures."
+  - §4: "paints three concepts, steered by her own paintings" became "Yara says it out loud: this wall, and a painting she loves. Impasto turns what she said into a brief, and sizes the canvas to the wall."
+  - §5: "Muse Image paints it, in her style" became "Muse Image paints it."
+  - §6: The check-ins are labeled "Saved result", and the narration says the photos were taken while she painted, not that she checked in at the time.
+  - §7: "It started as an idea in her head" became "It started as a picture she loved and an empty wall."
+
 ## 0. Hook (≈ 0:00–0:08)
 
 > *(Animated type on a plain background, one line at a time. Then the Impasto wordmark.)*
@@ -114,7 +128,7 @@ A real check-in, recorded now, using one of her plum bowl photos (`mixes` 01, 05
 All check-in results are from Wed 4 Nov, 15:51–15:57, so they're labeled "saved result". The canvas photos are from after she painted, so the film must not say she checked in while painting.
 
 Before using it:
-- Hide her email (top right) and the browser bar ("Relaunch to update"). Cropping the top 90 px removes both.
+- Done: `demo/video/recording-cropped.mp4` is the recording with its top 108 px cropped off, which removes the browser bar ("Relaunch to update") and her email.
 - The brief and concepts parts (0:00–0:48) show "client" in four places: the heading, the placeholder, the "Client's wall" toggle, and older briefs in "Carry on with a piece". The code changed on Nov 2 (`256362f`), so the live deploy is older than that.
 - What the recording shows doesn't match the script in §4: she asks for an exact copy of a reference photo, and she gets one picture, not "three concepts, steered by her own paintings". The hook and §7 ("an idea in her head") also don't fit.
 
