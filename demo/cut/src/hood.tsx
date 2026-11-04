@@ -5,15 +5,16 @@ import React from 'react'
 import { AbsoluteFill, Img, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion'
 import { C, Fade, SANS, SERIF, Say, ease } from './kit'
 
+// Timed to the voiceover (public/vo/hood.wav, from frame 8): each model's beat starts on its name.
 const SAY_ALL: [number, number, string][] = [
-  [8, 62, 'Underneath, four Meta models work together.'],
-  [68, 150, 'Muse Voice Transcribe hears the idea.'],
-  [156, 252, 'Muse Spark plans it, from the brief to every step.'],
-  [258, 360, 'SAM 3.1 finds the painting in her picture, and the canvas in every check-in photo.'],
-  [366, 462, 'Muse Image cleans the picture, and repaints any part she wants changed.'],
-  [470, 575, 'The rest, Impasto measures itself: band areas become grams, and every color is mixed from her tubes.'],
+  [10, 72, 'Underneath, four Meta models.'],
+  [87, 150, 'Muse Voice Transcribe hears the idea.'],
+  [162, 254, 'Muse Spark plans it, from the brief to every step.'],
+  [265, 398, 'SAM 3.1 finds the painting, and the canvas in every photo.'],
+  [409, 498, 'Muse Image cleans it, and repaints what she changed.'],
+  [510, 680, 'The rest, Impasto measures itself: areas into grams, colors into mixes.'],
 ]
-const BEATS = [[64, 154], [154, 256], [256, 364], [364, 466], [466, 590]] as const
+const BEATS = [[87, 162], [162, 265], [265, 409], [409, 510], [510, 688]] as const
 const MODELS = [
   { name: 'Muse Voice Transcribe', job: 'hears the idea' },
   { name: 'Muse Spark', job: 'plans it, from the brief to every step' },
@@ -188,7 +189,7 @@ const Showcase: React.FC<{ beats: number; len: number }> = ({ beats, len }) => {
   return (
     <AbsoluteFill style={{ background: C.paper }}>
       <Fade len={len} inF={12} outF={12}>
-        <Sequence durationInFrames={64}><Fade len={64} inF={0} outF={8}><Intro /></Fade></Sequence>
+        <Sequence durationInFrames={BEATS[0][0]}><Fade len={BEATS[0][0]} inF={0} outF={8}><Intro /></Fade></Sequence>
         {BEATS.slice(0, beats).map(([a, b], i) => {
           const end = i === beats - 1 ? len : b
           return <Sequence key={i} from={a} durationInFrames={end - a}><Beat i={i} len={end - a} last={i === beats - 1} /></Sequence>
@@ -198,7 +199,7 @@ const Showcase: React.FC<{ beats: number; len: number }> = ({ beats, len }) => {
     </AbsoluteFill>
   )
 }
-export const HOOD_A_LEN = 480, HOOD_B_LEN = 590, HOOD_C_LEN = 590
+export const HOOD_A_LEN = 520, HOOD_B_LEN = 688, HOOD_C_LEN = 688
 export const HoodWork: React.FC = () => <Showcase beats={4} len={HOOD_A_LEN} />
 export const HoodMeasured: React.FC = () => <Showcase beats={5} len={HOOD_B_LEN} />
 

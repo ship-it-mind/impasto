@@ -10,8 +10,8 @@ export const EASY_SAY: [number, number, string][] = [
   [118, 172, 'I was wrong.'],
 ]
 // When each claim is said, and when "I was wrong." lands.
-const CLAIMS: [number, string][] = [[58, 'writes ideas'], [76, 'paints pictures'], [94, 'names colors']]
-const WRONG = 118
+const CLAIMS: [number, string][] = [[30, 'writes ideas'], [48, 'paints pictures'], [66, 'names colors']]
+const WRONG = 103  // on "I was wrong" in the voiceover
 
 // Her white paste texture, the handheld pass over it, slowed to fill 6 s (it's 4.7 s).
 const Texture: React.FC<{ grey?: number }> = ({ grey = 0 }) => (
@@ -130,7 +130,7 @@ const thumb = (src: string, w: number, h: number) => <Img src={staticFile(src)} 
 // Day 1: her three paintings in, generic texture out.
 const ChatDayOne: React.FC = () => (
   <AbsoluteFill style={{ background: C.paper }}>
-    <Turn len={150}>
+    <Turn len={137}>
       <Me a={0} style={{ maxWidth: 1080 }}>
         <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           {thumb('easy/ref-2.jpg', 160, 200)}{thumb('easy/ref-3.jpg', 160, 200)}
@@ -152,7 +152,7 @@ const ChatDayOne: React.FC = () => (
 const LIT = '#e5dccb', SHADE = '#a39b8b'
 const ChatNothing: React.FC = () => {
   const f = useCurrentFrame()
-  const why = ease(f, 62, 78)
+  const why = ease(f, 127, 143)  // on "Every ridge's shadow changes the color"
   const row = (a: number, word: string) => (
     <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', opacity: ease(f, a, a + 10) }}>
       <span>“{word}”</span><span style={{ color: C.soft }}>→</span>
@@ -181,10 +181,10 @@ const ChatNothing: React.FC = () => {
       <div style={{ position: 'absolute', left: 510, top: 100, width: 900, height: 632, borderRadius: 24, overflow: 'hidden', opacity: why, transform: `translateY(${(1 - why) * 30}px) scale(${0.96 + 0.04 * why})`,
         boxShadow: '0 40px 90px -30px rgba(40,25,15,.65)' }}>
         <Img src={staticFile('easy/shadow.jpg')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        {dot(0.347, 0.445, SHADE, 'in shadow', 80)}
-        {dot(0.642, 0.55, LIT, 'in light', 88)}
+        {dot(0.347, 0.445, SHADE, 'in shadow', 145)}
+        {dot(0.642, 0.55, LIT, 'in light', 153)}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 30px', display: 'flex', alignItems: 'center', gap: 22, background: 'rgba(15,13,12,.78)',
-          fontFamily: SANS, fontSize: 34, color: '#fff', opacity: ease(f, 96, 108) }}>
+          fontFamily: SANS, fontSize: 34, color: '#fff', opacity: ease(f, 161, 173) }}>
           <span style={{ fontFamily: SERIF, fontSize: 42 }}>The same cream:</span>
           {[[LIT, 'in light'], [SHADE, 'in shadow']].map(([hex, n]) => (
             <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
@@ -209,21 +209,24 @@ export const DontGuess: React.FC = () => {
 }
 
 // The whole of §3, 540 frames: chat (0–180), Day 1 (180–330), sage and cream (330–450), then "doesn't guess".
-export const EASY_ALL_LEN = 540
+// Timed to the voiceover (public/vo/easy.wav, from frame 8): each turn of the chat starts on its line.
+export const EASY_ALL_LEN = 568
+const CUTS = [138, 275, 480]  // "Ask it to paint", "Ask it to find", "So Impasto doesn't guess"
 export const EASY_ALL_SAY: [number, number, string][] = [
-  ...EASY_SAY,
-  [186, 320, 'Ask one to paint her idea, and you get generic texture, nothing like hers.'],
-  [334, 388, 'Ask it to find “sage” or “cream” in her painting, and it finds nothing.'],
-  [392, 442, 'And every knife ridge casts a shadow that changes the color it sees.'],
+  [12, 92, 'I thought AI could do this easily.'],
+  [103, 130, 'I was wrong.'],
+  [138, 262, 'Ask it to paint her idea: generic texture, nothing like hers.'],
+  [275, 392, 'Ask it to find “sage” or “cream” in her painting: nothing.'],
+  [402, 470, "Every ridge's shadow changes the color."],
 ]
 export const EasyChatAll: React.FC<{ say?: boolean }> = ({ say = true }) => (
   <AbsoluteFill style={{ background: C.paper }}>
-    <Sequence durationInFrames={180}><EasyChat /></Sequence>
-    <Sequence from={180} durationInFrames={150}><ChatDayOne /></Sequence>
-    <Sequence from={330} durationInFrames={120}><ChatNothing /></Sequence>
-    <Sequence from={450}><DontGuess /></Sequence>
-    {say && <Sequence durationInFrames={450}><Say lines={EASY_ALL_SAY} dark={false} bottom={40} /></Sequence>}
-    {say && <Sequence from={450}><Say lines={[[14, 86, 'It works from the pictures she gives it, and it measures.']]} /></Sequence>}
+    <Sequence durationInFrames={CUTS[0]}><EasyChat /></Sequence>
+    <Sequence from={CUTS[0]} durationInFrames={CUTS[1] - CUTS[0]}><ChatDayOne /></Sequence>
+    <Sequence from={CUTS[1]} durationInFrames={CUTS[2] - CUTS[1]}><ChatNothing /></Sequence>
+    <Sequence from={CUTS[2]}><DontGuess /></Sequence>
+    {say && <Sequence durationInFrames={CUTS[2]}><Say lines={EASY_ALL_SAY} dark={false} bottom={40} /></Sequence>}
+    {say && <Sequence from={CUTS[2]}><Say lines={[[0, 72, "So Impasto doesn't guess. It measures."]]} /></Sequence>}
   </AbsoluteFill>
 )
 

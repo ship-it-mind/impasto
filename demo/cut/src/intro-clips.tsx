@@ -22,18 +22,18 @@ const Media: React.FC<{ src: string; pos?: string; rate?: number; style?: React.
   )
 }
 
-const Frame: React.FC<{ children: React.ReactNode; dim?: boolean }> = ({ children, dim }) => (
+const Frame: React.FC<{ children: React.ReactNode; dim?: boolean; say?: [number, number, string][]; len?: number }> = ({ children, dim, say = INTRO_SAY, len = INTRO_LEN }) => (
   <AbsoluteFill style={{ background: BG }}>
-    <Fade len={INTRO_LEN} inF={14} outF={14}>
+    <Fade len={len} inF={14} outF={14}>
       {children}
       {dim && <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,.55) 100%)' }} />}
-      <Say lines={INTRO_SAY} dark />
+      <Say lines={say} dark />
     </Fade>
   </AbsoluteFill>
 )
 
 // The shots in order, cut on the words. Used by the one-at-a-time and full-frame versions.
-type Shot = { a: number; b: number; src: string; rate?: number; pos?: string }
+export type Shot = { a: number; b: number; src: string; rate?: number; pos?: string }
 const SHOTS: Shot[] = [
   { a: 0, b: 172, src: 'brush-cat', pos: '50% 45%' },
   { a: 172, b: 248, src: 'blank-live' },
@@ -114,9 +114,9 @@ const BlurShot: React.FC<{ s: Shot; W: number; H: number }> = ({ s, W, H }) => {
 
 // ─── c. Full frame ─────────────────────────────────────────────────────────
 // Cropped to fill the screen. Softer, because a slice of a portrait clip is blown up.
-export const IntroFull: React.FC = () => (
-  <Frame dim>
-    {SHOTS.map((s, i) => (
+export const IntroFull: React.FC<{ shots?: Shot[]; say?: [number, number, string][]; len?: number }> = ({ shots = SHOTS, say, len }) => (
+  <Frame dim say={say} len={len}>
+    {shots.map((s, i) => (
       <Sequence key={i} from={s.a} durationInFrames={s.b - s.a}>
         <Media src={s.src} rate={s.rate} pos={s.pos} />
       </Sequence>
