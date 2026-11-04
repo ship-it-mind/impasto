@@ -7,8 +7,9 @@ import { INTRO_LEN, INTRO_SAY } from './intros'
 
 const BG = '#1a1614'
 // Length of each clip in frames, so it can loop instead of stopping.
-const LEN: Record<string, number> = { 'brush-cat': 300, 'brush-gold': 300, 'brush-purple': 300, 'knife-white': 180, 'knife-purple': 285, ridges: 234, texture: 141, mix: 213 }
-const STILLS = new Set(['blank-1', 'blank-2', 'tube', 'textured'])
+const LEN: Record<string, number> = { 'brush-cat': 300, 'brush-gold': 300, 'brush-purple': 300, 'knife-white': 180, 'knife-purple': 285, ridges: 234, texture: 141, mix: 213, 'blank-live': 90, wall: 375 }
+const STILLS = new Set(['blank-1', 'blank-2', 'tube', 'textured', 'wall-photo'])
+const LAND = new Set(['blank-1', 'blank-2', 'blank-live'])
 
 // One clip or photo, filling its box. `pos` is the CSS object-position.
 const Media: React.FC<{ src: string; pos?: string; rate?: number; style?: React.CSSProperties }> = ({ src, pos = '50% 50%', rate = 1, style }) => {
@@ -35,8 +36,8 @@ const Frame: React.FC<{ children: React.ReactNode; dim?: boolean }> = ({ childre
 type Shot = { a: number; b: number; src: string; rate?: number; pos?: string }
 const SHOTS: Shot[] = [
   { a: 0, b: 172, src: 'brush-cat', pos: '50% 45%' },
-  { a: 172, b: 232, src: 'blank-1' },
-  { a: 232, b: 300, src: 'blank-2' },
+  { a: 172, b: 248, src: 'blank-live' },
+  { a: 248, b: 300, src: 'wall', rate: 1.5, pos: '50% 32%' },
   { a: 300, b: 362, src: 'knife-white', pos: '50% 60%' },
   { a: 362, b: 420, src: 'knife-purple', pos: '50% 70%' },
   { a: 420, b: 474, src: 'ridges' },
@@ -52,7 +53,8 @@ const PANELS: Panel[] = [
   { a: 0, end: 172, src: 'brush-cat', x: COL[1], pos: '50% 40%' },
   { a: 30, end: 172, src: 'brush-gold', x: COL[0] },
   { a: 58, end: 172, src: 'brush-purple', x: COL[2] },
-  { a: 172, end: 300, src: 'blank-1', x: 360, w: 1200, cut: 236, then: 'blank-2' },
+  { a: 172, end: 300, src: 'blank-live', x: 197, w: 1053 },
+  { a: 240, end: 300, src: 'wall', x: 1278, rate: 1.5, pos: '50% 30%' },
   { a: 300, end: 474, src: 'knife-white', x: COL[0], pos: '50% 60%' },
   { a: 360, end: 474, src: 'knife-purple', x: COL[1], pos: '50% 70%' },
   { a: 420, end: 474, src: 'ridges', x: COL[2] },
@@ -86,7 +88,7 @@ export const IntroPanels: React.FC = () => {
 export const IntroBlur: React.FC = () => (
   <Frame>
     {SHOTS.map((s, i) => {
-      const land = STILLS.has(s.src)
+      const land = LAND.has(s.src)
       const H = 800, W = land ? Math.round(H * 4 / 3) : Math.round(H * 9 / 16)
       return (
         <Sequence key={i} from={s.a} durationInFrames={s.b - s.a}>
@@ -127,9 +129,8 @@ export const IntroFull: React.FC = () => (
 const CW = 420, CH = 746, STEP = 470
 const STRIP: { src: string; at: number; rate?: number; pos?: string }[] = [
   { src: 'brush-cat', at: 70, pos: '50% 40%' },
-  { src: 'brush-gold', at: 150 },
-  { src: 'blank-1', at: 210, pos: '62% 50%' },
-  { src: 'brush-purple', at: 270 },
+  { src: 'blank-live', at: 205, pos: '62% 50%' },
+  { src: 'wall', at: 268, rate: 1.2, pos: '50% 30%' },
   { src: 'knife-white', at: 335, pos: '50% 60%' },
   { src: 'knife-purple', at: 392, pos: '50% 70%' },
   { src: 'ridges', at: 448 },
