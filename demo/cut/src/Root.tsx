@@ -4,6 +4,7 @@ import React from 'react'
 import { Composition } from 'remotion'
 import { Video } from './Video'
 import { INTRO_LEN, IntroClips, IntroCuts, IntroLift, IntroType, IntroWall } from './intros'
+import { IntroBlur, IntroFull, IntroPanels, IntroStrip } from './intro-clips'
 import { HOOK_LEN, HookBowl, HookDeal, HookDecisions, HookKnife, HookNoise, HookSketch, HookSplit } from './hooks'
 
 const opt = { fps: 30, width: 1920, height: 1080, durationInFrames: HOOK_LEN }
@@ -22,5 +23,9 @@ export const Root: React.FC = () => (
     <Composition id="Intro3-Wall" component={IntroWall} {...opt} durationInFrames={INTRO_LEN} />
     <Composition id="Intro4-Cuts" component={IntroCuts} {...opt} durationInFrames={INTRO_LEN} />
     <Composition id="Intro5-Type" component={IntroType} {...opt} durationInFrames={INTRO_LEN} />
+    <Composition id="Intro1a-Panels" component={IntroPanels} {...opt} durationInFrames={INTRO_LEN} />
+    <Composition id="Intro1b-Blur" component={IntroBlur} {...opt} durationInFrames={INTRO_LEN} />
+    <Composition id="Intro1c-Full" component={IntroFull} {...opt} durationInFrames={INTRO_LEN} />
+    <Composition id="Intro1d-Strip" component={IntroStrip} {...opt} durationInFrames={INTRO_LEN} />
   </>
 )
