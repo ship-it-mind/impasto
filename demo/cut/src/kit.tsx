@@ -161,3 +161,13 @@ const NameCard: React.FC = () => {
     </div>
   )
 }
+
+// An app scene: the five stops on top, a tag like "Saved result", and the narration.
+export const App: React.FC<{ stop: number; len: number; children: React.ReactNode; say: [number, number, string][]; tag?: string }> = ({ stop, len, children, say, tag }) => (
+  <Fade len={len} inF={8} outF={8}>
+    {children}
+    <Stops active={stop} />
+    {tag && <Tag x={1920 - 260 - 200} y={146} at={10} dark>{tag}</Tag>}
+    <Say lines={say} dark={false} bottom={24} />
+  </Fade>
+)

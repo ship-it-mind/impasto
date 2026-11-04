@@ -1,6 +1,6 @@
 import React from 'react'
 import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion'
-import { C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
+import { App, C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
 import { HookSketch } from './hooks'
 import { IntroFull } from './intro-clips'
 import { EasyChatAll } from './easy'
@@ -85,14 +85,6 @@ const Stat: React.FC<{ at: number; items: [string, string][] }> = ({ at, items }
   )
 }
 
-const App: React.FC<{ stop: number; len: number; children: React.ReactNode; say: [number, number, string][]; tag?: string }> = ({ stop, len, children, say, tag }) => (
-  <Fade len={len} inF={8} outF={8}>
-    {children}
-    <Stops active={stop} />
-    {tag && <Tag x={1920 - 260 - 200} y={146} at={10} dark>{tag}</Tag>}
-    <Say lines={say} dark={false} bottom={24} />
-  </Fade>
-)
 
 // 4. The idea: the box as she filled it, then the brief Impasto read from it.
 // `brief` is which recording of the brief: 'fix' with the app's "From the picture" rows, 'hide' with those rows hidden.
