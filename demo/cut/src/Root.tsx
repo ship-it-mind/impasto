@@ -3,6 +3,7 @@ import '@fontsource-variable/archivo'
 import React from 'react'
 import { Composition } from 'remotion'
 import { Idea, TOTAL, Video } from './Video'
+import { UI_ALL_LEN, UiAll } from './app-ui'
 import { APP_ALL_LEN, AppScenes, BowlScene, ColorsScene, IdeaScene, SeeScene, StepCheckScene, StepsScene } from './app-scenes'
 import { INTRO_LEN, IntroClips, IntroCuts, IntroLift, IntroType, IntroWall } from './intros'
 import { EASY_ALL_LEN, EASY_LEN, EasyChatAll, EasyPreview } from './easy'
@@ -36,6 +37,7 @@ export const Root: React.FC = () => (
     <Composition id="Easy4-ChatAll" component={EasyChatAll} {...opt} durationInFrames={EASY_ALL_LEN} />
     <Composition id="Idea-Fix" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'fix' as const }} />
     <Composition id="Idea-Hide" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'hide' as const }} />
+    <Composition id="UI-All" component={UiAll} {...opt} durationInFrames={UI_ALL_LEN} />
     <Composition id="App-All" component={AppScenes} {...opt} durationInFrames={APP_ALL_LEN} />
     <Composition id="App1-Idea" component={IdeaScene} {...opt} durationInFrames={300} />
     <Composition id="App2-See" component={SeeScene} {...opt} durationInFrames={150} />
