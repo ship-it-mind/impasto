@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts Impasto out/impasto-demo.mp4 --codec h264 --crf 16"
+    "render": "remotion render src/index.ts Impasto out/impasto-demo.mp4 --codec h264 --crf 16",
+    "hooks": "for h in Hook1-Sketch Hook2-Deal Hook3-Knife Hook4-Noise; do remotion render src/index.ts $h out/$h.mp4 --codec h264 --crf 16 --gl=swangle --log=error || exit 1; done"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
