@@ -54,19 +54,21 @@ These clips are from her other paintings, not the one the rest of the film follo
 
 She can say it in her own way. Her questions are the stops section 4 walks through, in the same order.
 
-## 3. "I thought this would be easy" (≈ 0:42–1:00)
+## 3. "I thought this would be easy" (≈ 0:46–1:04), chosen 2026-11-04
 
-> *(Close-ups of her ridges, `stages` photos.)*
+`EasyChatAll` in `demo/cut/src/easy.tsx`: the whole section as one chat on paper, picked over a pan across a ridge photo.
+
+> *(A prompt types itself, a shortened version of the real Day 1 prompt. Three confident replies come back: an idea, the real Day 1 "words alone" picture, three color chips. On "I was wrong." it all goes grey.)*
 > **Sultan:** "I thought AI could do this easily. Models write ideas, paint pictures, name colors. I was wrong."
-> *(Day 1 test: `text-only.webp` beside `with-refs.webp`.)*
+> *(The chat scrolls on, tagged "Day 1 test". Two of her paintings go in with "Make a new one in the same style, palette and knife texture." The generic texture comes back.)*
 > "Ask one to paint her idea, and you get generic texture, nothing like hers."
-> *(Animated type over a ridge photo: `"sage" → nothing found`, `"cream" → nothing found`.)*
+> *("Find the sage green band and the cream band in her painting." Both: nothing found. Then a close-up of her ridges, the same cream measured in light, `#e5dccb`, and in shadow, `#a39b8b`.)*
 > "Ask it to find 'sage' or 'cream' in her painting, and it finds nothing.
 > And every knife ridge casts a shadow that changes the color it sees."
-> *(Hard cut to black, then type: "So Impasto doesn't guess.")*
-> "So Impasto doesn't guess. It learns from her own paintings, and it measures."
+> *(Hard cut to black: "So Impasto doesn't guess.")*
+> "It works from the pictures she gives it, and it measures."
 
-Visual: the real Day 1 results from `backend/spikes/output/image/`, labeled "Day 1 test". No reruns.
+The Day 1 run and the sage and cream search are the real ones in `backend/spikes/output/`. The Day 1 run had a third reference, a painting she made after the app was done, so the chat leaves it out. The idea text, the color chips and the reply wording are written for the film; the models gave the images and the empty searches, not those words.
 
 ## 4. On top, it's simple (≈ 1:00–1:45)
 

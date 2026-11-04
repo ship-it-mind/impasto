@@ -1,8 +1,9 @@
 import React from 'react'
-import { AbsoluteFill, Img, Sequence, staticFile, useCurrentFrame } from 'remotion'
+import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion'
 import { C, Fade, Photo, SANS, SERIF, Say, Screen, Stops, Tag, Wordmark, YaraSlot, ease } from './kit'
 import { HookSketch } from './hooks'
 import { IntroFull } from './intro-clips'
+import { EasyChatAll } from './easy'
 
 // Yara's clips, cut by scripts/yara-clips.sh, with her words as subtitles (frames within each clip).
 export const YARA = { intro: 'yara/yara-1.mp4' as string | null, last: 'yara/yara-2.mp4' as string | null }
@@ -32,58 +33,6 @@ export const TOTAL = at
 const S: React.FC<{ t: readonly [number, number]; children: React.ReactNode }> = ({ t, children }) => (
   <Sequence from={t[0]} durationInFrames={t[1]}>{children}</Sequence>
 )
-
-// 3. The "nothing found" type over a ridge photo.
-const NothingFound: React.FC = () => {
-  const f = useCurrentFrame()
-  const row = (a: number, word: string) => (
-    <div style={{ display: 'flex', gap: 26, alignItems: 'baseline', opacity: ease(f, a, a + 12), transform: `translateX(${(1 - ease(f, a, a + 18)) * -30}px)` }}>
-      <span style={{ fontFamily: SERIF, fontSize: 96, color: '#fff' }}>“{word}”</span>
-      <span style={{ fontFamily: SANS, fontSize: 52, color: 'rgba(255,255,255,.6)' }}>→</span>
-      <span style={{ fontFamily: SANS, fontSize: 52, fontWeight: 600, color: '#f2b8a8', opacity: ease(f, a + 16, a + 26) }}>nothing found</span>
-    </div>
-  )
-  return (
-    <AbsoluteFill>
-      <Photo src="photos/stage-06.jpg" len={120} from={1.3} to={1.42} dim={0} />
-      <AbsoluteFill style={{ background: 'rgba(15,13,12,.55)' }} />
-      <AbsoluteFill style={{ justifyContent: 'center', paddingLeft: 200, gap: 22, flexDirection: 'column', paddingBottom: 120 }}>
-        {row(4, 'sage')}
-        {row(26, 'cream')}
-      </AbsoluteFill>
-    </AbsoluteFill>
-  )
-}
-
-const DayOne: React.FC = () => {
-  const f = useCurrentFrame()
-  const pic = (src: string, label: string, a: number) => (
-    <div style={{ opacity: ease(f, a, a + 14), transform: `translateY(${(1 - ease(f, a, a + 20)) * 20}px)`, display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
-      <Img src={staticFile(src)} style={{ width: 640, height: 640, objectFit: 'cover', borderRadius: 16, boxShadow: '0 30px 60px -25px rgba(0,0,0,.45)' }} />
-      <div style={{ fontFamily: SANS, fontSize: 26, color: C.soft }}>{label}</div>
-    </div>
-  )
-  return (
-    <AbsoluteFill style={{ background: C.paper }}>
-      <AbsoluteFill style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 70, paddingBottom: 150 }}>
-        {pic('text-only.webp', 'From the words alone', 0)}
-        {pic('with-refs.webp', 'With her paintings as references', 10)}
-      </AbsoluteFill>
-      <Tag at={4}>Day 1 test</Tag>
-    </AbsoluteFill>
-  )
-}
-
-const DontGuess: React.FC = () => {
-  const f = useCurrentFrame()
-  return (
-    <AbsoluteFill style={{ background: C.black, justifyContent: 'center', alignItems: 'center' }}>
-      <div style={{ fontFamily: SERIF, fontSize: 110, color: '#fff', letterSpacing: -2, opacity: ease(f, 4, 16), transform: `scale(${1.03 - 0.03 * ease(f, 4, 40)})`, paddingBottom: 120 }}>
-        So Impasto doesn't guess.
-      </div>
-    </AbsoluteFill>
-  )
-}
 
 // 5. Four models, one node per sentence.
 const NODES = [
@@ -159,19 +108,7 @@ export const Video: React.FC = () => (
 
     {/* 3. "I thought this would be easy" */}
     <S t={T.easy}>
-      <Fade len={540} inF={10} outF={10}>
-        <Sequence durationInFrames={180}><Photo src="photos/stage-13.jpg" len={180} from={1.35} to={1.5} y={[3, -3]} dim={0.5} /></Sequence>
-        <Sequence from={180} durationInFrames={150}><DayOne /></Sequence>
-        <Sequence from={330} durationInFrames={120}><NothingFound /></Sequence>
-        <Sequence from={450}><DontGuess /></Sequence>
-        <Say lines={[
-          [6, 110, 'I thought AI could do this easily. Models write ideas, paint pictures, name colors.'],
-          [118, 172, 'I was wrong.'],
-        ]} />
-        <Sequence from={180} durationInFrames={150}><Say dark={false} lines={[[6, 140, 'Ask one to paint her idea, and you get generic texture, nothing like hers.']]} /></Sequence>
-        <Sequence from={330} durationInFrames={120}><Say lines={[[4, 58, "Ask it to find “sage” or “cream” in her painting, and it finds nothing."], [62, 112, 'And every knife ridge casts a shadow that changes the color it sees.']]} /></Sequence>
-        <Sequence from={450}><Say lines={[[14, 86, 'It works from the pictures she gives it, and it measures.']]} /></Sequence>
-      </Fade>
+      <Fade len={540} inF={10} outF={10}><EasyChatAll /></Fade>
     </S>
 
     {/* 4. On top, it's simple */}
