@@ -1,0 +1,1146 @@
+{
+ "piece": "7b5c367705db4c798dcf00593c0d1756",
+ "tables": {
+  "pieces": [
+   {
+    "id": "7b5c367705db4c798dcf00593c0d1756",
+    "user_id": null,
+    "record": {
+     "source": "web",
+     "transcript": "This is the wall of my office room. I wanna paint this exact reference I shared with you, can you help with that?",
+     "wall_photo": "wall.jpg",
+     "answers": [],
+     "brief": {
+      "clarifying_question": null,
+      "mood": [],
+      "paint_as_is": true,
+      "palette": {
+       "avoid": [],
+       "colors": [],
+       "intensity": "unspecified",
+       "temperature": "unspecified"
+      },
+      "piece": {
+       "width_cm": 115.0,
+       "height_cm": 135.0,
+       "orientation": "portrait"
+      },
+      "room": {
+       "lighting": "natural daylight",
+       "name": "office room",
+       "notes": "Large empty wall with white cube bookshelf on left holding books, boxes and trailing plant, brass globe wall sconce above, wood-look tile floor with dark baseboard, wood table corner bottom left, light switch on right, white crown molding, no art hanging",
+       "placement": null,
+       "wall_color_hex": "#EDEAE3",
+       "wall_width_cm": null
+      },
+      "style": [],
+      "summary": "Exact copy of the shared reference for the office wall.",
+      "wall_fit": {
+       "center_x": 0.5,
+       "center_y": 0.42,
+       "height_cm": 90,
+       "reason": "Large centered piece suits the wide empty wall, scaled from the bookshelf and light switch.",
+       "visible_width_cm": 300,
+       "width_cm": 120
+      }
+     },
+     "warnings": []
+    },
+    "mockup": {
+     "line": [
+      [
+       0.0,
+       860.16
+      ],
+      [
+       1536.0,
+       860.16
+      ]
+     ],
+     "length_cm": 300.0,
+     "corners": [
+      [
+       496.7432396251674,
+       462.3297456492637
+      ],
+      [
+       1085.5432396251674,
+       462.3297456492637
+      ],
+      [
+       1085.5432396251674,
+       1153.5297456492635
+      ],
+      [
+       496.7432396251675,
+       1153.5297456492635
+      ]
+     ],
+     "estimated": true
+    },
+    "run": "concepts-1098fb52",
+    "chosen": 0,
+    "created_at": 1793799815.4423902,
+    "updated_at": 1793800707.5148137
+   }
+  ],
+  "runs": [
+   {
+    "id": "concepts-1098fb52",
+    "piece": "7b5c367705db4c798dcf00593c0d1756",
+    "record": {
+     "style": {
+      "preset": null,
+      "references": [],
+      "exact": "exact.jpg"
+     },
+     "canvas_px": [
+      852,
+      1000
+     ],
+     "prompt": "You are the studio assistant of a palette-knife / impasto painter, who is going to paint the attached\npicture as it is. Its colors have already been measured, listed below with the share of the canvas each covers and\nits average position (x and y from 0 at the top left to 1 at the bottom right).\n\nWrite:\n- title: the picture's subject in a few plain words. idea: one sentence describing the picture.\n- flow: how the shapes run, if they follow one of these regular layouts:\n  - arc\n  - diagonal\n  - diagonal split\n  - gentle wave\n  - grid\n  - horizontal\n  - wave\n  Otherwise freeform.\n- colors: one entry per measured color, in the same order:\n  - name: a short color name a painter would use. Every name different.\n  - where: where this color sits in the picture and what shape it takes, in a few words.\n  - relief: how thick the paste looks there (thin / medium / heavy). With no visible paste, as in a photo or a\n    flat print, use thin for backgrounds and fine areas and medium for the main shapes.\n\nMeasured colors:\n1. #d2bda8, 43% of the canvas, around x 0.53, y 0.49\n2. #ab887e, 21% of the canvas, around x 0.59, y 0.41\n3. #391e20, 14% of the canvas, around x 0.52, y 0.59\n4. #a2957d, 11% of the canvas, around x 0.33, y 0.57\n5. #694445, 6% of the canvas, around x 0.20, y 0.22\n6. #968972, 5% of the canvas, around x 0.60, y 0.84\n",
+     "concepts": [
+      {
+       "title": "Curved bands in neutral earth tones",
+       "idea": "Thick overlapping bands of cream, dusty rose, dark brown and sage sweep in nested curves from top to bottom.",
+       "flow": "arc",
+       "exact": true,
+       "bands": [
+        {
+         "name": "Warm Linen Beige",
+         "where": "large field top right and circle bottom left",
+         "hex": "#d2bda8",
+         "width": 2.58,
+         "relief": "medium",
+         "lab": [
+          77.83,
+          4.09,
+          13.33
+         ],
+         "mix": {
+          "hex": "#ccbaa7",
+          "delta_e": 1.49,
+          "tubes": [
+           {
+            "name": "Titanium White",
+            "share": 0.63
+           },
+           {
+            "name": "Raw Umber",
+            "share": 0.25
+           },
+           {
+            "name": "Yellow Ochre",
+            "share": 0.12
+           }
+          ]
+         }
+        },
+        {
+         "name": "Dusty Rose",
+         "where": "wide wavy diagonal band upper middle",
+         "hex": "#ab887e",
+         "width": 1.24,
+         "relief": "heavy",
+         "lab": [
+          59.68,
+          11.79,
+          10.44
+         ],
+         "mix": {
+          "hex": "#a9877d",
+          "delta_e": 0.53,
+          "tubes": [
+           {
+            "name": "Titanium White",
+            "share": 0.47
+           },
+           {
+            "name": "Burnt Sienna",
+            "share": 0.41
+           },
+           {
+            "name": "Ultramarine Blue",
+            "share": 0.12
+           }
+          ]
+         }
+        },
+        {
+         "name": "Deep Burgundy Brown",
+         "where": "narrow dark diagonal band in center",
+         "hex": "#391e20",
+         "width": 0.82,
+         "relief": "heavy",
+         "lab": [
+          14.97,
+          13.45,
+          4.34
+         ],
+         "mix": {
+          "hex": "#3a2022",
+          "delta_e": 0.7,
+          "tubes": [
+           {
+            "name": "Mars Black",
+            "share": 0.52
+           },
+           {
+            "name": "Cadmium Red",
+            "share": 0.24
+           },
+           {
+            "name": "Ultramarine Blue",
+            "share": 0.24
+           }
+          ]
+         }
+        },
+        {
+         "name": "Sage Grey",
+         "where": "pale green-grey arch lower left",
+         "hex": "#a2957d",
+         "width": 0.68,
+         "relief": "medium",
+         "lab": [
+          62.22,
+          0.81,
+          14.43
+         ],
+         "mix": {
+          "hex": "#a4967b",
+          "delta_e": 1.08,
+          "tubes": [
+           {
+            "name": "Raw Umber",
+            "share": 0.47
+           },
+           {
+            "name": "Titanium White",
+            "share": 0.45
+           },
+           {
+            "name": "Sap Green",
+            "share": 0.08
+           }
+          ]
+         }
+        },
+        {
+         "name": "Muted Plum",
+         "where": "small strip in top left corner",
+         "hex": "#694445",
+         "width": 0.38,
+         "relief": "medium",
+         "lab": [
+          33.07,
+          16.13,
+          5.96
+         ],
+         "mix": {
+          "hex": "#6a4546",
+          "delta_e": 0.34,
+          "tubes": [
+           {
+            "name": "Yellow Ochre",
+            "share": 0.47
+           },
+           {
+            "name": "Ultramarine Blue",
+            "share": 0.29
+           },
+           {
+            "name": "Quinacridone Magenta",
+            "share": 0.24
+           }
+          ]
+         }
+        },
+        {
+         "name": "Olive Taupe",
+         "where": "darker tip at bottom of sage arch",
+         "hex": "#968972",
+         "width": 0.3,
+         "relief": "medium",
+         "lab": [
+          57.65,
+          1.03,
+          14.12
+         ],
+         "mix": {
+          "hex": "#9b8b72",
+          "delta_e": 1.62,
+          "tubes": [
+           {
+            "name": "Raw Umber",
+            "share": 0.53
+           },
+           {
+            "name": "Titanium White",
+            "share": 0.4
+           },
+           {
+            "name": "Sap Green",
+            "share": 0.07
+           }
+          ]
+         }
+        }
+       ],
+       "warnings": [],
+       "layout": {
+        "image": "concept-1-exact.png",
+        "map": "concept-1-layout.png",
+        "shares": [
+         0.4295,
+         0.2071,
+         0.1368,
+         0.1127,
+         0.0631,
+         0.0508
+        ],
+        "color_de": [
+         0.4,
+         2.1,
+         2.0,
+         1.8,
+         0.5,
+         9.9
+        ],
+        "prompt": "You are the studio assistant of a palette-knife / impasto painter, who is going to paint the attached\npicture as it is. Its colors have already been measured, listed below with the share of the canvas each covers and\nits average position (x and y from 0 at the top left to 1 at the bottom right).\n\nWrite:\n- title: the picture's subject in a few plain words. idea: one sentence describing the picture.\n- flow: how the shapes run, if they follow one of these regular layouts:\n  - arc\n  - diagonal\n  - diagonal split\n  - gentle wave\n  - grid\n  - horizontal\n  - wave\n  Otherwise freeform.\n- colors: one entry per measured color, in the same order:\n  - name: a short color name a painter would use. Every name different.\n  - where: where this color sits in the picture and what shape it takes, in a few words.\n  - relief: how thick the paste looks there (thin / medium / heavy). With no visible paste, as in a photo or a\n    flat print, use thin for backgrounds and fine areas and medium for the main shapes.\n\nMeasured colors:\n1. #d2bda8, 43% of the canvas, around x 0.53, y 0.49\n2. #ab887e, 21% of the canvas, around x 0.59, y 0.41\n3. #391e20, 14% of the canvas, around x 0.52, y 0.59\n4. #a2957d, 11% of the canvas, around x 0.33, y 0.57\n5. #694445, 6% of the canvas, around x 0.20, y 0.22\n6. #968972, 5% of the canvas, around x 0.60, y 0.84\n"
+       },
+       "layout_note": "Muse Image cleaned this picture, and the plan is read off its version.",
+       "mix_warnings": []
+      }
+     ],
+     "mixing": {
+      "tubes": [
+       "Titanium White",
+       "Mars Black",
+       "Burnt Sienna",
+       "Raw Umber",
+       "Yellow Ochre",
+       "Cadmium Red",
+       "Quinacridone Magenta",
+       "Ultramarine Blue",
+       "Sap Green"
+      ],
+      "without": [],
+      "paste_in_mix": false
+     }
+    },
+    "created_at": 1793799901.24206
+   }
+  ],
+  "supplies": [
+   {
+    "piece": "7b5c367705db4c798dcf00593c0d1756",
+    "record": {
+     "tube:Mars Black": {
+      "qty": 1,
+      "size": 779.0
+     },
+     "tube:Yellow Ochre": {
+      "qty": 1,
+      "size": 595.0
+     },
+     "tube:Quinacridone Magenta": {
+      "qty": 1,
+      "size": 489.0
+     },
+     "tube:Ultramarine Blue": {
+      "qty": 1,
+      "size": 500.0
+     },
+     "tube:Cadmium Red": {
+      "qty": 1,
+      "size": 100.0
+     },
+     "tube:Burnt Sienna": {
+      "qty": 1,
+      "size": 98.0
+     },
+     "tube:Sap Green": {
+      "qty": 1,
+      "size": 19.0
+     },
+     "paste": {
+      "qty": 1,
+      "size": 3500.0
+     },
+     "tool:canvas": {
+      "qty": 1,
+      "size": null
+     },
+     "tool:large-knife": {
+      "qty": 1,
+      "size": 10.0
+     },
+     "tool:small-knife": {
+      "qty": 1,
+      "size": 3.0
+     },
+     "tool:spatula": {
+      "qty": 1,
+      "size": 10.0
+     },
+     "tool:palette": {
+      "qty": 1,
+      "size": null
+     },
+     "tool:tubs": {
+      "qty": 6,
+      "size": null
+     },
+     "tool:charcoal": {
+      "qty": 1,
+      "size": null
+     },
+     "tool:spray": {
+      "qty": 1,
+      "size": null
+     },
+     "tool:rags": {
+      "qty": 1,
+      "size": null
+     },
+     "tool:varnish": {
+      "qty": 1,
+      "size": null
+     }
+    }
+   }
+  ],
+  "recipes": [
+   {
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "without_tubes": "[]",
+    "paste_in_mix": 1,
+    "record": {
+     "bands": [
+      {
+       "name": "Warm Linen Beige",
+       "target_hex": "#d2bda8",
+       "mix_hex": "#cdb7a0",
+       "delta_e": 1.72,
+       "parts_delta_e": 1.92,
+       "tubes": [
+        {
+         "name": "Yellow Ochre",
+         "share": 0.67,
+         "grams": 697,
+         "parts": 13
+        },
+        {
+         "name": "Ultramarine Blue",
+         "share": 0.18,
+         "grams": 187,
+         "parts": 3
+        },
+        {
+         "name": "Quinacridone Magenta",
+         "share": 0.15,
+         "grams": 156,
+         "parts": 3
+        }
+       ],
+       "paste_parts": 35,
+       "area_cm2": 6668.0,
+       "level": "medium",
+       "paint_g": 1039.7,
+       "paste_g": 2431.5,
+       "card": {
+        "recipe_line": "35 parts Modeling Paste : 13 parts Yellow Ochre : 3 parts Quinacridone Magenta : 3 parts Ultramarine Blue",
+        "steps": [
+         "Stir the Modeling Paste and Yellow Ochre smooth.",
+         "Work in the Quinacridone Magenta a little at a time.",
+         "Add the Ultramarine Blue last in tiny bits until even."
+        ],
+        "too_dark": "Too dark? Work in a little more Yellow Ochre.",
+        "too_light": "Too light? Work in a little more Ultramarine Blue.",
+        "warnings": [],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it beside the dry paint and let it dry - acrylics dry slightly darker.",
+         "Adjust in tiny bits with Yellow Ochre if too dark, Ultramarine Blue if too light."
+        ]
+       }
+      },
+      {
+       "name": "Dusty Rose",
+       "target_hex": "#ab887e",
+       "mix_hex": "#bc9a92",
+       "delta_e": 5.79,
+       "parts_delta_e": 5.84,
+       "tubes": [
+        {
+         "name": "Mars Black",
+         "share": 0.69,
+         "grams": 577,
+         "parts": 7
+        },
+        {
+         "name": "Cadmium Red",
+         "share": 0.31,
+         "grams": 259,
+         "parts": 3
+        }
+       ],
+       "paste_parts": 19,
+       "area_cm2": 3215.2,
+       "level": "heavy",
+       "paint_g": 835.6,
+       "paste_g": 1954.0,
+       "card": {
+        "recipe_line": "19 parts Modeling Paste : 3 parts Cadmium Red : 7 parts Mars Black",
+        "steps": [
+         "Stir the Modeling Paste and Cadmium Red smooth.",
+         "Add the Mars Black slowly, a little at a time.",
+         "Mix to a flat, even color with the knife."
+        ],
+        "too_dark": "Too dark? Work in a little more Titanium White.",
+        "too_light": "Too light? Work in a little more Quinacridone Magenta.",
+        "warnings": [
+         "The parts mix lands a little off target, so finish by eye with the adjust tips."
+        ],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it next to the dry paint and let it dry - acrylics dry slightly darker.",
+         "Nudge lighter with Titanium White or deeper with Quinacridone Magenta in tiny bits."
+        ]
+       }
+      },
+      {
+       "name": "Deep Burgundy Brown",
+       "target_hex": "#391e20",
+       "mix_hex": "#b37bb4",
+       "delta_e": 40.86,
+       "parts_delta_e": 40.88,
+       "tubes": [
+        {
+         "name": "Quinacridone Magenta",
+         "share": 0.62,
+         "grams": 342,
+         "parts": 2
+        },
+        {
+         "name": "Ultramarine Blue",
+         "share": 0.38,
+         "grams": 210,
+         "parts": 1
+        }
+       ],
+       "paste_parts": 6,
+       "area_cm2": 2123.8,
+       "level": "heavy",
+       "paint_g": 551.9,
+       "paste_g": 1290.7,
+       "card": {
+        "recipe_line": "6 parts Modeling Paste : 2 parts Quinacridone Magenta : 1 part Ultramarine Blue",
+        "steps": [
+         "Stir the Modeling Paste and Quinacridone Magenta smooth.",
+         "Add the Ultramarine Blue slowly, a little at a time.",
+         "Work until transparent-even with no streaks."
+        ],
+        "too_dark": "Too dark? Work in a little more Titanium White.",
+        "too_light": "",
+        "warnings": [
+         "The parts mix lands a little off target, so finish by eye with the adjust tip.",
+         "Mostly transparent pigments here, so coverage will be weak - plan on thin layered passes."
+        ],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it beside the dry paint and let it dry - acrylics dry slightly darker.",
+         "If too dark, touch in Titanium White in tiny bits until it matches."
+        ]
+       }
+      },
+      {
+       "name": "Sage Grey",
+       "target_hex": "#a2957d",
+       "mix_hex": "#b1a591",
+       "delta_e": 5.19,
+       "parts_delta_e": 5.28,
+       "tubes": [
+        {
+         "name": "Mars Black",
+         "share": 0.62,
+         "grams": 169,
+         "parts": 8
+        },
+        {
+         "name": "Burnt Sienna",
+         "share": 0.3,
+         "grams": 82,
+         "parts": 3
+        },
+        {
+         "name": "Sap Green",
+         "share": 0.08,
+         "grams": 22,
+         "parts": 1
+        }
+       ],
+       "paste_parts": 22,
+       "area_cm2": 1749.7,
+       "level": "medium",
+       "paint_g": 272.8,
+       "paste_g": 638.0,
+       "card": {
+        "recipe_line": "22 parts Modeling Paste : 1 part Sap Green : 3 parts Burnt Sienna : 8 parts Mars Black",
+        "steps": [
+         "Stir the Modeling Paste and Sap Green smooth.",
+         "Work in the Burnt Sienna a little at a time.",
+         "Add the Mars Black last in tiny bits until even."
+        ],
+        "too_dark": "Too dark? Work in a little more Sap Green.",
+        "too_light": "Too light? Work in a little more Ultramarine Blue.",
+        "warnings": [
+         "The parts mix lands a little off target, so finish by eye with the adjust tips."
+        ],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it beside the dry paint and let it dry - acrylics dry slightly darker.",
+         "Adjust in tiny bits with Sap Green if too dark, Ultramarine Blue if too light."
+        ]
+       }
+      },
+      {
+       "name": "Muted Plum",
+       "target_hex": "#694445",
+       "mix_hex": "#ba86a1",
+       "delta_e": 29.65,
+       "parts_delta_e": 29.77,
+       "tubes": [
+        {
+         "name": "Mars Black",
+         "share": 0.51,
+         "grams": 78,
+         "parts": 1
+        },
+        {
+         "name": "Quinacridone Magenta",
+         "share": 0.49,
+         "grams": 75,
+         "parts": 1
+        }
+       ],
+       "paste_parts": 4,
+       "area_cm2": 979.6,
+       "level": "medium",
+       "paint_g": 152.7,
+       "paste_g": 357.2,
+       "card": {
+        "recipe_line": "4 parts Modeling Paste : 1 part Quinacridone Magenta : 1 part Mars Black",
+        "steps": [
+         "Stir the Modeling Paste and Quinacridone Magenta smooth.",
+         "Add the Mars Black slowly, a little at a time.",
+         "Mix to a flat, even color with the knife."
+        ],
+        "too_dark": "Too dark? Work in a little more Titanium White.",
+        "too_light": "",
+        "warnings": [
+         "The parts mix lands a little off target, so finish by eye with the adjust tip."
+        ],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it beside the dry paint and let it dry - acrylics dry slightly darker.",
+         "If too dark, touch in Titanium White in tiny bits until it matches."
+        ]
+       }
+      },
+      {
+       "name": "Olive Taupe",
+       "target_hex": "#968972",
+       "mix_hex": "#aca096",
+       "delta_e": 9.61,
+       "parts_delta_e": 9.61,
+       "tubes": [
+        {
+         "name": "Mars Black",
+         "share": 0.73,
+         "grams": 90,
+         "parts": 8
+        },
+        {
+         "name": "Burnt Sienna",
+         "share": 0.27,
+         "grams": 33,
+         "parts": 3
+        }
+       ],
+       "paste_parts": 20,
+       "area_cm2": 788.7,
+       "level": "medium",
+       "paint_g": 123.0,
+       "paste_g": 287.6,
+       "card": {
+        "recipe_line": "20 parts Modeling Paste : 3 parts Burnt Sienna : 8 parts Mars Black",
+        "steps": [
+         "Stir the Modeling Paste and Burnt Sienna smooth.",
+         "Add the Mars Black slowly, a little at a time.",
+         "Mix to a flat, even color with the knife."
+        ],
+        "too_dark": "Too dark? Work in a little more Titanium White.",
+        "too_light": "Too light? Work in a little more Ultramarine Blue.",
+        "warnings": [
+         "The parts mix lands a little off target, so finish by eye with the adjust tips."
+        ],
+        "rematch": [
+         "Mix a small test batch from the same parts.",
+         "Dab it beside the dry paint and let it dry - acrylics dry slightly darker.",
+         "Adjust in tiny bits with Titanium White if too dark, Ultramarine Blue if too light."
+        ]
+       }
+      }
+     ],
+     "totals": {
+      "paint_g": 2975.7,
+      "paste_g": 6959.0,
+      "area_cm2": 15525.0
+     },
+     "shopping": {
+      "tubes": [
+       {
+        "name": "Mars Black",
+        "grams": 914,
+        "buy_g": 1051,
+        "tubes": 7
+       },
+       {
+        "name": "Yellow Ochre",
+        "grams": 697,
+        "buy_g": 802,
+        "tubes": 5
+       },
+       {
+        "name": "Quinacridone Magenta",
+        "grams": 573,
+        "buy_g": 659,
+        "tubes": 5
+       },
+       {
+        "name": "Ultramarine Blue",
+        "grams": 397,
+        "buy_g": 457,
+        "tubes": 3
+       },
+       {
+        "name": "Cadmium Red",
+        "grams": 259,
+        "buy_g": 298,
+        "tubes": 2
+       },
+       {
+        "name": "Burnt Sienna",
+        "grams": 115,
+        "buy_g": 132,
+        "tubes": 1
+       },
+       {
+        "name": "Sap Green",
+        "grams": 22,
+        "buy_g": 25,
+        "tubes": 1
+       }
+      ],
+      "paste": {
+       "grams": 6959,
+       "buy_g": 8003,
+       "tubs": 10
+      }
+     },
+     "materials": {
+      "tube_ml": 120.0,
+      "tub_ml": 500.0,
+      "buffer_pct": 15,
+      "waste_pct": 10,
+      "calibrated": false
+     },
+     "mixing": {
+      "tubes": [
+       "Titanium White",
+       "Mars Black",
+       "Burnt Sienna",
+       "Raw Umber",
+       "Yellow Ochre",
+       "Cadmium Red",
+       "Quinacridone Magenta",
+       "Ultramarine Blue",
+       "Sap Green"
+      ],
+      "without": [],
+      "paste_in_mix": true
+     }
+    },
+    "used_at": 1793800081.146716
+   }
+  ],
+  "guides": [
+   {
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "without_tubes": "[]",
+    "paste_in_mix": 1,
+    "record": {
+     "overview": "Lock the small corner and tip anchors first to fix the nested arcs, then fill the big beige field. Lay the two heavy center bands last wet-on-wet so they sit proud and overlap clean.",
+     "tips": [
+      "Sweep curves with shoulder, flat of knife down; use edge only to cut lines.",
+      "Hold medium as buttered 2-3mm bed, heavy as loaded 5-6mm ridge standing over it.",
+      "Wipe knife clean between every load; never drag dark burgundy into beige and rose.",
+      "Lay tinted paste in one directional pass and stop - overstroking flattens relief and muddies color."
+     ],
+     "steps": [
+      {
+       "id": "prepare",
+       "title": "Prepare the canvas and mark the bands",
+       "band": null,
+       "paste": [],
+       "paint": [],
+       "wait": null,
+       "do": [
+        "Seal 115x135 cm canvas to a level tacky ground.",
+        "Draw nested top-to-bottom arcs for all six bands.",
+        "Mark plum corner top-left and sage arch lower-left with olive tip."
+       ],
+       "tips": [
+        "Keep charcoal lines thin so medium paste buries them."
+       ]
+      },
+      {
+       "id": "band-4",
+       "title": "Lay Muted Plum",
+       "band": 4,
+       "paste": [],
+       "paint": [
+        4
+       ],
+       "wait": null,
+       "do": [
+        "Place Muted Plum strip tight in top-left corner.",
+        "Butter flat to an even medium bed following the curve.",
+        "Cut lower curved edge clean with knife edge."
+       ],
+       "tips": [
+        "Leave lower edge sharp; beige will butt to it later."
+       ]
+      },
+      {
+       "id": "band-5",
+       "title": "Lay Olive Taupe",
+       "band": 5,
+       "paste": [],
+       "paint": [
+        4,
+        5
+       ],
+       "wait": null,
+       "do": [
+        "Place Olive Taupe tip at bottom end of future sage arch, lower left.",
+        "Pack to even medium bed with flat of knife.",
+        "Shape pointed tip with knife edge."
+       ],
+       "tips": [
+        "Keep isolated from plum; leave upper edge wet for sage."
+       ]
+      },
+      {
+       "id": "band-3",
+       "title": "Lay Sage Grey",
+       "band": 3,
+       "paste": [],
+       "paint": [
+        4,
+        5,
+        3
+       ],
+       "wait": null,
+       "do": [
+        "Lay Sage Grey arch down lower-left to meet the olive tip.",
+        "Spread to even medium bed in one sweeping direction.",
+        "Butt upper end into olive tip while both are wet."
+       ],
+       "tips": [
+        "Overlap olive by 1cm with flat, then cut joint with edge - don't blend."
+       ]
+      },
+      {
+       "id": "band-0",
+       "title": "Lay Warm Linen Beige",
+       "band": 0,
+       "paste": [],
+       "paint": [
+        4,
+        5,
+        3,
+        0
+       ],
+       "wait": null,
+       "do": [
+        "Fill Warm Linen Beige field top-right and circle bottom-left.",
+        "Butter to even medium bed, flush with sage and plum.",
+        "Cut clean against plum and sage, leave center channel open."
+       ],
+       "tips": [
+        "Butt, don't overlap plum and sage; wipe knife before each cut.",
+        "Keep center edges thick-wet to receive heavy bands."
+       ]
+      },
+      {
+       "id": "band-2",
+       "title": "Lay Deep Burgundy Brown",
+       "band": 2,
+       "paste": [],
+       "paint": [
+        4,
+        5,
+        3,
+        0,
+        2
+       ],
+       "wait": null,
+       "do": [
+        "Lay Deep Burgundy Brown narrow diagonal through center.",
+        "Load knife heavy and pull one proud ridge over beige and sage.",
+        "Cut both long edges in single passes to seal overlap."
+       ],
+       "tips": [
+        "Let heavy paste sit on top of medium bed - don't press flat."
+       ]
+      },
+      {
+       "id": "band-1",
+       "title": "Lay Dusty Rose",
+       "band": 1,
+       "paste": [],
+       "paint": [
+        4,
+        5,
+        3,
+        0,
+        2,
+        1
+       ],
+       "wait": null,
+       "do": [
+        "Lay Dusty Rose wide wavy diagonal in upper middle.",
+        "Load heavy and sweep nested curve parallel above burgundy.",
+        "Lap lower edge 1-2cm over burgundy to form raised overlap."
+       ],
+       "tips": [
+        "Wipe knife per load to keep rose clean from dark brown."
+       ]
+      },
+      {
+       "id": "finish",
+       "title": "Let it dry and finish",
+       "band": null,
+       "paste": [],
+       "paint": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ],
+       "wait": null,
+       "do": [
+        "Check overlaps and flick off crumbs with clean knife tip.",
+        "Dry flat dust-free until heavy ridges are firm through.",
+        "Trim edge strings, varnish only when fully cured."
+       ],
+       "tips": [
+        "Do not tool heavy bands after skin forms; it tears the tinted skin."
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "checkins": [],
+  "checks": [
+   {
+    "id": "20261104T134947Z-9b31",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "step",
+    "record": {
+     "step": "prepare",
+     "taken_at": "2026-11-04T13:49:47+00:00",
+     "paste_in_mix": true,
+     "review": {
+      "headline": "Thin nested arcs on sealed ground match the target, ready to lay paste.",
+      "looks_right": [
+       "Level white ground with no paint yet, lines thin enough to bury",
+       "Nested top-to-bottom arcs from top-right field to lower-left sage arch line up with reference"
+      ],
+      "to_fix": [],
+      "verdict": "on_track"
+     }
+    }
+   },
+   {
+    "id": "20261104T135019Z-d444",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "mix",
+    "record": {
+     "taken_at": "2026-11-04T13:50:19+00:00",
+     "paste_in_mix": true,
+     "results": [
+      {
+       "band": 4,
+       "name": "Muted Plum",
+       "planned_hex": "#ba86a1",
+       "measured_hex": "#9c6f7d",
+       "delta_e": 10.1,
+       "state": "off",
+       "drift": "darker and warmer",
+       "advice": [
+        "Mix in about 7 parts Titanium White and 1 part Quinacridone Magenta to 26 parts of it.",
+        "Work it through until there are no streaks, then check it again."
+       ],
+       "warnings": [],
+       "point": [
+        560.0,
+        550.0
+       ]
+      }
+     ],
+     "white": [
+      1136.0,
+      979.0
+     ],
+     "warnings": []
+    }
+   },
+   {
+    "id": "20261104T135100Z-c6f7",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "mix",
+    "record": {
+     "taken_at": "2026-11-04T13:51:00+00:00",
+     "paste_in_mix": true,
+     "results": [
+      {
+       "band": 5,
+       "name": "Olive Taupe",
+       "planned_hex": "#aca096",
+       "measured_hex": "#a98c8c",
+       "delta_e": 10.9,
+       "state": "off",
+       "drift": "warmer and darker",
+       "advice": [
+        "Mix in about 4 parts Titanium White and 1 part Sap Green to 15 parts of it.",
+        "Work it through until there are no streaks, then check it again."
+       ],
+       "warnings": [],
+       "point": [
+        445.0,
+        554.0
+       ]
+      }
+     ],
+     "white": [
+      598.0,
+      29.0
+     ],
+     "warnings": []
+    }
+   },
+   {
+    "id": "20261104T135115Z-5d3d",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "mix",
+    "record": {
+     "taken_at": "2026-11-04T13:51:15+00:00",
+     "paste_in_mix": true,
+     "results": [
+      {
+       "band": 2,
+       "name": "Deep Burgundy Brown",
+       "planned_hex": "#b37bb4",
+       "measured_hex": "#6d445d",
+       "delta_e": 25.2,
+       "state": "off",
+       "drift": "darker and duller",
+       "advice": [
+        "Mix in about 1 part Titanium White to 2 parts of it.",
+        "That only gets it part of the way. If there isn't much in the bowl, mix it again from the recipe: 6 parts Modeling Paste : 2 parts Quinacridone Magenta : 1 part Ultramarine Blue.",
+        "Work it through until there are no streaks, then check it again."
+       ],
+       "warnings": [],
+       "point": [
+        723.0,
+        531.0
+       ]
+      }
+     ],
+     "white": [
+      1152.0,
+      125.0
+     ],
+     "warnings": []
+    }
+   },
+   {
+    "id": "20261104T135324Z-9221",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "step",
+    "record": {
+     "step": "band-2",
+     "taken_at": "2026-11-04T13:53:24+00:00",
+     "paste_in_mix": true,
+     "review": {
+      "headline": "Burgundy center band is in place but its right side sits on bare canvas where beige should be.",
+      "looks_right": [
+       "Narrow diagonal runs center through nested curve parallel to sage",
+       "Ridge sits proud and heavy over sage, not pressed flat"
+      ],
+      "to_fix": [
+       "Lay Warm Linen Beige top-right field up to the burgundy so burgundy overlaps medium bed, not bare white at lower right"
+      ],
+      "verdict": "needs_work"
+     }
+    }
+   },
+   {
+    "id": "20261104T135739Z-64b7",
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "kind": "step",
+    "record": {
+     "step": "band-1",
+     "taken_at": "2026-11-04T13:57:39+00:00",
+     "paste_in_mix": true,
+     "review": {
+      "headline": "Dusty Rose band is in place upper-middle with correct overlap over burgundy.",
+      "looks_right": [
+       "Wide diagonal sweep runs nested and parallel above dark center band",
+       "Lower edge shows raised lap over burgundy with clean, heavy impasto"
+      ],
+      "to_fix": [],
+      "verdict": "on_track"
+     }
+    }
+   }
+  ],
+  "questions": [
+   {
+    "run": "concepts-1098fb52",
+    "concept": 0,
+    "record": {
+     "question": "should i lay it vertical or horizontal?",
+     "answer": "Lay it flat face up and level. It will sag on the easel so dry it horizontal and dust free until the heavy ridges are firm all the way through.",
+     "asked_at": "2026-11-04T13:58:27+00:00",
+     "section": "finish"
+    }
+   }
+  ]
+ }
+}
