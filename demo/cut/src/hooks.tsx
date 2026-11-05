@@ -37,7 +37,7 @@ export const HookSketch: React.FC = () => {
       <AbsoluteFill style={{ opacity: 1 - ease(f, 214, 226) }}>
         <div style={{ position: 'absolute', left: 140, top: 0, bottom: 0, width: 820, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 40 }}>
           <Line at={8}>Every painting starts in your head.</Line>
-          <Line at={92} color={C.plum}>Getting it onto the canvas is the hard part.</Line>
+          <Line at={89} color={C.plum}>Getting it onto the canvas is the hard part.</Line>
         </div>
         <div style={{ position: 'absolute', left: X, top: Y, width: W, height: H, borderRadius: 6, overflow: 'hidden', background: '#f4f0e7',
           boxShadow: `0 ${40 * ease(f, 0, 30)}px 90px -36px rgba(60,40,30,.45), 0 0 0 1px rgba(60,40,30,.07)`,

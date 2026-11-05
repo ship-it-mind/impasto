@@ -19,10 +19,10 @@ SR = 48000
 BPM = 70
 BEAT = 60 / BPM
 BAR = 4 * BEAT
-TOTAL = 176.17
+TOTAL = 178.63
 # Where each part of the film starts (s), and the moments the music answers.
-SECTIONS = {'intro': 9.0, 'yara': 30.17, 'easy': 46.77, 'wrong': 49.57, 'guess': 61.47, 'app': 64.27,
-            'hood': 122.67, 'back': 146.0, 'last': 151.67, 'end': 173.17}
+SECTIONS = {'intro': 9.0, 'yara': 32.0, 'easy': 48.6, 'wrong': 51.2, 'guess': 63.73, 'app': 66.87,
+            'hood': 124.3, 'back': 148.8, 'last': 154.13, 'end': 175.63}
 rng = np.random.default_rng(11)
 N = int((TOTAL + 6) * SR)
 out = np.zeros((N, 2))

@@ -8,7 +8,7 @@ scripts/voiceover.py treats like a recorded take.
     uv run --no-project --with requests python scripts/elevenlabs.py            # make what's missing
     uv run --no-project --with requests python scripts/elevenlabs.py intro:2   # redo one line
 """
-import hashlib, json, subprocess, sys
+import hashlib, json, subprocess, sys, time
 from pathlib import Path
 
 import requests
@@ -60,9 +60,15 @@ for section, lines in LINES.items():
             for old in OUT.glob(f'{section}-{i}-*.mp3'): old.unlink()
         if not path.exists():
             for old in OUT.glob(f'{section}-{i}-*.mp3'): old.unlink()
-            r = requests.post(f'https://api.elevenlabs.io/v1/text-to-speech/{VOICE}', params={'output_format': 'mp3_44100_128'},
-                              headers={'xi-api-key': key, 'Content-Type': 'application/json'},
-                              json={'text': text, 'model_id': MODEL, 'voice_settings': SETTINGS, 'previous_text': prev or None, 'next_text': nxt or None}, timeout=120)
+            for attempt in range(4):  # the connection sometimes drops; a retry is free, only a finished line costs
+                try:
+                    r = requests.post(f'https://api.elevenlabs.io/v1/text-to-speech/{VOICE}', params={'output_format': 'mp3_44100_128'},
+                                      headers={'xi-api-key': key, 'Content-Type': 'application/json'},
+                                      json={'text': text, 'model_id': MODEL, 'voice_settings': SETTINGS, 'previous_text': prev or None, 'next_text': nxt or None}, timeout=120)
+                    break
+                except requests.exceptions.ConnectionError:
+                    if attempt == 3: raise
+                    time.sleep(3 * (attempt + 1))
             if r.status_code != 200:
                 sys.exit(f'{section}:{i} failed: {r.status_code} {r.text[:300]}')
             path.write_bytes(r.content)
