@@ -55,7 +55,7 @@ make dev               # the same, reloading as you edit: http://localhost:5173
 make test              # the backend tests, with no keys and a throwaway database
 ```
 
-`make run` and `make dev` keep everything you make in `backend/output/impasto.db`, with the example piece listed first. `PORT=8001 make run` picks another port.
+`make run` and `make dev` keep everything you make in `backend/output/impasto.db`, with the example piece listed first. If port 8000 is taken, put another before any of them, like `PORT=8001 make example`.
 
 ### Model spikes
 
@@ -70,7 +70,7 @@ uv run spikes/voice_transcribe.py spikes/inputs/brief.m4a --expected spikes/inpu
 
 ### Web app
 
-`make dev` runs the API on port 8000 and the web app's dev server beside it, which sends `/api` there.
+`make dev` runs the API on port 8000 (or `PORT`) and the web app's dev server beside it, which sends `/api` there.
 
 Pieces, with their pictures, are kept in `backend/output/impasto.db`, a SQLite file (git-ignored). On first start it imports any older pieces from `backend/output/api/`.
 

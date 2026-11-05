@@ -27,12 +27,12 @@ run: key build
 	@echo "Impasto: http://localhost:$(PORT)"
 	cd backend && IMPASTO_MODE=local uv run uvicorn impasto.api:app --port $(PORT)
 
-# The web app's dev server sends /api to port 8000, so the API stays there. If either stops, both do.
+# The web app's dev server sends /api to the API on PORT. If either stops, both do.
 dev: SHELL := bash
 dev: key
 	@trap 'kill 0' EXIT; \
-	(cd backend && IMPASTO_MODE=local uv run uvicorn impasto.api:app --port 8000 --reload) & \
-	(cd web && npm run dev) & \
+	(cd backend && IMPASTO_MODE=local uv run uvicorn impasto.api:app --port $(PORT) --reload) & \
+	(cd web && API_PORT=$(PORT) npm run dev) & \
 	wait -n
 
 test:
