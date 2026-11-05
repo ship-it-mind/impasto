@@ -5,7 +5,8 @@ speech itself is untouched), then filtered (hum, a little noise) and leveled to 
 from faster-whisper (words.json, made beside this script's input); the shifted times go to
 public/vo/words.json so the film's subtitles can follow the voice.
 
-    uv run --no-project --with numpy python scripts/voiceover.py /path/to/words.json
+    uv run --no-project --with numpy python scripts/voiceover.py /path/to/words.json          # recorded takes
+    uv run --no-project --with numpy python scripts/voiceover.py /path/to/words.json --el     # the ElevenLabs voice (scripts/elevenlabs.py)
 """
 import json, subprocess, sys
 from pathlib import Path
@@ -19,9 +20,12 @@ TAKES = {  # the take used for each part of the film
 }
 root = Path(__file__).resolve().parent.parent
 words = json.load(open(sys.argv[1]))
+EL = '--el' in sys.argv
+if EL:  # the generated sections are named after their text files, one per part
+    TAKES = {**TAKES, 'change': 'app-tour-change', 'intro': 'intro', 'hood': 'under-the-hood'}
 out = {}
 for part, take in TAKES.items():
-    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(root.parent / 'voiceover' / f'{take}.opus'), '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True, check=True).stdout
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(root.parent / 'voiceover' / ('el' if EL else '') / f'{take}.{"wav" if EL else "opus"}'), '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True, check=True).stdout
     audio = np.frombuffer(raw, np.float32)
     ws = words[take]
     # Runs of speech, split where a pause is longer than MAX_PAUSE.
