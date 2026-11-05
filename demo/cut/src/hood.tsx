@@ -7,14 +7,14 @@ import { C, Fade, SANS, SERIF, Say, ease } from './kit'
 
 // Timed to the voiceover (public/vo/hood.wav, from frame 8): each model's beat starts on its name.
 const SAY_ALL: [number, number, string][] = [
-  [8, 67, 'Underneath, four Meta models.'],
-  [82, 165, 'Muse Voice Transcribe hears the idea.'],
-  [180, 292, 'Muse Spark plans it, from the brief to every step.'],
-  [307, 437, 'SAM 3.1 finds the painting, and the canvas in every photo.'],
-  [452, 550, 'Muse Image cleans it, and repaints what she changes.'],
-  [563, 718, 'The rest, Impasto measures itself: areas into grams, colors into mixes.'],
+  [8, 77, 'Underneath, four Meta models.'],
+  [96, 167, 'Muse Voice Transcribe hears the idea.'],
+  [185, 296, 'Muse Spark plans it, from the brief to every step.'],
+  [312, 449, 'SAM 3.1 finds the painting, and the canvas in every photo.'],
+  [467, 575, 'Muse Image cleans it, and repaints what she changes.'],
+  [588, 775, 'The rest, Impasto measures itself: areas into grams, colors into mixes.'],
 ]
-const BEATS = [[82, 180], [180, 307], [307, 452], [452, 563], [563, 735]] as const
+const BEATS = [[96, 185], [185, 312], [312, 467], [467, 588], [588, 785]] as const
 const MODELS = [
   { name: 'Muse Voice Transcribe', job: 'hears the idea' },
   { name: 'Muse Spark', job: 'plans it, from the brief to every step' },
@@ -199,7 +199,7 @@ const Showcase: React.FC<{ beats: number; len: number }> = ({ beats, len }) => {
     </AbsoluteFill>
   )
 }
-export const HOOD_A_LEN = 575, HOOD_B_LEN = 735, HOOD_C_LEN = 735
+export const HOOD_A_LEN = 600, HOOD_B_LEN = 785, HOOD_C_LEN = 785
 export const HoodWork: React.FC = () => <Showcase beats={4} len={HOOD_A_LEN} />
 export const HoodMeasured: React.FC = () => <Showcase beats={5} len={HOOD_B_LEN} />
 

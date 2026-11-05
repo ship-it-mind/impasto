@@ -14,7 +14,7 @@ from pathlib import Path
 import requests
 
 VOICE = 'NhYAwE75KjPavWcOGOQC'
-MODEL = 'eleven_multilingual_v2'
+MODEL = 'eleven_v4'
 SETTINGS = {'stability': 0.5, 'similarity_boost': 0.8, 'style': 0.15, 'use_speaker_boost': True, 'speed': 1.0}
 PAUSE = 0.35  # between lines in a section
 # What is said, per section. Spelled for the ear where it matters ("SAM three point one");
