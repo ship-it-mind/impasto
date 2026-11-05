@@ -44,7 +44,7 @@ make install
 make example   # look through the example piece: no keys needed
 ```
 
-Then open http://localhost:8000. The repo holds one real piece, recorded from the first brief to the last check-in, and `make example` opens straight at it. Every screen can be looked through, and nothing calls a model, even with a key in `.env`.
+Then open http://localhost:8000. That's the Python API, which also serves the web app: `make example` and `make run` build it first. The repo holds one real piece, recorded from the first brief to the last check-in, and `make example` opens straight at it. Every screen can be looked through, and nothing calls a model, even with a key in `.env`.
 
 To start pieces of your own, you need a Meta Model API key:
 
