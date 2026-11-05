@@ -53,7 +53,8 @@ for part, take in TAKES.items():
     mapped = [(w, round(max(0.0, a - onset), 3), round(max(0.0, b - onset), 3)) for w, a, b in mapped]
     tmp = root / 'public' / 'vo' / f'{part}.raw.wav'
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', '-', str(tmp)], input=joined.tobytes(), check=True)
-    chain = 'highpass=f=80,afftdn=nf=-28'
+    # Phone recordings get a little noise reduction; the generated voice is already clean, and noise reduction would dull its highs.
+    chain = 'highpass=f=70' if EL else 'highpass=f=80,afftdn=nf=-28'
     m = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(tmp), '-af', f'{chain},loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json', '-f', 'null', '-'], capture_output=True, text=True).stderr
     j = json.loads(m[m.rindex('{'):m.rindex('}') + 1])
     ln = f"loudnorm=I=-16:TP=-1.5:LRA=11:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}:measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true"
