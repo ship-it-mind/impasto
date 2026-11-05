@@ -4,6 +4,7 @@ import React from 'react'
 import { Composition } from 'remotion'
 import { Idea, TOTAL, Video } from './Video'
 import { UI_ALL_LEN, UiAll } from './app-ui'
+import { ThumbCanvas, ThumbYara } from './thumbs'
 import { HOOD_A_LEN, HOOD_B_LEN, HOOD_C_LEN, HoodFlow, HoodMeasured, HoodWork } from './hood'
 import { APP_ALL_LEN, AppScenes, BowlScene, ColorsScene, IdeaScene, SeeScene, StepCheckScene, StepsScene } from './app-scenes'
 import { INTRO_LEN, IntroClips, IntroCuts, IntroLift, IntroType, IntroWall } from './intros'
@@ -38,6 +39,8 @@ export const Root: React.FC = () => (
     <Composition id="Easy4-ChatAll" component={EasyChatAll} {...opt} durationInFrames={EASY_ALL_LEN} />
     <Composition id="Idea-Fix" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'fix' as const }} />
     <Composition id="Idea-Hide" component={Idea} {...opt} durationInFrames={300} defaultProps={{ brief: 'hide' as const }} />
+    <Composition id="Thumb-Canvas" component={ThumbCanvas} durationInFrames={1} fps={30} width={1280} height={720} />
+    <Composition id="Thumb-Yara" component={ThumbYara} durationInFrames={1} fps={30} width={1280} height={720} />
     <Composition id="Hood1-Work" component={HoodWork} {...opt} durationInFrames={HOOD_A_LEN} />
     <Composition id="Hood2-Measured" component={HoodMeasured} {...opt} durationInFrames={HOOD_B_LEN} />
     <Composition id="Hood3-Flow" component={HoodFlow} {...opt} durationInFrames={HOOD_C_LEN} />
